@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nigeria E-Commerce</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore.js"></script>
+</head>
+<body>
+    <!-- Header Section -->
+    <header>
+        <div class="header-content">
+            <img src="head_logo.png" alt="Logo" class="logo">
+            <h1>Nigeria E-Commerce</h1>
+            <img src="user_icon.png" alt="User Icon" class="user-icon">
+        </div>
+    </header>
+
+    <!-- Navigation Menu -->
+    <nav>
+        <ul>
+            <li><a href="#">Home</a></li>
+            <li><a href="#">Add Product</a></li>
+            <li><a href="#">List Products</a></li>
+            <li><a href="#">About Us</a></li>
+            <li><a href="#" id="login-link">Login</a></li>
+            <li><a href="#">Cart</a></li>
+        </ul>
+    </nav>
+
+    <!-- Mid Section -->
+    <section class="mid-section">
+        <!-- Categories -->
+        <aside class="categories">
+            <h2>Categories</h2>
+            <ul>
+                <li><a href="#">Electronics</a></li>
+                <li><a href="#">Domestic Gadgets</a></li>
+                <li><a href="#">Computers & Accessories</a></li>
+                <li><a href="#">Smartphones</a></li>
+                <li><a href="#">Cars</a></li>
+                <li><a href="#">Furniture</a></li>
+                <li><a href="#">Clothes</a></li>
+                <li><a href="#">Shoes</a></li>
+            </ul>
+        </aside>
+
+        <!-- Product Display -->
+        <main class="products">
+            <h2>Featured Products</h2>
+            <div class="product-grid">
+                <!-- Example Products -->
+                <div class="product-item">
+                    <img src="electronics1.jpg" alt="Electronics">
+                    <h3>Product 1</h3>
+                    <p>₦20,000</p>
+                </div>
+                <div class="product-item">
+                    <img src="gadget1.jpg" alt="Domestic Gadget">
+                    <h3>Product 2</h3>
+                    <p>₦15,000</p>
+                </div>
+                <div class="product-item">
+                    <img src="computer1.jpg" alt="Computer">
+                    <h3>Product 3</h3>
+                    <p>₦50,000</p>
+                </div>
+                <div class="product-item">
+                    <img src="smartphone1.jpg" alt="Smartphone">
+                    <h3>Product 4</h3>
+                    <p>₦80,000</p>
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <!-- Footer Section -->
+    <footer>
+        <div class="footer-content">
+            <h2>Contact Us</h2>
+            <div class="social-media">
+                <a href="#">Twitter (X)</a>
+                <a href="#">Instagram</a>
+                <a href="#">Facebook</a>
+            </div>
+            <form id="contact-form">
+                <input type="email" id="email" placeholder="Your Email" required>
+                <textarea id="message" placeholder="Your Message" required></textarea>
+                <button type="submit">Send</button>
+            </form>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
