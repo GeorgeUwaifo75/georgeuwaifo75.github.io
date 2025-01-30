@@ -8,9 +8,8 @@ body {
 }
 
 /* Header Section */
-/* Header Section */
 header {
-    background-image: url('head_bg.png');
+    background-image: url('images/head_bg.png');
     background-size: cover;
     background-position: center;
     padding: 40px 20px;
