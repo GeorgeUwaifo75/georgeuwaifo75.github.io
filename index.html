@@ -35,51 +35,46 @@
         </ul>
     </nav>
 
-    <!-- Mid Section -->
-    <section class="mid-section">
-        <!-- Categories -->
-        <aside class="categories">
-            <h2>Categories</h2>
-            <ul>
-                <li><a href="#">Electronics</a></li>
-                <li><a href="#">Domestic Gadgets</a></li>
-                <li><a href="#">Computers & Accessories</a></li>
-                <li><a href="#">Smartphones</a></li>
-                <li><a href="#">Cars</a></li>
-                <li><a href="#">Furniture</a></li>
-                <li><a href="#">Clothes</a></li>
-                <li><a href="#">Shoes</a></li>
-            </ul>
-        </aside>
-
-        <!-- Product Display -->
-        <main class="products">
-            <h2>Featured Products</h2>
-            <div class="product-grid">
-                <!-- Example Products -->
-                <div class="product-item">
+<!-- Mid Section -->
+<section class="mid-section">
+    <!-- Categories Display -->
+    <aside class="categories">
+        <h2>Categories</h2>
+        <div class="category-grid">
+            <!-- Electronics -->
+            <a href="electronics.html" class="category-card">
+                <div class="category-item">
                     <img src="electronics1.jpg" alt="Electronics">
-                    <h3>Product 1</h3>
-                    <p>₦20,000</p>
+                    <div class="category-info">
+                        <h3>Electronics</h3>
+                        <p>From ₦15,000</p>
+                    </div>
                 </div>
-                <div class="product-item">
-                    <img src="gadget1.jpg" alt="Domestic Gadget">
-                    <h3>Product 2</h3>
-                    <p>₦15,000</p>
+            </a>
+
+            <!-- Domestic Gadgets -->
+            <a href="domestic.html" class="category-card">
+                <div class="category-item">
+                    <img src="gadget1.jpg" alt="Domestic Gadgets">
+                    <div class="category-info">
+                        <h3>Domestic Gadgets</h3>
+                        <p>From ₦8,000</p>
+                    </div>
                 </div>
-                <div class="product-item">
-                    <img src="computer1.jpg" alt="Computer">
-                    <h3>Product 3</h3>
-                    <p>₦50,000</p>
-                </div>
-                <div class="product-item">
-                    <img src="smartphone1.jpg" alt="Smartphone">
-                    <h3>Product 4</h3>
-                    <p>₦80,000</p>
-                </div>
-            </div>
-        </main>
-    </section>
+            </a>
+
+            <!-- Repeat for other categories -->
+        </div>
+    </aside>
+
+    <!-- Product Display -->
+    <main class="products">
+        <h2>Featured Products</h2>
+        <div class="product-grid" id="product-grid">
+            <!-- Products will be dynamically added here -->
+        </div>
+    </main>
+</section>
 
     <!-- Footer Section -->
     <footer>
