@@ -153,5 +153,17 @@ footer {
     margin: 0.25rem 0;
 }
 
+.submenu {
+    font-size: 0.6em; /* 60% reduction from parent font size */ 
+}
+
+.submenu li {
+    padding: 0.25rem 0; /* 50% reduction from original padding */
+}
+
+.submenu li a {
+    padding: 0.25rem 1rem; /* Reduced vertical padding by 50% */
+}
+
 
 
