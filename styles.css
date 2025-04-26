@@ -72,7 +72,7 @@ header h1 {
     z-index: 1;
     border-radius: 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    font-size: 0.78em; /* 30% larger than previous 0.6em */
+    font-size: 0.7em;
 }
 
 .submenu li {
@@ -121,10 +121,12 @@ footer {
 }
 
 .submenu li a {
-    padding: 0.25rem 1rem;
-    
+    padding: 0.25rem 1rem; /* Revert to original tighter padding */
+    font-size: 1em; /* Inherits from parent .submenu */
     display: block;
     transition: background 0.2s;
+
+    
 }
 
 
@@ -132,12 +134,6 @@ footer {
     background-color: #800020; /* Ox-blood hover */
 }
 
-
-
-/* Indent nested submenu items (e.g., countries under "Guides") */
-.submenu li li a {
-    padding-left: 2rem;
-}
 
 
 
