@@ -193,3 +193,35 @@ footer {
     content: "▶ ";
 }
 
+/* Comparison items get scale icon */
+.submenu li a[href="#Canada vs USA"]::before,
+.submenu li a[href="#Thailand vs Vietnam"]::before,
+.submenu li a[href="#Ireland vs UK"]::before {
+    content: "⚖ ";
+}
+
+/* Product items get star icon */
+.submenu li a[href="#International Bank Accounts"]::before,
+.submenu li a[href="#Travel Credit Cards"]::before,
+.submenu li a[href="#Forex Services"]::before {
+    content: "★ ";
+    color: #FFD700; /* Gold star */
+}
+
+/* Visa items get document icon */
+.submenu li a[href="#Canada Proof of Funds"]::before,
+.submenu li a[href="#Schengen Visa Requirements"]::before,
+.submenu li a[href="#Thailand Retirement Visa"]::before {
+    content: "📄 ";
+}
+
+/* User tips get community icon */
+.submenu li a[href="#Most Helpful Tips"]::before,
+.submenu li a[href="#Submit Your Tip"]::before {
+    content: "💡 ";
+}
+
+/* Top contributor gets trophy */
+.submenu li a[href="#Monthly Top Contributor"]::before {
+    content: "🏆 ";
+}
