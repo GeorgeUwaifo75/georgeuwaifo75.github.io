@@ -109,3 +109,26 @@ footer {
     padding: 1.5rem;
     margin-top: 2rem;
 }
+/* Add to existing CSS */
+.submenu .divider {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.2);
+    margin: 0.5rem 0;
+    list-style: none;
+}
+
+.submenu li a {
+    padding: 0.5rem 1rem;
+    display: block;
+    transition: background 0.2s;
+}
+
+.submenu li a:hover {
+    background-color: #800020; /* Ox-blood hover */
+}
+
+/* Indent nested submenu items (e.g., countries under "Guides") */
+.submenu li li a {
+    padding-left: 2rem;
+    font-size: 0.9rem;
+}
