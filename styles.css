@@ -163,5 +163,17 @@ footer {
     margin: 0.25rem 0;
 }
 
+/* Add these if not already present */
+.submenu li {
+    position: relative;
+}
 
+.submenu li a {
+    white-space: nowrap; /* Prevent text wrapping */
+}
+
+.submenu li li a::before {
+    content: "→ ";
+    opacity: 0.7;
+}
 
