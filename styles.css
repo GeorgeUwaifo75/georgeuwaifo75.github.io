@@ -165,5 +165,31 @@ footer {
     padding: 0.25rem 1rem; /* Reduced vertical padding by 50% */
 }
 
+/* Add premium course styling */
+.submenu li a[href="#Master Canadian Finances"],
+.submenu li a[href="#Asian Relocation Bundle"],
+.submenu li a[href="#European Visa Masterclass"] {
+    color: #FFD700; /* Gold color for premium courses */
+    font-weight: bold;
+}
 
+/* Tool items get calculator icon */
+.submenu li a[href="#Salary Converter"]::before,
+.submenu li a[href="#Tax Estimator"]::before,
+.submenu li a[href="#Visa Cost Calculator"]::before {
+    content: "🖩 ";
+}
+
+/* Membership items get community icon */
+.submenu li a[href="#Join Community"]::before,
+.submenu li a[href="#Q&A Webinar Schedule"]::before {
+    content: "👥 ";
+}
+
+/* YouTube items get play icon */
+.submenu li a[href="#Canada Prep Series"]::before,
+.submenu li a[href="#Thailand Money Tips"]::before,
+.submenu li a[href="#Ireland Tax Explained"]::before {
+    content: "▶ ";
+}
 
