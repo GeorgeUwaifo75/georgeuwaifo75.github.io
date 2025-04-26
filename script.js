@@ -27,3 +27,30 @@ document.addEventListener('click', (e) => {
         });
     }
 });
+
+// Image Carousel Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const carousel = document.querySelector('.carousel');
+    const slides = document.querySelectorAll('.carousel-slide');
+    let currentIndex = 0;
+    const slideCount = slides.length;
+    const delay = 3000; // 3 seconds
+
+    function rotateCarousel() {
+        currentIndex = (currentIndex + 1) % slideCount;
+        carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
+    }
+
+    // Start auto-rotation
+    let carouselInterval = setInterval(rotateCarousel, delay);
+
+    // Pause on hover
+    carousel.addEventListener('mouseenter', () => {
+        clearInterval(carouselInterval);
+    });
+
+    // Resume on mouse leave
+    carousel.addEventListener('mouseleave', () => {
+        carouselInterval = setInterval(rotateCarousel, delay);
+    });
+});
