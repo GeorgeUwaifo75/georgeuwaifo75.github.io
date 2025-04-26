@@ -72,6 +72,7 @@ header h1 {
     z-index: 1;
     border-radius: 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    font-size: 0.78em; /* 30% larger than previous 0.6em */
 }
 
 .submenu li {
@@ -121,7 +122,7 @@ footer {
 
 .submenu li a {
     padding: 0.25rem 1rem;
-    font-size: 0.6em;
+    
     display: block;
     transition: background 0.2s;
 }
@@ -143,8 +144,8 @@ footer {
 
 /* Keep existing indentation for nested items */
 .submenu li li a {
-    padding-left: 2rem;
-    font-size: 1em; /* Maintain same size for nested items */
+     font-size: 0.9em; /* Slightly smaller than parent items */
+    padding-left: 2rem; 
 }
 
 .submenu .divider {
@@ -153,16 +154,15 @@ footer {
     margin: 0.25rem 0;
 }
 
-.submenu {
-    font-size: 0.6em; /* 60% reduction from parent font size */ 
-}
 
 .submenu li {
     padding: 0.25rem 0; /* 50% reduction from original padding */
 }
 
 .submenu li a {
-    padding: 0.25rem 1rem; /* Reduced vertical padding by 50% */
+    padding: 0.3rem 1rem; /* Slightly increased padding */
+    font-size: 1em; /* Now inherits from parent .submenu */
+    
 }
 
 /* Add premium course styling */
