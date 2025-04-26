@@ -3,97 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nigeria E-Commerce</title>
-    <link rel="stylesheet" href="styles.css">
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore.js"></script>
+    <title>OsUwa Newland Finance Hub</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Header Section -->
     <header>
-    <div class="header-content">
-        <img src="/images/biz_logo.jpg" alt="Logo" class="logo">
-        <div class="header-text">
-            <h1>The Nigerian Robust Market Center</h1>
-            <p class="subtitle">Where they all meet</p>
+        <div class="header-content">
+            <h1>OsUwa Newland Finance Hub</h1>
+            <p class="subtitle">Emigration is easy when you have all the information including the vital financial information. Let's help out.</p>
         </div>
-        <img src="/images/user_icon.jpg" alt="User Icon" class="user-icon">
-    </div>
-</header>
+    </header>
 
-    <!-- Navigation Menu -->
-    <nav>
+    <nav class="main-menu">
         <ul>
-            <li><a href="#">Home</a></li>
-            <li><a href="#">Add Product</a></li>
-            <li><a href="#">List Products</a></li>
-            <li><a href="#">About Us</a></li>
-            <li><a href="#" id="login-link">Login</a></li>
-            <li><a href="#">Cart</a></li>
+            <li class="menu-item">
+                <button class="menu-btn">Newland Finance Hub</button>
+                <ul class="submenu">
+                    <li><a href="#">Procedures for Canada</a></li>
+                    <li><a href="#">Financial Planning</a></li>
+                    <li><a href="#">Visa FAQs</a></li>
+                </ul>
+            </li>
+            <li class="menu-item">
+                <button class="menu-btn">MoveStart Financial</button>
+                <ul class="submenu">
+                    <li><a href="#">Banking Abroad</a></li>
+                    <li><a href="#">Taxation Guide</a></li>
+                    <li><a href="#">Cost of Living</a></li>
+                </ul>
+            </li>
+            <li class="menu-item">
+                <button class="menu-btn">Global Finance Passport</button>
+                <ul class="submenu">
+                    <li><a href="#">Currency Exchange</a></li>
+                    <li><a href="#">Investment Tips</a></li>
+                    <li><a href="#">Real Estate</a></li>
+                </ul>
+            </li>
+            <li class="menu-item">
+                <button class="menu-btn">Expat Money Coach</button>
+                <ul class="submenu">
+                    <li><a href="#">Budgeting</a></li>
+                    <li><a href="#">Remote Work</a></li>
+                    <li><a href="#">Side Hustles</a></li>
+                </ul>
+            </li>
+            <li class="menu-item">
+                <button class="menu-btn">The Relocation Wallet</button>
+                <ul class="submenu">
+                    <li><a href="#">Packing Finances</a></li>
+                    <li><a href="#">Emergency Funds</a></li>
+                    <li><a href="#">Insurance</a></li>
+                </ul>
+            </li>
+            <li class="menu-item">
+                <button class="menu-btn">Bonus: Youtube + Website Combo</button>
+                <ul class="submenu">
+                    <li><a href="#">Video Tutorials</a></li>
+                    <li><a href="#">Exclusive Content</a></li>
+                    <li><a href="#">Community</a></li>
+                </ul>
+            </li>
         </ul>
     </nav>
 
-<!-- Mid Section -->
-<section class="mid-section">
-    <!-- Categories Display -->
-    <aside class="categories">
-        <h2>Categories</h2>
-        <div class="category-grid">
-            <!-- Electronics -->
-            <a href="electronics.html" class="category-card">
-                <div class="category-item">
-                    <img src="electronics1.jpg" alt="Electronics">
-                    <div class="category-info">
-                        <h3>Electronics</h3>
-                        <p>From ₦15,000</p>
-                    </div>
-                </div>
-            </a>
-
-            <!-- Domestic Gadgets -->
-            <a href="domestic.html" class="category-card">
-                <div class="category-item">
-                    <img src="gadget1.jpg" alt="Domestic Gadgets">
-                    <div class="category-info">
-                        <h3>Domestic Gadgets</h3>
-                        <p>From ₦8,000</p>
-                    </div>
-                </div>
-            </a>
-
-            <!-- Repeat for other categories -->
-        </div>
-    </aside>
-
-    <!-- Product Display -->
-    <main class="products">
-        <h2>Featured Products</h2>
-        <div class="product-grid" id="product-grid">
-            <!-- Products will be dynamically added here -->
-        </div>
+    <main>
+        <section class="intro">
+            <h2>Your Journey Starts Here</h2>
+            <p>We provide financial guidance for emigrating to Canada, Thailand, Iceland, Ireland, and more.</p>
+        </section>
     </main>
-</section>
 
-    <!-- Footer Section -->
     <footer>
-        <div class="footer-content">
-            <h2>Contact Us</h2>
-            <div class="social-media">
-                <a href="#">Twitter (X)</a>
-                <a href="#">Instagram</a>
-                <a href="#">Facebook</a>
-            </div>
-            <form id="contact-form">
-                <input type="email" id="email" placeholder="Your Email" required>
-                <textarea id="message" placeholder="Your Message" required></textarea>
-                <button type="submit">Send</button>
-            </form>
-        </div>
+        <p>&copy; 2024 OsUwa Newland Finance Hub. All rights reserved.</p>
     </footer>
 
-    <!-- JavaScript -->
     <script src="script.js"></script>
 </body>
 </html>
