@@ -120,21 +120,24 @@ footer {
 }
 
 .submenu li a {
-    padding: 0.5rem 1rem;
+    padding: 0.25rem 1rem;
+    font-size: 0.6em;
     display: block;
     transition: background 0.2s;
-    
 }
+
 
 .submenu li a:hover {
     background-color: #800020; /* Ox-blood hover */
 }
 
+
+
 /* Indent nested submenu items (e.g., countries under "Guides") */
 .submenu li li a {
     padding-left: 2rem;
-    font-size: 0.9rem;
 }
+
 
 .submenu {
     font-size: 0.6em; /* 60% reduction from parent font size */ 
@@ -153,4 +156,12 @@ footer {
     padding-left: 2rem;
     font-size: 1em; /* Maintain same size for nested items */
 }
+
+.submenu .divider {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.2);
+    margin: 0.25rem 0;
+}
+
+
 
