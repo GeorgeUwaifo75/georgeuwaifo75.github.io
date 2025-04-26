@@ -115,12 +115,15 @@ footer {
     background-color: rgba(255, 255, 255, 0.2);
     margin: 0.5rem 0;
     list-style: none;
+   
+    
 }
 
 .submenu li a {
     padding: 0.5rem 1rem;
     display: block;
     transition: background 0.2s;
+    
 }
 
 .submenu li a:hover {
@@ -132,3 +135,22 @@ footer {
     padding-left: 2rem;
     font-size: 0.9rem;
 }
+
+.submenu {
+    font-size: 0.6em; /* 60% reduction from parent font size */ 
+}
+
+.submenu li {
+    padding: 0.25rem 0; /* 50% reduction from original padding */
+}
+
+.submenu li a {
+    padding: 0.25rem 1rem; /* Reduced vertical padding by 50% */
+}
+
+/* Keep existing indentation for nested items */
+.submenu li li a {
+    padding-left: 2rem;
+    font-size: 1em; /* Maintain same size for nested items */
+}
+
