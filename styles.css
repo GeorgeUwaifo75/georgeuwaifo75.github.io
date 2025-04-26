@@ -1,211 +1,29 @@
-/* General Styles */
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
-}
+// Toggle submenus on button click
+document.querySelectorAll('.menu-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        const submenu = button.nextElementSibling;
+        
+        // Close all other open submenus
+        document.querySelectorAll('.submenu').forEach(menu => {
+            if (menu !== submenu) {
+                menu.style.display = 'none';
+            }
+        });
 
-/* Header Section */
-header {
-    background-image: url('images/head_bg.jpg');
-    background-size: cover;
-    background-position: center;
-    padding: 40px 20px;
-    text-align: center;
-    color: white;
-    min-height: 200px; /* Adjust height as needed */
-}
+        // Toggle current submenu
+        if (submenu.style.display === 'block') {
+            submenu.style.display = 'none';
+        } else {
+            submenu.style.display = 'block';
+        }
+    });
+});
 
-.header-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.header-text {
-    flex-grow: 1;
-    text-align: center;
-    padding: 0 20px;
-}
-
-.header-text h1 {
-    margin: 0;
-    font-size: 2.5em;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.subtitle {
-    font-size: 1.2em;
-    margin-top: 10px;
-    font-style: italic;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.logo {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-.user-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-}
-/* Navigation Menu */
-nav {
-    background-color: #333;
-    padding: 10px;
-}
-
-nav ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    justify-content: space-around;
-}
-
-nav ul li a {
-    color: white;
-    text-decoration: none;
-    font-weight: bold;
-}
-
-nav ul li a:hover {
-    color: #ffa500;
-}
-
-/* Mid Section */
-.mid-section {
-    display: flex;
-    padding: 20px;
-}
-
-/* Categories Display */
-.categories {
-    width: 20%;
-    padding: 10px;
-}
-
-.category-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.category-card {
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.3s ease;
-}
-
-.category-card:hover {
-    transform: translateY(-5px);
-}
-
-.category-item {
-    background: white;
-    border-radius: 15px;
-    overflow: hidden;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    border: 2px solid #2e8b57;
-}
-
-.category-item img {
-    width: 100%;
-    height: 150px;
-    object-fit: cover;
-    border-bottom: 3px solid #ffa500;
-}
-
-.category-info {
-    padding: 10px;
-    text-align: center;
-    background: #f8f8f8;
-}
-
-.category-info h3 {
-    margin: 5px 0;
-    color: #2e8b57;
-    font-size: 1.1em;
-}
-
-.category-info p {
-    margin: 5px 0;
-    color: #333;
-    font-size: 0.9em;
-    font-weight: bold;
-}
-
-/* Product Display */
-.products {
-    width: 80%;
-    padding: 10px 20px;
-}
-
-.product-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    padding: 10px;
-}
-.product-item {
-    background-color: white;
-    padding: 10px;
-    border: 1px solid #ddd;
-    width: 23%;
-    text-align: center;
-}
-
-.product-item img {
-    width: 100%;
-    height: auto;
-}
-
-/* Footer Section */
-footer {
-    background-color: #333;
-    color: white;
-    padding: 20px;
-    text-align: center;
-}
-
-.footer-content {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.social-media a {
-    color: white;
-    margin: 0 10px;
-    text-decoration: none;
-}
-
-.social-media a:hover {
-    color: #ffa500;
-}
-
-#contact-form input, #contact-form textarea {
-    width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid #ddd;
-}
-
-#contact-form button {
-    background-color: #ffa500;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    cursor: pointer;
-}
-
-#contact-form button:hover {
-    background-color: #e69500;
-}
+// Close submenus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.matches('.menu-btn')) {
+        document.querySelectorAll('.submenu').forEach(menu => {
+            menu.style.display = 'none';
+        });
+    }
+});
