@@ -56,3 +56,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+
+
+// Country Guide Interactions
+document.querySelectorAll('.guide-button').forEach(button => {
+    button.addEventListener('click', function() {
+        const country = this.closest('.guide-card').querySelector('h4').textContent;
+        alert(`Downloading ${country} guide...`);
+        // In production: would link to actual PDF/download
+    });
+});
+
+// Newsletter Form Handling
+document.querySelector('.signup-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const email = this.querySelector('input').value;
+    const country = this.querySelector('select').value;
+    alert(`Thank you! We'll send ${country} guides to ${email}`);
+    this.reset();
+});
