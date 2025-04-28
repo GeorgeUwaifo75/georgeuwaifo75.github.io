@@ -23,8 +23,9 @@ header {
 .main-header {
     position: relative;
     height: 250px;
-    background: url('images/osuwa_bg1.jpg'');
-    
+    background: 
+        linear-gradient(rgba(128, 0, 32, 0.7)),
+        url('images/osuwa_bg1.jpg') center/cover no-repeat;
     color: white;
     display: flex;
     align-items: center;
