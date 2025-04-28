@@ -13,6 +13,21 @@ body {
 }
 
 /* ===== HEADER STYLES ===== */
+
+.main-header {
+    height: 60vh; /* Viewport units for fluid height */
+    min-height: 400px;
+    max-height: 800px;
+    background:
+        linear-gradient(rgba(128, 0, 32, 0.7)),
+        url('../images/osuwa_bg2.jpeg') center/cover no-repeat;
+}
+
+.header-content {
+    padding: 1rem;
+}
+
+
 header {
     background-color: #800020;
     color: white;
@@ -20,6 +35,7 @@ header {
     padding: 2rem 1rem;
 }
 
+/*
 .main-header {
     position: relative;
     height: 250px;
@@ -31,20 +47,6 @@ header {
     align-items: center;
     text-align: center;
 }
-
-/* Add this to debug if image still doesn't appear */
-/*
-.main-header::after {
-    content: "Image path: ../images/osuwa_bg1.jpg";
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    background: white;
-    color: #800020;
-    padding: 5px;
-    font-size: 12px;
-    z-index: 100;
-}
 */
 
 .header-overlay {
@@ -52,11 +54,11 @@ header {
     padding: 2rem;
     background-color: rgba(0, 0, 0, 0.4);
 }
-
+/*
 .header-content {
     max-width: 1200px;
     margin: 0 auto;
-}
+} */
 
 header h1,
 .main-header h1 {
@@ -74,24 +76,41 @@ header h1,
 }
 
 /* ===== NAVIGATION STYLES ===== */
+
+.main-menu ul {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+}
+
+.menu-btn {
+    width: 100%;
+    padding: 1rem;
+    text-align: left;
+}
+
+
 .main-menu {
     background-color: #006400;
     padding: 1rem;
 }
 
+
+/*
 .main-menu ul {
     display: flex;
     justify-content: center;
     list-style: none;
     gap: 1rem;
     flex-wrap: wrap;
-}
+} */
 
 .menu-item {
     position: relative;
     display: inline-block;
 }
 
+/*
 .menu-btn {
     background-color: #800020;
     color: white;
@@ -101,13 +120,20 @@ header h1,
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.3s;
-}
+} */
 
 .menu-btn:hover {
     background-color: #a0022a;
 }
 
 /* ===== SUBMENU STYLES ===== */
+.submenu {
+    width: 100%;
+    position: static; /* Stack on mobile */
+    box-shadow: none;
+    font-size: 0.8em;
+}
+/*
 .submenu {
     display: none;
     position: absolute;
@@ -118,7 +144,7 @@ header h1,
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     font-size: 0.7em;
 }
-
+*/
 .menu-item:hover .submenu,
 .menu-item:focus-within .submenu {
     display: block;
@@ -268,6 +294,37 @@ footer,
 }
 
 /* ===== RESPONSIVE STYLES ===== */
+
+/* ===== BASE RESPONSIVE STYLES ===== */
+:root {
+    --oxblood: #800020;
+    --dark-green: #006400;
+    --brown: #654321;
+    --gold: #FFD700;
+    --text-light: #f9f5f0;
+}
+
+/* Fluid typography */
+html {
+    font-size: 100%;
+}
+
+@media (min-width: 576px) {
+    html { font-size: 106.25%; } /* 17px */
+}
+@media (min-width: 768px) {
+    html { font-size: 112.5%; } /* 18px */
+}
+@media (min-width: 992px) {
+    html { font-size: 118.75%; } /* 19px */
+}
+@media (min-width: 1200px) {
+    html { font-size: 125%; } /* 20px */
+}
+
+
+
+
 @media (max-width: 768px) {
     .main-header {
         height: 300px;
