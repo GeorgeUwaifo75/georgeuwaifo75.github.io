@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Country Financial Guides | OsUwa Newland Finance Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Newsletter-specific enhancements */
+        .newsletter-hero {
+            height: 50vh;
+            min-height: 400px;
+            background: 
+                linear-gradient(rgba(101, 67, 33, 0.7), 
+                url('../images/country-guides-hero.jpg') center/cover no-repeat;
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 2rem;
+        }
+        
+        .newsletter-title {
+            background: rgba(128, 0, 32, 0.9);
+            color: white;
+            padding: 2rem;
+            width: 100%;
+        }
+        
+        .guide-container {
+            display: grid;
+            gap: 2rem;
+            padding: 0 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .guide-card {
+            background: #f9f5f0;
+            border-left: 5px solid #800020;
+            padding: 1.5rem;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .country-flag {
+            height: 30px;
+            width: auto;
+            margin-right: 10px;
+            vertical-align: middle;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .newsletter-form {
+            background: #654321;
+            padding: 2rem;
+            color: white;
+            text-align: center;
+            margin-top: 3rem;
+        }
+        
+        .form-input {
+            padding: 12px;
+            width: 300px;
+            max-width: 100%;
+            border: none;
+            margin: 10px 0;
+        }
+        
+        @media (min-width: 768px) {
+            .guide-container {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 0;
+            }
+            
+            .newsletter-hero {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="main-header">
+        <div class="header-overlay">
+            <div class="header-content">
+                <h1>OsUwa Newland Finance Hub</h1>
+                <p class="subtitle">Emigration is easy when you have all the information including the vital financial information. Let's help out.</p>
+            </div>
+        </div>
+    </header>
+
+    <nav class="main-menu">
+        <ul>
+            <!-- Your existing menu items here -->
+        </ul>
+    </nav>
+
+    <main>
+        <section class="newsletter-hero">
+            <div class="newsletter-title">
+                <h2>Country-Specific Financial Guides</h2>
+                <p>Your passport to financial preparedness abroad</p>
+            </div>
+        </section>
+
+        <div class="guide-container">
+            <article class="guide-card">
+                <h3><img src="images/flags/canada.png" alt="Canada Flag" class="country-flag"> Canada Financial Blueprint</h3>
+                <p>Navigate Canada's banking system, TFSA/RRSP accounts, and proof of funds requirements with our step-by-step guide. Learn how to establish credit as a newcomer and optimize your tax filings.</p>
+                <ul>
+                    <li>✓ Minimum funds required for each visa type</li>
+                    <li>✓ Best newcomer bank accounts</li>
+                    <li>✓ Provincial tax differences</li>
+                </ul>
+                <a href="#" class="menu-btn" style="display: inline-block; margin-top: 1rem;">Download Guide</a>
+            </article>
+
+            <article class="guide-card">
+                <h3><img src="images/flags/thailand.png" alt="Thailand Flag" class="country-flag"> Thailand Money Mastery</h3>
+                <p>Everything you need to know about Thai banking, visa financial requirements, and managing your finances between currencies. Includes special section on retirement visa financials.</p>
+                <ul>
+                    <li>✓ Thai bank account options for foreigners</li>
+                    <li>✓ 800K Baht seasoning requirements</li>
+                    <li>✓ International transfer best practices</li>
+                </ul>
+                <a href="#" class="menu-btn" style="display: inline-block; margin-top: 1rem;">Download Guide</a>
+            </article>
+
+            <article class="guide-card">
+                <h3><img src="images/flags/iceland.png" alt="Iceland Flag" class="country-flag"> Iceland Financial Survival</h3>
+                <p>Navigate one of the world's most expensive countries with confidence. Our guide covers everything from opening a kennitala-linked bank account to understanding VAT refunds.</p>
+                <ul>
+                    <li>✓ Cost of living breakdown by region</li>
+                    <li>✓ Foreigner banking restrictions</li>
+                    <li>✓ Salary conversion benchmarks</li>
+                </ul>
+                <a href="#" class="menu-btn" style="display: inline-block; margin-top: 1rem;">Download Guide</a>
+            </article>
+
+            <article class="guide-card">
+                <h3><img src="images/flags/ireland.png" alt="Ireland Flag" class="country-flag"> Ireland Financial Gateway</h3>
+                <p>From PPS numbers to understanding the Irish mortgage system, this guide helps you navigate financial life in the Emerald Isle. Special section on EU citizen advantages.</p>
+                <ul>
+                    <li>✓ PPS number application walkthrough</li>
+                    <li>✓ Rental deposit protection schemes</li>
+                    <li>✓ Cross-border banking with Northern Ireland</li>
+                </ul>
+                <a href="#" class="menu-btn" style="display: inline-block; margin-top: 1rem;">Download Guide</a>
+            </article>
+        </div>
+
+        <section class="newsletter-form">
+            <h3>Get Updated Guides Directly</h3>
+            <p>Join our newsletter for monthly country spotlights and financial updates</p>
+            <form>
+                <input type="email" class="form-input" placeholder="Your best email" required>
+                <select class="form-input">
+                    <option value="">Select country interest</option>
+                    <option>Canada</option>
+                    <option>Thailand</option>
+                    <option>Iceland</option>
+                    <option>Ireland</option>
+                </select>
+                <br>
+                <button type="submit" class="menu-btn" style="background-color: #FFD700; color: #654321;">Subscribe Now</button>
+            </form>
+        </section>
+    </main>
+
+    <footer class="page-footnote">
+        <p>OsUwa Newland Finance Hub © 2024 | All financial advice should be verified with certified professionals</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
