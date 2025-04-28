@@ -26,6 +26,12 @@ body {
     text-align: center;
 }
 
+.header-overlay {
+    width: 100%;
+    padding: 2rem;
+    background-color: rgba(0, 0, 0, 0.4); /* Dark overlay for better text contrast */
+}
+
 header {
     background-color: #800020; 
     color: white;
