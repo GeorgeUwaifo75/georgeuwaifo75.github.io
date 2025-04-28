@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-*/
+
 
 // Existing hover detection
 function detectTouch() {
@@ -156,4 +156,4 @@ function detectTouch() {
     }
 }
 detectTouch();
-
+*/
