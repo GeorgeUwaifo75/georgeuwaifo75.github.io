@@ -48,6 +48,24 @@ header h1 {
     position: relative;
 }
 
+/* Show submenu on hover */
+.menu-item:hover .submenu {
+    display: block;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Submenu stays open when hovering over it */
+.submenu:hover {
+    display: block;
+}
+
+/* Smooth fade-in animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
 .menu-btn {
     background-color: #800020; /* Ox-blood red */
     color: white;
