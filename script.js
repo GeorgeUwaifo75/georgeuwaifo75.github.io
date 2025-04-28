@@ -56,34 +56,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-
-// Mobile menu toggle
-const mobileMenuToggle = document.createElement('button');
-mobileMenuToggle.className = 'mobile-menu-toggle';
-mobileMenuToggle.innerHTML = '☰ Menu';
-document.querySelector('.main-menu').prepend(mobileMenuToggle);
-
-mobileMenuToggle.addEventListener('click', () => {
-    const menu = document.querySelector('.main-menu ul');
-    menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
-});
-
-// Close submenus when tapping outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.menu-item')) {
-        document.querySelectorAll('.submenu').forEach(sub => {
-            sub.style.display = 'none';
-        });
-    }
-});
-
-// Handle hover vs touch devices
-function detectTouch() {
-    if ('ontouchstart' in window) {
-        document.body.classList.add('touch-device');
-    } else {
-        document.body.classList.add('hover-device');
-    }
-}
-detectTouch();
-
