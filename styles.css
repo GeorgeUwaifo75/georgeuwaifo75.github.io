@@ -22,10 +22,10 @@ header {
 
 .main-header {
     position: relative;
-    height: 280px;
+    height: 250px;
     background: 
         linear-gradient(rgba(128, 0, 32, 0.7)),
-        url('images/finance-world-map.jpg') center/cover no-repeat;
+        url('images/canada.jpg') center/cover no-repeat;
     display: flex;
     align-items: center;
     text-align: center;
