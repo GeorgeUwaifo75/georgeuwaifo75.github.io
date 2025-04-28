@@ -14,18 +14,6 @@ body {
 
 /* Header Styles */
 
-.main-header {
-    position: relative;
-    height: 400px; /* Adjust as needed */
-    background: 
-        linear-gradient(rgba(128, 0, 32, 0.7), /* Ox-blood overlay */
-        url('image1.jpg') center/cover no-repeat;
-    color: white;
-    display: flex;
-    align-items: center;
-    text-align: center;
-}
-
 
 header {
     background-color: #800020; 
