@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const slideCount = slides.length;
     const delay = 3000; // 3 seconds
 
-     const mobileMenuToggle = document.createElement('button');
+    // const mobileMenuToggle = document.createElement('button');
    
 
     function rotateCarousel() {
@@ -60,36 +60,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
 //Begin new additions
 // Force hide all submenus
-    document.querySelectorAll('.submenu').forEach(submenu => {
+ /*   document.querySelectorAll('.submenu').forEach(submenu => {
         submenu.style.display = 'none';
-    });
-
-
-    /*
-// Mobile menu toggle (existing)
-    mobileMenuToggle.className = 'mobile-menu-toggle';
-    mobileMenuToggle.innerHTML = '☰ Menu';
-    document.querySelector('.main-menu').prepend(mobileMenuToggle);
-
-    mobileMenuToggle.addEventListener('click', () => {
-        const menu = document.querySelector('.main-menu ul');
-        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
-    });
-
-    // Close submenus when clicking outside (existing)
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.menu-item')) {
-            document.querySelectorAll('.submenu').forEach(sub => {
-                sub.style.display = 'none';
-            });
-        }
-    });
-*/
-//End of addition
-    
-
-
-    
+    }); 
+    */
     
 });
 
