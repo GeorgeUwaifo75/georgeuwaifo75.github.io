@@ -18,7 +18,7 @@ header {
     height: 400px; /* Adjust as needed */
     background: 
         linear-gradient(rgba(128, 0, 32, 0.7), /* Ox-blood overlay */
-        url('images/finance-world-map.jpg') center/cover no-repeat;
+        url('images/canada.jpg') center/cover no-repeat;
     color: white;
     display: flex;
     align-items: center;
