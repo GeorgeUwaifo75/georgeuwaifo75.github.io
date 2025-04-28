@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const slideCount = slides.length;
     const delay = 3000; // 3 seconds
 
+     const mobileMenuToggle = document.createElement('button');
+   
+
     function rotateCarousel() {
         currentIndex = (currentIndex + 1) % slideCount;
         carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
@@ -61,8 +64,9 @@ document.addEventListener('DOMContentLoaded', function() {
         submenu.style.display = 'none';
     });
 
+
+    /*
 // Mobile menu toggle (existing)
-    const mobileMenuToggle = document.createElement('button');
     mobileMenuToggle.className = 'mobile-menu-toggle';
     mobileMenuToggle.innerHTML = '☰ Menu';
     document.querySelector('.main-menu').prepend(mobileMenuToggle);
@@ -80,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
-
+*/
 //End of addition
     
 
