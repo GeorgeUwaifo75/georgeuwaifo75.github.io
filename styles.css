@@ -63,8 +63,9 @@ body {
     }
 }
 
+/*
 header {
-    background-color: #800020; /* Ox-blood red */
+    background-color: #800020; 
     color: white;
     text-align: center;
     padding: 2rem 1rem;
@@ -75,11 +76,12 @@ header h1 {
     margin-bottom: 0.5rem;
 }
 
-/*
+
 .subtitle {
     font-size: 1.2rem;
     opacity: 0.9;
 }*/
+
 /* Main Menu Styles */
 .main-menu {
     background-color: #006400; /* Dark green */
