@@ -210,31 +210,19 @@ header h1,
 
 .carousel-container {
     width: 100%;
-    overflow: hidden;
-    position: relative;
-}
-
-/*
-.carousel-container {
-    width: 100%;
     max-width: 1200px;
     margin: 1.5rem auto;
     overflow: hidden;
     position: relative;
 }
-*/
 
-.carousel {
-    display: flex;
-    transition: transform 0.5s ease-in-out;
-}
-/*
+
 .carousel {
     display: flex;
     transition: transform 0.5s ease-in-out;
     height: 400px;
 }
-*/
+
 
 .carousel-slide {
     min-width: 100%;
@@ -243,17 +231,9 @@ header h1,
 
 .carousel-slide img {
     width: 100%;
-    height: auto;
-    display: block;
-}
-
-/*
-.carousel-slide img {
-    width: 100%;
     height: 100%;
     object-fit: cover;
 }
-*/
 
 .slide-caption {
     position: absolute;
