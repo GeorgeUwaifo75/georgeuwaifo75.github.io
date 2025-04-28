@@ -13,21 +13,6 @@ body {
 }
 
 /* ===== HEADER STYLES ===== */
-
-.main-header {
-    height: 60vh; /* Viewport units for fluid height */
-    min-height: 400px;
-    max-height: 800px;
-    background:
-        linear-gradient(rgba(128, 0, 32, 0.7)),
-        url('../images/osuwa_bg2.jpeg') center/cover no-repeat;
-}
-
-.header-content {
-    padding: 1rem;
-}
-
-
 header {
     background-color: #800020;
     color: white;
@@ -35,30 +20,27 @@ header {
     padding: 2rem 1rem;
 }
 
-/*
 .main-header {
     position: relative;
-    height: 250px;
+    height: 400px;
     background: 
         linear-gradient(rgba(128, 0, 32, 0.7)),
-        url('images/osuwa_bg2.jpeg') center/cover no-repeat;
-    color: white;
+        url('images/finance-world-map.jpg') center/cover no-repeat;
     display: flex;
     align-items: center;
     text-align: center;
 }
-*/
 
 .header-overlay {
     width: 100%;
     padding: 2rem;
     background-color: rgba(0, 0, 0, 0.4);
 }
-/*
+
 .header-content {
     max-width: 1200px;
     margin: 0 auto;
-} */
+}
 
 header h1,
 .main-header h1 {
@@ -76,41 +58,24 @@ header h1,
 }
 
 /* ===== NAVIGATION STYLES ===== */
-
-.main-menu ul {
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.5rem;
-}
-
-.menu-btn {
-    width: 100%;
-    padding: 1rem;
-    text-align: left;
-}
-
-
 .main-menu {
     background-color: #006400;
     padding: 1rem;
 }
 
-
-/*
 .main-menu ul {
     display: flex;
     justify-content: center;
     list-style: none;
     gap: 1rem;
     flex-wrap: wrap;
-} */
+}
 
 .menu-item {
     position: relative;
     display: inline-block;
 }
 
-/*
 .menu-btn {
     background-color: #800020;
     color: white;
@@ -120,20 +85,13 @@ header h1,
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.3s;
-} */
+}
 
 .menu-btn:hover {
     background-color: #a0022a;
 }
 
 /* ===== SUBMENU STYLES ===== */
-.submenu {
-    width: 100%;
-    position: static; /* Stack on mobile */
-    box-shadow: none;
-    font-size: 0.8em;
-}
-/*
 .submenu {
     display: none;
     position: absolute;
@@ -144,7 +102,7 @@ header h1,
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     font-size: 0.7em;
 }
-*/
+
 .menu-item:hover .submenu,
 .menu-item:focus-within .submenu {
     display: block;
@@ -241,18 +199,11 @@ header h1,
     position: relative;
 }
 
-
-/* ===== CAROUSEL ===== */
-.carousel {
-    height: 50vw;
-    max-height: 500px;
-}
-/*
 .carousel {
     display: flex;
     transition: transform 0.5s ease-in-out;
     height: 400px;
-}*/
+}
 
 .carousel-slide {
     min-width: 100%;
@@ -275,13 +226,6 @@ header h1,
     padding: 1rem;
     text-align: center;
     font-size: 1.2rem;
-}
-
-/* ===== CONTENT AREAS ===== */
-.container {
-    width: 100%;
-    padding: 0 1rem;
-    margin: 0 auto;
 }
 
 /* ===== FOOTER STYLES ===== */
@@ -307,70 +251,7 @@ footer,
     }
 }
 
-/* Desktop menu */
-@media (min-width: 992px) {
-    .main-menu ul {
-        flex-direction: row;
-        flex-wrap: nowrap;
-    }
-    
-    .menu-btn {
-        width: auto;
-        text-align: center;
-    }
-    
-    .submenu {
-        position: absolute;
-        width: auto;
-        min-width: 250px;
-    }
-}
-
-
-
 /* ===== RESPONSIVE STYLES ===== */
-
-/* ===== BASE RESPONSIVE STYLES ===== */
-:root {
-    --oxblood: #800020;
-    --dark-green: #006400;
-    --brown: #654321;
-    --gold: #FFD700;
-    --text-light: #f9f5f0;
-}
-
-/* Fluid typography */
-html {
-    font-size: 100%;
-}
-
-@media (min-width: 576px) {
-    html { font-size: 106.25%; } /* 17px */
-}
-@media (min-width: 768px) {
-    html { font-size: 112.5%; } /* 18px */
-}
-@media (min-width: 992px) {
-    html { font-size: 118.75%; } /* 19px */
-}
-@media (min-width: 1200px) {
-    html { font-size: 125%; } /* 20px */
-}
-
-@media (min-width: 576px) {
-    .container { max-width: 540px; }
-}
-@media (min-width: 768px) {
-    .container { max-width: 720px; }
-}
-@media (min-width: 992px) {
-    .container { max-width: 960px; }
-}
-@media (min-width: 1200px) {
-    .container { max-width: 1140px; }
-}
-
-
 @media (max-width: 768px) {
     .main-header {
         height: 300px;
@@ -389,57 +270,4 @@ html {
         flex-direction: column;
         gap: 0.5rem;
     }
-}
-
-/* ===== TOUCH FRIENDLY ELEMENTS ===== */
-a, button, .menu-btn {
-    touch-action: manipulation; /* Removes tap delay on mobile */
-    min-height: 48px; /* Minimum touch target size */
-}
-
-/* ===== IMAGE OPTIMIZATION ===== */
-img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-}
-
-/* ===== FOOTER ===== */
-footer {
-    padding: 2rem 1rem;
-}
-
-/* Mobile-first styles */
-.mobile-menu-toggle {
-    display: block;
-    background: var(--oxblood);
-    color: white;
-    border: none;
-    padding: 1rem;
-    width: 100%;
-    font-size: 1.2rem;
-    margin-bottom: 0.5rem;
-}
-
-.main-menu ul {
-    display: none; /* Hidden by default on mobile */
-}
-
-@media (min-width: 992px) {
-    .mobile-menu-toggle {
-        display: none;
-    }
-    .main-menu ul {
-        display: flex;
-    }
-}
-
-/* Touch device adjustments */
-.touch-device .menu-item:hover .submenu {
-    display: none;
-}
-
-.touch-device .menu-item:active .submenu,
-.touch-device .menu-item:focus-within .submenu {
-    display: block;
 }
