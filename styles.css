@@ -22,7 +22,7 @@ header {
 
 .main-header {
     position: relative;
-    height: 250px;
+    height: 235px;
     background: 
         linear-gradient(rgba(128, 0, 32, 0.7)),
         url('images/finance-world-map.jpg') center/cover no-repeat;
