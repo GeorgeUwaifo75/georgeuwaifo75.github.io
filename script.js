@@ -1,5 +1,5 @@
 // Toggle submenus on button click
-/*
+
 document.querySelectorAll('.menu-btn').forEach(button => {
     button.addEventListener('click', () => {
         const submenu = button.nextElementSibling;
@@ -19,7 +19,7 @@ document.querySelectorAll('.menu-btn').forEach(button => {
         }
     });
 });
-*/
+
 // Close submenus when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.matches('.menu-btn')) {
