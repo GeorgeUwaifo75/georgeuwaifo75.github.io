@@ -34,7 +34,7 @@ header {
 
 /* Add this to debug if image still doesn't appear */
 .main-header::after {
-    content: "Image path: ../images/world-finance.jpg";
+    content: "Image path: ../images/osuwa_bg1.jpg";
     position: absolute;
     bottom: 10px;
     right: 10px;
