@@ -1,4 +1,5 @@
 // Toggle submenus on button click
+/*
 document.querySelectorAll('.menu-btn').forEach(button => {
     button.addEventListener('click', () => {
         const submenu = button.nextElementSibling;
@@ -27,7 +28,7 @@ document.addEventListener('click', (e) => {
         });
     }
 });
-
+*/
 // Image Carousel Functionality
 document.addEventListener('DOMContentLoaded', function() {
     const carousel = document.querySelector('.carousel');
