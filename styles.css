@@ -83,7 +83,7 @@ header h1 {
 
 /* Submenu Styles */
 .submenu {
-    display: none;
+    /*display: none;*/
     position: absolute;
     background-color: #654321; /* Brown */
     min-width: 200px;
