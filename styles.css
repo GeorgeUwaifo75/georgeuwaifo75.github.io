@@ -25,7 +25,8 @@ header {
     height: 250px;
     background: 
         linear-gradient(rgba(128, 0, 32, 0.7)),
-        url('images/canada.jpg') center/cover no-repeat;
+        url('/images/finance-world-map.jpg') center/cover no-repeat;
+    color: white;
     display: flex;
     align-items: center;
     text-align: center;
