@@ -191,10 +191,21 @@ header h1,
 }
 
 /* ===== CAROUSEL STYLES ===== */
+
+/* Slightly increase content padding above carousel */
+.intro {
+    padding-bottom: 1.5rem; /* Adds space before carousel */
+}
+
+/* Reduce footer top margin to match */
+.page-footnote {
+    margin-top: 1.5rem; /* Reduced from 2rem */
+}
+
 .carousel-container {
     width: 100%;
     max-width: 1200px;
-    margin: 3rem auto;
+    margin: 1.5rem auto;
     overflow: hidden;
     position: relative;
 }
@@ -223,9 +234,9 @@ header h1,
     right: 0;
     background: rgba(0, 0, 0, 0.7);
     color: white;
-    padding: 1rem;
+    padding: 0.5rem;
     text-align: center;
-    font-size: 1.2rem;
+    font-size: 1rem;
 }
 
 /* ===== FOOTER STYLES ===== */
