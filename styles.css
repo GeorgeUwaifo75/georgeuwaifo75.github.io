@@ -103,6 +103,12 @@ header h1,
     font-size: 0.7em;
 }
 
+/* Remove any conflicting display properties */
+.menu-item .submenu {
+    display: none;
+}
+
+
 .menu-item:hover .submenu,
 .menu-item:focus-within .submenu {
     display: block;
