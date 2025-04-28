@@ -19,7 +19,7 @@ document.querySelectorAll('.menu-btn').forEach(button => {
         }
     });
 });
-
+*/
 // Close submenus when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.matches('.menu-btn')) {
@@ -28,7 +28,7 @@ document.addEventListener('click', (e) => {
         });
     }
 });
-*/
+
 // Image Carousel Functionality
 document.addEventListener('DOMContentLoaded', function() {
     const carousel = document.querySelector('.carousel');
