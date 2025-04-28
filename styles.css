@@ -408,3 +408,38 @@ img {
 footer {
     padding: 2rem 1rem;
 }
+
+/* Mobile-first styles */
+.mobile-menu-toggle {
+    display: block;
+    background: var(--oxblood);
+    color: white;
+    border: none;
+    padding: 1rem;
+    width: 100%;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.main-menu ul {
+    display: none; /* Hidden by default on mobile */
+}
+
+@media (min-width: 992px) {
+    .mobile-menu-toggle {
+        display: none;
+    }
+    .main-menu ul {
+        display: flex;
+    }
+}
+
+/* Touch device adjustments */
+.touch-device .menu-item:hover .submenu {
+    display: none;
+}
+
+.touch-device .menu-item:active .submenu,
+.touch-device .menu-item:focus-within .submenu {
+    display: block;
+}
