@@ -1,5 +1,5 @@
-/* Reset & Base Styles */
-* {
+/* ===== RESET & BASE STYLES ===== */
+*, *::before, *::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -7,17 +7,46 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background-color: #f9f5f0; /* Light brown background */
+    background-color: #f9f5f0;
     color: #333;
     line-height: 1.6;
 }
 
-/* Header Styles */
+/* ===== HEADER STYLES ===== */
+header {
+    background-color: #800020;
+    color: white;
+    text-align: center;
+    padding: 2rem 1rem;
+}
 
+.main-header {
+    position: relative;
+    height: 400px;
+    background: 
+        linear-gradient(rgba(128, 0, 32, 0.7)),
+        url('images/finance-world-map.jpg') center/cover no-repeat;
+    display: flex;
+    align-items: center;
+    text-align: center;
+}
+
+.header-overlay {
+    width: 100%;
+    padding: 2rem;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header h1,
 .main-header h1 {
-    font-size: 3rem;
+    font-size: 2.5rem;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .subtitle {
@@ -25,34 +54,12 @@ body {
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
     max-width: 800px;
     margin: 0 auto;
-}
-
-
-header {
-    background-color: #800020; 
-    color: white;
-    text-align: center;
-    padding: 2rem 1rem;
-}
-
-header h1 {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.header-content {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-/*
-.subtitle {
-    font-size: 1.2rem;
     opacity: 0.9;
-}*/
+}
 
-/* Main Menu Styles */
+/* ===== NAVIGATION STYLES ===== */
 .main-menu {
-    background-color: #006400; /* Dark green */
+    background-color: #006400;
     padding: 1rem;
 }
 
@@ -66,209 +73,124 @@ header h1 {
 
 .menu-item {
     position: relative;
-    #display: inline-block;
+    display: inline-block;
 }
-
-/* Show submenu on hover */
-.menu-item:hover .submenu {
-    display: block;
-    animation: fadeIn 0.3s ease-in-out;
-}
-
-
-
-
-/* Submenu stays open when hovering over it */
-.submenu:hover {
-    display: block;
-}
-
-/* Smooth fade-in animation */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-
 
 .menu-btn {
-    background-color: #800020; /* Ox-blood red */
+    background-color: #800020;
     color: white;
     border: none;
     padding: 0.8rem 1.5rem;
     font-weight: bold;
     cursor: pointer;
     border-radius: 4px;
-    transition: background 0.3s;
+    transition: background-color 0.3s;
 }
 
 .menu-btn:hover {
     background-color: #a0022a;
 }
 
-/* Submenu Styles */
+/* ===== SUBMENU STYLES ===== */
 .submenu {
-    /*display: none;*/
+    display: none;
     position: absolute;
-    background-color: #654321; /* Brown */
+    background-color: #654321;
     min-width: 200px;
-    z-index: 1;
+    z-index: 100;
     border-radius: 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    font-size: 0.65em;
+    font-size: 0.7em;
 }
 
-
-
+.menu-item:hover .submenu,
+.menu-item:focus-within .submenu {
+    display: block;
+    animation: fadeIn 0.3s ease-in-out;
+}
 
 .submenu li {
-    padding: 0.5rem;
+    padding: 0.25rem 0;
 }
 
 .submenu a {
     color: white;
     text-decoration: none;
     display: block;
-    padding: 0.5rem 1rem;
+    padding: 0.3rem 1rem;
+    transition: background-color 0.2s;
 }
 
 .submenu a:hover {
     background-color: #800020;
 }
 
-/* Main Content */
-.intro {
-    text-align: center;
-    padding: 3rem 1rem;
-    background-color: #f9f5f0;
-}
-
-.intro h2 {
-    color: #800020;
-    margin-bottom: 1rem;
-}
-
-/* Footer */
-footer {
-    background-color: #654321; /* Brown */
-    color: white;
-    text-align: center;
-    padding: 1.5rem;
-    margin-top: 2rem;
-}
-/* Add to existing CSS */
-.submenu .divider {
-    height: 1px;
-    background-color: rgba(255, 255, 255, 0.2);
-    margin: 0.5rem 0;
-    list-style: none;
-   
-    
-}
-
-.submenu li a {
-    padding: 0.25rem 1rem; /* Revert to original tighter padding */
-    font-size: 1em; /* Inherits from parent .submenu */
-    display: block;
-    transition: background 0.2s;
-
-    
-}
-
-
-.submenu li a:hover {
-    background-color: #800020; /* Ox-blood hover */
-}
-
-
-
-
-
-/* Keep existing indentation for nested items */
 .submenu li li a {
-     font-size: 0.9em; /* Slightly smaller than parent items */
-    padding-left: 2rem; 
+    padding-left: 2rem;
+    font-size: 0.9em;
 }
 
 .submenu .divider {
     height: 1px;
     background-color: rgba(255, 255, 255, 0.2);
     margin: 0.25rem 0;
+    list-style: none;
 }
 
-
-.submenu li {
-    padding: 0.25rem 0; /* 50% reduction from original padding */
-}
-
-.submenu li a {
-    padding: 0.3rem 1rem; /* Slightly increased padding */
-    font-size: 1em; /* Now inherits from parent .submenu */
-    
-}
-
-/* Add premium course styling */
+/* ===== ICON STYLES ===== */
 .submenu li a[href="#Master Canadian Finances"],
 .submenu li a[href="#Asian Relocation Bundle"],
 .submenu li a[href="#European Visa Masterclass"] {
-    color: #FFD700; /* Gold color for premium courses */
+    color: #FFD700;
     font-weight: bold;
 }
 
-/* Tool items get calculator icon */
 .submenu li a[href="#Salary Converter"]::before,
 .submenu li a[href="#Tax Estimator"]::before,
 .submenu li a[href="#Visa Cost Calculator"]::before {
     content: "🖩 ";
 }
 
-/* Membership items get community icon */
 .submenu li a[href="#Join Community"]::before,
 .submenu li a[href="#Q&A Webinar Schedule"]::before {
     content: "👥 ";
 }
 
-/* YouTube items get play icon */
 .submenu li a[href="#Canada Prep Series"]::before,
 .submenu li a[href="#Thailand Money Tips"]::before,
 .submenu li a[href="#Ireland Tax Explained"]::before {
     content: "▶ ";
 }
 
-/* Comparison items get scale icon */
 .submenu li a[href="#Canada vs USA"]::before,
 .submenu li a[href="#Thailand vs Vietnam"]::before,
 .submenu li a[href="#Ireland vs UK"]::before {
     content: "⚖ ";
 }
 
-/* Product items get star icon */
 .submenu li a[href="#International Bank Accounts"]::before,
 .submenu li a[href="#Travel Credit Cards"]::before,
 .submenu li a[href="#Forex Services"]::before {
     content: "★ ";
-    color: #FFD700; /* Gold star */
+    color: #FFD700;
 }
 
-/* Visa items get document icon */
 .submenu li a[href="#Canada Proof of Funds"]::before,
 .submenu li a[href="#Schengen Visa Requirements"]::before,
 .submenu li a[href="#Thailand Retirement Visa"]::before {
     content: "📄 ";
 }
 
-/* User tips get community icon */
 .submenu li a[href="#Most Helpful Tips"]::before,
 .submenu li a[href="#Submit Your Tip"]::before {
     content: "💡 ";
 }
 
-/* Top contributor gets trophy */
 .submenu li a[href="#Monthly Top Contributor"]::before {
     content: "🏆 ";
 }
 
-/* Carousel Styles */
+/* ===== CAROUSEL STYLES ===== */
 .carousel-container {
     width: 100%;
     max-width: 1200px;
@@ -280,7 +202,7 @@ footer {
 .carousel {
     display: flex;
     transition: transform 0.5s ease-in-out;
-    height: 400px; /* Adjust as needed */
+    height: 400px;
 }
 
 .carousel-slide {
@@ -306,7 +228,8 @@ footer {
     font-size: 1.2rem;
 }
 
-/* Footnote Styles */
+/* ===== FOOTER STYLES ===== */
+footer,
 .page-footnote {
     text-align: center;
     padding: 1.5rem;
@@ -314,4 +237,37 @@ footer {
     color: white;
     font-size: 0.8rem;
     margin-top: 2rem;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn {
+    from { 
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== RESPONSIVE STYLES ===== */
+@media (max-width: 768px) {
+    .main-header {
+        height: 300px;
+    }
+    
+    header h1,
+    .main-header h1 {
+        font-size: 2rem;
+    }
+    
+    .subtitle {
+        font-size: 1.1rem;
+    }
+    
+    .main-menu ul {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
 }
