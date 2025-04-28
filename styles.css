@@ -33,6 +33,7 @@ header {
 }
 
 /* Add this to debug if image still doesn't appear */
+/*
 .main-header::after {
     content: "Image path: ../images/osuwa_bg1.jpg";
     position: absolute;
@@ -44,6 +45,7 @@ header {
     font-size: 12px;
     z-index: 100;
 }
+*/
 
 .header-overlay {
     width: 100%;
