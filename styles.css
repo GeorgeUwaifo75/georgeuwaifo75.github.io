@@ -70,17 +70,7 @@ header h1 {
 }
 
 
-/* Remove button styling if using plain menu items */
-.menu-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.8rem 1.5rem;
-    font: inherit;
-    color: white;
-}
 
-/*
 .menu-btn {
     background-color: #800020; /* Ox-blood red */
     color: white;
@@ -91,7 +81,7 @@ header h1 {
     border-radius: 4px;
     transition: background 0.3s;
 }
-*/
+
 .menu-btn:hover {
     background-color: #a0022a;
 }
