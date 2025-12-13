@@ -1,190 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
-    
 <head>
     <meta charset="UTF-8">
-    
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
-    <title>OsUwa Newland Finance Hub</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebStarNg - Login</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-
-    
 <body>
-   <header class="main-header">
-	<div class="header-overlay">
-    	<div class="header-content">
-        	<h1>OsUwa Newland Finance Hub</h1>
-        	<p class="subtitle">Emigration is easy when you have all the information including the vital financial information. Let's help out.</p>
-    	</div>
-	</div>
-</header>
+    <div class="login-container">
+        <div class="login-box" id="loginBox">
+            <h1 class="logo">WebStarNg</h1>
+            <p class="demo-message">⚠️ This is a demo learning application. No real data is stored or shared.</p>
+
+            <h2>Welcome Back</h2>
+            <p class="subtitle">Sign in to access your account</p>
+            
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="userID">User ID</label>
+                    <input type="text" id="userID" name="userID" required 
+                           placeholder="Enter your user ID">
+                    <div class="input-hint">Use 'tmp101' for demo</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="Enter your password">
+                    <div class="input-hint">Use '12345' for demo</div>
+                </div>
+                
+                <button type="submit" class="login-btn">Sign In</button>
+                
+                <div class="demo-credentials">
+                    <h3>Demo Credentials:</h3>
+                    <p>User ID: <strong>tmp101</strong></p>
+                    <p>Password: <strong>12345</strong></p>
+                </div>
+            </form>
+            
+            <div id="errorMessage" class="error-message"></div>
+        </div>
+
+        <!-- New User Registration Form (Initially Hidden) -->
+        <div class="registration-box" id="registrationBox" style="display: none;">
+            <h1 class="logo">WebStarNg</h1>
+            <h2>Create New Account</h2>
+            <p class="subtitle">User not found. Let's create a new account for you!</p>
+            
+            <form id="registrationForm">
+                <div class="input-group">
+                    <label for="newUserID">Choose User ID</label>
+                    <input type="text" id="newUserID" name="newUserID" required 
+                           placeholder="Choose a unique user ID">
+                    <div class="input-hint">This will be your login username</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="newPassword">Password</label>
+                    <input type="password" id="newPassword" name="newPassword" required 
+                           placeholder="Create a password">
+                </div>
+                
+                <div class="input-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required 
+                           placeholder="Confirm your password">
+                </div>
+                
+                <div class="input-group">
+                    <label for="fullName">Full Name</label>
+                    <input type="text" id="fullName" name="fullName" required 
+                           placeholder="Enter your full name">
+                </div>
+                
+                <div class="input-group">
+                    <label for="initialBalance">Initial Wallet Balance</label>
+                    <input type="number" id="initialBalance" name="initialBalance" 
+                           placeholder="Enter initial amount (optional)" min="0" step="0.01">
+                    <div class="input-hint">Default: ₦0.00</div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="register-btn">Create Account</button>
+                    <button type="button" id="backToLogin" class="back-btn">Back to Login</button>
+                </div>
+            </form>
+            
+            <div id="registrationError" class="error-message"></div>
+            <div id="registrationSuccess" class="success-message"></div>
+        </div>
+    </div>
     
+    <footer class="privacy-footer">
+    <p>Your privacy is important. All data is stored locally in your browser. This app is for demonstration only.</p>
+</footer>
 
-	<nav class="main-menu">
-    	<ul>
-        	<li class="menu-item">
-	<button class="menu-btn">Newland Finance Hub</button>
-	<ul class="submenu">
-    	<li><a href="coy_finance.html">Country-Specific Financial Guides</a></li>
-    	<li><a href="#">Canada</a></li>
-    	<li><a href="#">Thailand</a></li>
-    	<li><a href="#">Iceland</a></li>
-    	<li><a href="#">Ireland</a></li>
-    	<li class="divider"></li> <!-- Visual separator -->
-    	<li><a href="#">Checklists: Documents, Bank Accounts, Taxes, Visas</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Video Tutorials & Q&A Sessions</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Affiliate Promotions</a></li>
-    	<li><a href="#">Banking Services</a></li>
-    	<li><a href="#">Remittance Tools</a></li>
-    	<li><a href="#">Tax Consultants</a></li>
-	</ul>
-</li>
-        	<li class="menu-item">
-	<button class="menu-btn">MoveSmart Financial</button>
-	<ul class="submenu">
-    	<li><a href="#">Interactive Comparison Tools</a></li>
-    	<li><a href="#">Banking Comparison</a></li>
-    	<li><a href="#">Tax Comparison</a></li>
-    	<li><a href="#">Cost of Living Calculator</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">"Ask an Expert" Live Sessions</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Downloadable Templates</a></li>
-    	<li><a href="#">Budget Sheets</a></li>
-    	<li><a href="#">Visa Requirement Checklists</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Country Spotlight Blog Posts</a></li>
-	</ul>
-</li>
-       	<li class="menu-item">
-	<button class="menu-btn">Global Finance Passport</button>
-	<ul class="submenu">
-    	<li><a href="#">Expat Success Stories</a></li>
-    	<li><a href="#">Canada Experience</a></li>
-    	<li><a href="#">Thailand Journey</a></li>
-    	<li><a href="#">Iceland Adventure</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Video Procedure Breakdowns</a></li>
-    	<li><a href="#">Banking Setup Videos</a></li>
-    	<li><a href="#">Tax Filing Guides</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Request a Country Guide</a></li>
-    	<li><a href="#">Vote for Next Country</a></li>
-    	<li class="divider"></li>
-    	<li><a href="#">Partner Discounts</a></li>
-    	<li><a href="#">Forex Special Rates</a></li>
-    	<li><a href="#">International SIM Deals</a></li>
-    	<li><a href="#">Insurance Partnerships</a></li>
-	</ul>
-</li>
-        	<li class="menu-item">
-	<button class="menu-btn">Expat Money Coach</button>
-	<ul class="submenu">
-    	<!-- Free YouTube Content -->
-    	<li><a href="#">Free YouTube Content</a></li>
-    	<li><a href="#">Canada Prep Series</a></li>
-    	<li><a href="#">Thailand Money Tips</a></li>
-    	<li><a href="#">Ireland Tax Explained</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Paid Courses -->
-    	<li><a href="#">Premium Courses</a></li>
-    	<li><a href="#">Master Canadian Finances</a></li>
-    	<li><a href="#">Asian Relocation Bundle</a></li>
-    	<li><a href="#">European Visa Masterclass</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Interactive Tools -->
-    	<li><a href="#">Financial Tools</a></li>
-    	<li><a href="#">Salary Converter</a></li>
-    	<li><a href="#">Tax Estimator</a></li>
-    	<li><a href="#">Visa Cost Calculator</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Membership -->
-    	<li><a href="#">Expat Membership</a></li>
-    	<li><a href="#">Join Community</a></li>
-    	<li><a href="#">Q&A Webinar Schedule</a></li>
-    	<li><a href="#">Member Resources</a></li>
-	</ul>
-</li>
-        	<li class="menu-item">
-	<button class="menu-btn">The Relocation Wallet</button>
-	<ul class="submenu">
-    	<!-- Country Comparisons -->
-    	<li><a href="#">Country Comparisons</a></li>
-    	<li><a href="#">Canada vs USA</a></li>
-    	<li><a href="#">Thailand vs Vietnam</a></li>
-    	<li><a href="#">Ireland vs UK</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Financial Products -->
-    	<li><a href="#">Recommended Products</a></li>
-    	<li><a href="#">International Bank Accounts</a></li>
-    	<li><a href="#">Travel Credit Cards</a></li>
-    	<li><a href="#">Forex Services</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Visa Guides -->
-    	<li><a href="#">Visa Financial Proof</a></li>
-    	<li><a href="#">Canada Proof of Funds</a></li>
-    	<li><a href="#">Schengen Visa Requirements</a></li>
-    	<li><a href="#">Thailand Retirement Visa</a></li>
-    	<li class="divider"></li>
-   	 
-    	<!-- Community Tips -->
-    	<li><a href="#">User Tips</a></li>
-    	<li><a href="#">Most Helpful Tips</a></li>
-    	<li><a href="#">Submit Your Tip</a></li>
-    	<li><a href="#">Monthly Top Contributor</a></li>
-	</ul>
-</li>
-        	<li class="menu-item">
-            	<button class="menu-btn">Bonus: Youtube + Website Combo</button>
-            	<ul class="submenu">
-                	<li><a href="#">Video Tutorials</a></li>
-                	<li><a href="#">Exclusive Content</a></li>
-                	<li><a href="#">Community</a></li>
-            	</ul>
-        	</li>
-    	</ul>
-	</nav>
-
-	<main>
-   	 
-
-     	<section class="carousel-container">
-    	<div class="carousel">
-        	<div class="carousel-slide active">
-            	<img src="images/canada1.jpg" alt="Financial Planning for Canada">
-            	<div class="slide-caption">Canada Financial Guide</div>
-        	</div>
-        	<div class="carousel-slide">
-            	<img src="images/thailand1.jpg" alt="Thailand Cost of Living">
-            	<div class="slide-caption">Thailand Living Costs</div>
-        	</div>
-        	<div class="carousel-slide">
-            	<img src="images/ireland1.jpg" alt="Ireland Banking Tips">
-            	<div class="slide-caption">Ireland Banking</div>
-        	</div>
-        	<div class="carousel-slide">
-            	<img src="images/iceland1.jpg" alt="Iceland Visa Process">
-            	<div class="slide-caption">Iceland Visa Guide</div>
-        	</div>
-    	</div>
-	</section>
-
-    	<!-- Footnote Section -->
-	<footer class="page-footnote">
-    	<p>OsUwa Newland Finance Hub © 2025 | All financial advice should be verified with certified professionals</p>
-	</footer>
-   	 
-	</main>
-
-
-	<script src="script.js"></script>
+    
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
 </body>
 </html>
