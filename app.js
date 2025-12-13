@@ -62,14 +62,19 @@ class WebStarNgApp {
         }
     }
 
-    setupEventListeners() {
-        // Logout button
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => this.logout());
-        }
-    }
 
+setupEventListeners() {
+    // Logout button
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('webstarng_user');
+            localStorage.removeItem('webstarng_token');
+            window.location.href = 'index.html';
+        });
+    }
+}
+    
     setupMenuNavigation() {
         // Main menu toggle
         const menuLinks = document.querySelectorAll('.menu-link');
