@@ -1,1 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebStarNg - Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box" id="loginBox">
+            <h1 class="logo">WebStarNg</h1>
+            <p class="demo-message">⚠️ This is a demo learning application. No real data is stored or shared.</p>
 
+            <h2>Welcome Back</h2>
+            <p class="subtitle">Sign in to access your account</p>
+            
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="userID">User ID</label>
+                    <input type="text" id="userID" name="userID" required 
+                           placeholder="Enter your user ID">
+                    <div class="input-hint">Use 'tmp101' for demo</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="Enter your password">
+                    <div class="input-hint">Use '12345' for demo</div>
+                </div>
+                
+                <button type="submit" class="login-btn">Sign In</button>
+                
+                <div class="demo-credentials">
+                    <h3>Demo Credentials:</h3>
+                    <p>User ID: <strong>tmp101</strong></p>
+                    <p>Password: <strong>12345</strong></p>
+                </div>
+            </form>
+            
+            <div id="errorMessage" class="error-message"></div>
+        </div>
+
+        <!-- New User Registration Form (Initially Hidden) -->
+        <div class="registration-box" id="registrationBox" style="display: none;">
+            <h1 class="logo">WebStarNg</h1>
+            <h2>Create New Account</h2>
+            <p class="subtitle">User not found. Let's create a new account for you!</p>
+            
+            <form id="registrationForm">
+                <div class="input-group">
+                    <label for="newUserID">Choose User ID</label>
+                    <input type="text" id="newUserID" name="newUserID" required 
+                           placeholder="Choose a unique user ID">
+                    <div class="input-hint">This will be your login username</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="newPassword">Password</label>
+                    <input type="password" id="newPassword" name="newPassword" required 
+                           placeholder="Create a password">
+                </div>
+                
+                <div class="input-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required 
+                           placeholder="Confirm your password">
+                </div>
+                
+                <div class="input-group">
+                    <label for="fullName">Full Name</label>
+                    <input type="text" id="fullName" name="fullName" required 
+                           placeholder="Enter your full name">
+                </div>
+                
+                <div class="input-group">
+                    <label for="initialBalance">Initial Wallet Balance</label>
+                    <input type="number" id="initialBalance" name="initialBalance" 
+                           placeholder="Enter initial amount (optional)" min="0" step="0.01">
+                    <div class="input-hint">Default: ₦0.00</div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="register-btn">Create Account</button>
+                    <button type="button" id="backToLogin" class="back-btn">Back to Login</button>
+                </div>
+            </form>
+            
+            <div id="registrationError" class="error-message"></div>
+            <div id="registrationSuccess" class="success-message"></div>
+        </div>
+    </div>
+    
+    <footer class="privacy-footer">
+    <p>Your privacy is important. All data is stored locally in your browser. This app is for demonstration only.</p>
+</footer>
+
+    
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html>
