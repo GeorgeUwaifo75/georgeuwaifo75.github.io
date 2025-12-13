@@ -1326,3 +1326,20 @@ body {
     align-items: center;
     gap: 10px;
 }
+/* Add these styles to your existing style.css */
+
+/* Home Link Special Styling */
+.home-link {
+    background: #3498db !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+
+.home-link:hover {
+    background: #2980b9 !important;
+    border-left-color: #2c3e50 !important;
+}
+
+.home-link .menu-icon {
+    color: white !important;
+}
