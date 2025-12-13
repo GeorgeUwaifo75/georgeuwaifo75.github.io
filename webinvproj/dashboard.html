@@ -1,1 +1,160 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebStarNg - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">WebStarNg</div>
+        <div class="user-info">
+            <span id="currentUser"></span>
+            <button id="logoutBtn" class="logout-btn">Logout</button>
+        </div>
+    </nav>
+    
+    <div class="main-container">
+        <!-- Sidebar Menu -->
+        <aside class="sidebar">
+            <div class="menu-section">
+                <h3 class="menu-title">Main Menu</h3>
+                <ul class="menu-list">
+                    <!-- Products Menu -->
+                    <li class="menu-item">
+                        <a href="#" class="menu-link" data-menu="products">
+                            <span class="menu-icon">📦</span>
+                            <span>Products</span>
+                            <span class="menu-arrow">▼</span>
+                        </a>
+                        <ul class="submenu" id="products-submenu">
+                            <li><a href="#" data-action="new-product">➕ New Product</a></li>
+                            <li><a href="#" data-action="buy-products">🛒 Buy Products</a></li>
+                            <li><a href="#" data-action="wallet-topup">💰 Wallet TopUp</a></li>
+                        </ul>
+                    </li>
+                    
+                    <!-- Reports Menu -->
+                    <li class="menu-item">
+                        <a href="#" class="menu-link" data-menu="reports">
+                            <span class="menu-icon">📊</span>
+                            <span>Reports</span>
+                            <span class="menu-arrow">▼</span>
+                        </a>
+                        <ul class="submenu" id="reports-submenu">
+                            <li><a href="#" data-action="sales-day">📈 Sales of the Day</a></li>
+                            <li><a href="#" data-action="purchase-day">🛍️ Purchase of the Day</a></li>
+                            <li><a href="#" data-action="inventory-report">📦 Inventory Report</a></li>
+                        </ul>
+                    </li>
+                    
+                    <!-- Setup Menu -->
+                    <li class="menu-item">
+                        <a href="#" class="menu-link" data-menu="setup">
+                            <span class="menu-icon">⚙️</span>
+                            <span>Setup</span>
+                            <span class="menu-arrow">▼</span>
+                        </a>
+                        <ul class="submenu" id="setup-submenu">
+                            <li><a href="#" data-action="new-user">👤 New User</a></li>
+                            <li><a href="#" data-action="business-details">🏢 Business Details</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="user-profile-sidebar">
+                <div class="profile-summary">
+                    <h3>Profile Summary</h3>
+                    <div class="profile-info-sidebar">
+                        <p><strong>User:</strong> <span id="sidebarUser"></span></p>
+                        <p><strong>Balance:</strong> ₦<span id="sidebarBalance">0.00</span></p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="content-area">
+            <div class="content-header">
+                <h1 id="contentTitle">Dashboard Overview</h1>
+                <p id="contentSubtitle">Welcome back to your WebStarNg account</p>
+            </div>
+            
+            <!-- Default Dashboard Content -->
+            <div id="defaultContent" class="dashboard-content">
+                <div class="dashboard-grid">
+                    <div class="card profile-card">
+                        <h2>👤 Profile Information</h2>
+                        <div class="profile-info">
+                            <div class="info-item">
+                                <span class="label">Full Name:</span>
+                                <span id="userFullName" class="value">Loading...</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">User ID:</span>
+                                <span id="userIdDisplay" class="value">Loading...</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Account Status:</span>
+                                <span class="value status-active">Active</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card wallet-card">
+                        <h2>💰 Wallet Balance</h2>
+                        <div class="balance-container">
+                            <div class="balance-amount">
+                                <span class="currency">₦</span>
+                                <span id="walletBalance" class="amount">0.00</span>
+                            </div>
+                            <p class="balance-label">Available Balance</p>
+                        </div>
+                        <div class="wallet-actions">
+                            <button class="action-btn" onclick="showAddFunds()">Add Funds</button>
+                            <button class="action-btn secondary" onclick="showWithdraw()">Withdraw</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card recent-card">
+                        <h2>📋 Recent Activity</h2>
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <span class="activity-text">Account login</span>
+                                <span class="activity-time">Just now</span>
+                            </div>
+                            <div class="activity-item">
+                                <span class="activity-text">Initial setup completed</span>
+                                <span class="activity-time">Today</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dynamic Content Area -->
+            <div id="dynamicContent" class="dynamic-content" style="display: none;">
+                <!-- Content will be loaded here based on menu selection -->
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal">
+            <h2 id="modalTitle"></h2>
+            <div id="modalContent"></div>
+            <button class="modal-close" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+    
+    <footer class="privacy-footer">
+        <p>This is a demo learning application. All data is stored locally in your browser for demonstration purposes only.</p>
+    </footer>
+    
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
