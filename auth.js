@@ -54,7 +54,10 @@ class AuthManager {
                 const demoUser = {
                     userID: 'tmp101',
                     fullName: 'Demo Test User',
-                    wallet: 5000.00
+                    wallet: 5000.00,
+                    inventoryBinId: 'inventory_tmp101',
+                    salesBinId: 'sales_tmp101',
+                    purchasesBinId: 'purchases_tmp101'
                 };
                 this.setSession(demoUser);
                 window.location.href = 'dashboard.html';
@@ -112,6 +115,7 @@ class AuthManager {
 
         if (newPassword.length < 4) {
             errorElement.textContent = 'Password must be at least 4 characters long';
+            errorElement.textContent = 'Password must be at least 4 characters long';
             errorElement.style.display = 'block';
             return;
         }
@@ -133,18 +137,21 @@ class AuthManager {
                 wallet: initialBalance
             };
 
-            // Save user to JSONBin.io
+            // Save user to JSONBin.io (this will also create bins)
             const createdUser = await api.createUser(newUser);
             
-            // Show success message
+            // Show success message with bin information
             successElement.innerHTML = `
                 <div class="registration-success">
                     <h3>🎉 Account Created Successfully!</h3>
-                    <p>Your account has been created and saved to the database.</p>
+                    <p>Your account has been created with unique storage bins.</p>
                     <div class="user-created-info">
                         <p><strong>User ID:</strong> ${createdUser.userID}</p>
                         <p><strong>Full Name:</strong> ${createdUser.fullName}</p>
                         <p><strong>Initial Balance:</strong> ₦${createdUser.wallet.toFixed(2)}</p>
+                        <p><strong>Inventory Bin:</strong> ${createdUser.inventoryBinId}</p>
+                        <p><strong>Sales Bin:</strong> ${createdUser.salesBinId}</p>
+                        <p><strong>Purchases Bin:</strong> ${createdUser.purchasesBinId}</p>
                         <p><strong>Account Created:</strong> ${new Date(createdUser.createdAt).toLocaleString()}</p>
                     </div>
                     <p style="margin-top: 15px;">You can now login with your new credentials.</p>
@@ -189,7 +196,7 @@ class AuthManager {
                 errorElement.style.display = 'block';
             } else {
                 const errorElement = document.getElementById('registrationError');
-                errorElement.textContent = 'User not found. Please create a new account.';
+                errorElement.textContent = 'User not found. Please create a new account with unique storage bins.';
                 errorElement.style.display = 'block';
             }
         }
