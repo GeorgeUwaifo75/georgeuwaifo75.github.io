@@ -62,7 +62,15 @@ class WebStarNgApp {
         }
     }
 
-
+/*
+    setupEventListeners() {
+        // Logout button
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.logout());
+        }
+    }
+    */
 setupEventListeners() {
     // Logout button
     const logoutBtn = document.getElementById('logoutBtn');
@@ -74,44 +82,81 @@ setupEventListeners() {
         });
     }
 }
-    
-    setupMenuNavigation() {
-        // Main menu toggle
-        const menuLinks = document.querySelectorAll('.menu-link');
-        menuLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const menuItem = link.closest('.menu-item');
-                const isActive = menuItem.classList.contains('active');
-                
-                // Close all other menus
-                document.querySelectorAll('.menu-item.active').forEach(item => {
-                    if (item !== menuItem) {
-                        item.classList.remove('active');
-                    }
-                });
-                
-                // Toggle current menu
-                menuItem.classList.toggle('active', !isActive);
-                
-                // Don't load content if just toggling submenu
-                if (!link.hasAttribute('data-action')) {
-                    const menuType = link.getAttribute('data-menu');
-                    this.loadMenuContent(menuType);
-                }
-            });
-        });
-        
-        // Submenu item clicks
-        const submenuLinks = document.querySelectorAll('.submenu a');
-        submenuLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const action = link.getAttribute('data-action');
-                this.handleMenuAction(action);
-            });
+   // Update the setupMenuNavigation() method in app.js to include Home menu
+setupMenuNavigation() {
+    // Home menu click
+    const homeLink = document.querySelector('.home-link');
+    if (homeLink) {
+        homeLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.goToHomeDashboard();
         });
     }
+    
+    // Main menu toggle
+    const menuLinks = document.querySelectorAll('.menu-link:not(.home-link)');
+    menuLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const menuItem = link.closest('.menu-item');
+            const isActive = menuItem.classList.contains('active');
+            
+            // Close all other menus
+            document.querySelectorAll('.menu-item.active').forEach(item => {
+                if (item !== menuItem) {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // Toggle current menu
+            menuItem.classList.toggle('active', !isActive);
+            
+            // Don't load content if just toggling submenu
+            if (!link.hasAttribute('data-action')) {
+                const menuType = link.getAttribute('data-menu');
+                this.loadMenuContent(menuType);
+            }
+        });
+    });
+    
+    // Submenu item clicks
+    const submenuLinks = document.querySelectorAll('.submenu a');
+    submenuLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const action = link.getAttribute('data-action');
+            this.handleMenuAction(action);
+        });
+    });
+}
+
+// Add new method for Home functionality
+goToHomeDashboard() {
+    const defaultContent = document.getElementById('defaultContent');
+    const dynamicContent = document.getElementById('dynamicContent');
+    const contentTitle = document.getElementById('contentTitle');
+    const contentSubtitle = document.getElementById('contentSubtitle');
+    
+    // Show default content, hide dynamic content
+    defaultContent.style.display = 'block';
+    dynamicContent.style.display = 'none';
+    
+    // Update title and subtitle
+    contentTitle.textContent = 'Dashboard Overview';
+    contentSubtitle.textContent = 'Welcome back to your WebStarNg account';
+    
+    // Close any open submenus
+    document.querySelectorAll('.menu-item.active').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Highlight home menu
+    const allMenuLinks = document.querySelectorAll('.menu-link');
+    allMenuLinks.forEach(link => {
+        link.classList.remove('active');
+    });
+    document.querySelector('.home-link').classList.add('active');
+}
 
     loadMenuContent(menuType) {
         const defaultContent = document.getElementById('defaultContent');
