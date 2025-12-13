@@ -62,101 +62,94 @@ class WebStarNgApp {
         }
     }
 
-/*
     setupEventListeners() {
-        // Logout button
+        // Logout button - MINIMAL FIX: Direct logout and redirect
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => this.logout());
+            logoutBtn.addEventListener('click', () => {
+                // Clear session data
+                localStorage.removeItem('webstarng_user');
+                localStorage.removeItem('webstarng_token');
+                // Redirect to login page
+                window.location.href = 'index.html';
+            });
         }
     }
-    */
-setupEventListeners() {
-    // Logout button
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('webstarng_user');
-            localStorage.removeItem('webstarng_token');
-            window.location.href = 'index.html';
-        });
-    }
-}
-   // Update the setupMenuNavigation() method in app.js to include Home menu
-setupMenuNavigation() {
-    // Home menu click
-    const homeLink = document.querySelector('.home-link');
-    if (homeLink) {
-        homeLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.goToHomeDashboard();
-        });
-    }
-    
-    // Main menu toggle
-    const menuLinks = document.querySelectorAll('.menu-link:not(.home-link)');
-    menuLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const menuItem = link.closest('.menu-item');
-            const isActive = menuItem.classList.contains('active');
-            
-            // Close all other menus
-            document.querySelectorAll('.menu-item.active').forEach(item => {
-                if (item !== menuItem) {
-                    item.classList.remove('active');
+
+    setupMenuNavigation() {
+        // Home menu click
+        const homeLink = document.querySelector('.home-link');
+        if (homeLink) {
+            homeLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToHomeDashboard();
+            });
+        }
+        
+        // Main menu toggle
+        const menuLinks = document.querySelectorAll('.menu-link:not(.home-link)');
+        menuLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const menuItem = link.closest('.menu-item');
+                const isActive = menuItem.classList.contains('active');
+                
+                // Close all other menus
+                document.querySelectorAll('.menu-item.active').forEach(item => {
+                    if (item !== menuItem) {
+                        item.classList.remove('active');
+                    }
+                });
+                
+                // Toggle current menu
+                menuItem.classList.toggle('active', !isActive);
+                
+                // Don't load content if just toggling submenu
+                if (!link.hasAttribute('data-action')) {
+                    const menuType = link.getAttribute('data-menu');
+                    this.loadMenuContent(menuType);
                 }
             });
-            
-            // Toggle current menu
-            menuItem.classList.toggle('active', !isActive);
-            
-            // Don't load content if just toggling submenu
-            if (!link.hasAttribute('data-action')) {
-                const menuType = link.getAttribute('data-menu');
-                this.loadMenuContent(menuType);
-            }
         });
-    });
-    
-    // Submenu item clicks
-    const submenuLinks = document.querySelectorAll('.submenu a');
-    submenuLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const action = link.getAttribute('data-action');
-            this.handleMenuAction(action);
+        
+        // Submenu item clicks
+        const submenuLinks = document.querySelectorAll('.submenu a');
+        submenuLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const action = link.getAttribute('data-action');
+                this.handleMenuAction(action);
+            });
         });
-    });
-}
+    }
 
-// Add new method for Home functionality
-goToHomeDashboard() {
-    const defaultContent = document.getElementById('defaultContent');
-    const dynamicContent = document.getElementById('dynamicContent');
-    const contentTitle = document.getElementById('contentTitle');
-    const contentSubtitle = document.getElementById('contentSubtitle');
-    
-    // Show default content, hide dynamic content
-    defaultContent.style.display = 'block';
-    dynamicContent.style.display = 'none';
-    
-    // Update title and subtitle
-    contentTitle.textContent = 'Dashboard Overview';
-    contentSubtitle.textContent = 'Welcome back to your WebStarNg account';
-    
-    // Close any open submenus
-    document.querySelectorAll('.menu-item.active').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    // Highlight home menu
-    const allMenuLinks = document.querySelectorAll('.menu-link');
-    allMenuLinks.forEach(link => {
-        link.classList.remove('active');
-    });
-    document.querySelector('.home-link').classList.add('active');
-}
+    // Home functionality
+    goToHomeDashboard() {
+        const defaultContent = document.getElementById('defaultContent');
+        const dynamicContent = document.getElementById('dynamicContent');
+        const contentTitle = document.getElementById('contentTitle');
+        const contentSubtitle = document.getElementById('contentSubtitle');
+        
+        // Show default content, hide dynamic content
+        defaultContent.style.display = 'block';
+        dynamicContent.style.display = 'none';
+        
+        // Update title and subtitle
+        contentTitle.textContent = 'Dashboard Overview';
+        contentSubtitle.textContent = 'Welcome back to your WebStarNg account';
+        
+        // Close any open submenus
+        document.querySelectorAll('.menu-item.active').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // Highlight home menu
+        const allMenuLinks = document.querySelectorAll('.menu-link');
+        allMenuLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+        document.querySelector('.home-link').classList.add('active');
+    }
 
     loadMenuContent(menuType) {
         const defaultContent = document.getElementById('defaultContent');
@@ -202,6 +195,13 @@ goToHomeDashboard() {
         
         // Re-attach event listeners for dynamic content
         this.attachContentEventListeners();
+        
+        // Update menu highlighting
+        const allMenuLinks = document.querySelectorAll('.menu-link');
+        allMenuLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+        document.querySelector(`[data-menu="${menuType}"]`).classList.add('active');
     }
 
     handleMenuAction(action) {
@@ -220,7 +220,7 @@ goToHomeDashboard() {
         switch(action) {
             case 'new-product':
                 title = 'New Product';
-                subtitle = 'Add a new product to inventory';
+                subtitle = 'Add a new product to your inventory';
                 contentHTML = this.getNewProductForm();
                 break;
             case 'buy-products':
@@ -270,8 +270,25 @@ goToHomeDashboard() {
         this.attachContentEventListeners();
     }
 
-    // Content Templates
-    getProductsContent() {
+    // Updated Content Templates with real data
+    async getProductsContent() {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        let inventoryData = { products: [] };
+        
+        try {
+            if (currentUser) {
+                inventoryData = await api.getUserInventory(currentUser.userID);
+            }
+        } catch (error) {
+            console.error('Error loading inventory:', error);
+        }
+        
+        const productCount = inventoryData.products ? inventoryData.products.length : 0;
+        const totalValue = inventoryData.products ? 
+            inventoryData.products.reduce((sum, product) => sum + (product.quantity * product.sellingPrice || 0), 0) : 0;
+        const lowStockCount = inventoryData.products ? 
+            inventoryData.products.filter(product => product.quantity <= (product.reorderLevel || 5)).length : 0;
+
         return `
             <div class="content-page">
                 <h2>Products Management</h2>
@@ -280,19 +297,19 @@ goToHomeDashboard() {
                 <div class="report-cards">
                     <div class="report-card">
                         <h3>📦 Total Products</h3>
-                        <div class="value">25</div>
+                        <div class="value">${productCount}</div>
                         <div class="label">Active items in inventory</div>
                     </div>
                     
                     <div class="report-card">
                         <h3>💰 Total Value</h3>
-                        <div class="value">₦250,000</div>
+                        <div class="value">₦${totalValue.toLocaleString()}</div>
                         <div class="label">Current inventory value</div>
                     </div>
                     
                     <div class="report-card">
                         <h3>📊 Low Stock</h3>
-                        <div class="value">3</div>
+                        <div class="value">${lowStockCount}</div>
                         <div class="label">Items need restocking</div>
                     </div>
                 </div>
@@ -311,6 +328,34 @@ goToHomeDashboard() {
                         </button>
                     </div>
                 </div>
+                
+                ${productCount > 0 ? `
+                <h3>Recent Products</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Quantity</th>
+                            <th>Price (₦)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${inventoryData.products.slice(0, 5).map(product => `
+                            <tr>
+                                <td>${product.name || 'Unnamed Product'}</td>
+                                <td>${product.category || 'Uncategorized'}</td>
+                                <td>${product.quantity || 0}</td>
+                                <td>${(product.sellingPrice || 0).toLocaleString()}</td>
+                                <td>${(product.quantity || 0) <= (product.reorderLevel || 5) ? 
+                                    '<span style="color: #e74c3c;">Low Stock</span>' : 
+                                    '<span class="status-active">In Stock</span>'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                ` : ''}
             </div>
         `;
     }
@@ -378,168 +423,52 @@ goToHomeDashboard() {
         `;
     }
 
-    getBuyProductsForm() {
-        return `
-            <div class="content-page">
-                <h2>Buy Products</h2>
-                
-                <div class="content-form">
-                    <div class="form-group">
-                        <label for="supplier">Supplier</label>
-                        <select id="supplier">
-                            <option value="">Select Supplier</option>
-                            <option value="supplier1">ABC Suppliers</option>
-                            <option value="supplier2">XYZ Distributors</option>
-                            <option value="supplier3">Global Imports</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="productSelect">Product</label>
-                        <select id="productSelect">
-                            <option value="">Select Product</option>
-                            <option value="prod1">Laptop - ₦150,000</option>
-                            <option value="prod2">Mouse - ₦2,500</option>
-                            <option value="prod3">Keyboard - ₦4,000</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="buyQuantity">Quantity</label>
-                            <input type="number" id="buyQuantity" min="1" value="1">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="unitPrice">Unit Price (₦)</label>
-                            <input type="number" id="unitPrice" min="0" step="0.01" placeholder="0.00">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Total Amount: <strong id="totalAmount">₦0.00</strong></label>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Wallet Balance: <strong id="currentBalance">₦0.00</strong></label>
-                    </div>
-                    
-                    <div class="form-actions-content">
-                        <button class="btn-primary" onclick="app.processPurchase()">Process Purchase</button>
-                        <button class="btn-secondary" onclick="app.loadMenuContent('products')">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    async getSalesReport() {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        let salesData = { transactions: [], totalSales: 0 };
+        
+        try {
+            if (currentUser) {
+                salesData = await api.getUserSales(currentUser.userID);
+            }
+        } catch (error) {
+            console.error('Error loading sales:', error);
+        }
+        
+        const today = new Date().toLocaleDateString();
+        const todaySales = salesData.transactions ? 
+            salesData.transactions.filter(t => {
+                const transDate = new Date(t.timestamp).toLocaleDateString();
+                return transDate === today;
+            }) : [];
+        
+        const todayTotal = todaySales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
 
-    getWalletTopUpForm() {
         return `
             <div class="content-page">
-                <h2>Wallet TopUp</h2>
-                <p>Add funds to your business wallet for purchases and expenses.</p>
-                
-                <div class="content-form">
-                    <div class="form-group">
-                        <label for="topupAmount">Amount to Add (₦) *</label>
-                        <input type="number" id="topupAmount" required min="100" step="100" placeholder="1000">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="paymentMethod">Payment Method</label>
-                        <select id="paymentMethod">
-                            <option value="bank">Bank Transfer</option>
-                            <option value="card">Credit/Debit Card</option>
-                            <option value="cash">Cash Deposit</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Current Balance: <strong id="walletTopupBalance">₦0.00</strong></label>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>New Balance: <strong id="newBalanceAfterTopup">₦0.00</strong></label>
-                    </div>
-                    
-                    <div class="form-actions-content">
-                        <button class="btn-primary" onclick="app.processTopUp()">Add Funds</button>
-                        <button class="btn-secondary" onclick="app.loadMenuContent('products')">Back</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    getReportsContent() {
-        return `
-            <div class="content-page">
-                <h2>Reports Dashboard</h2>
-                <p>View and analyze your business performance with detailed reports.</p>
-                
-                <div class="report-cards">
-                    <div class="report-card">
-                        <h3>📈 Today's Sales</h3>
-                        <div class="value">₦45,200</div>
-                        <div class="label">From 15 transactions</div>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3>🛍️ Today's Purchases</h3>
-                        <div class="value">₦28,500</div>
-                        <div class="label">From 8 suppliers</div>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3>📊 Profit Today</h3>
-                        <div class="value">₦16,700</div>
-                        <div class="label">Gross profit margin</div>
-                    </div>
-                </div>
-                
-                <div class="quick-actions">
-                    <h3>Detailed Reports</h3>
-                    <div class="action-buttons">
-                        <button class="btn-primary" onclick="app.handleMenuAction('sales-day')">
-                            View Sales Report
-                        </button>
-                        <button class="btn-secondary" onclick="app.handleMenuAction('purchase-day')">
-                            View Purchase Report
-                        </button>
-                        <button class="btn-secondary" onclick="app.handleMenuAction('inventory-report')">
-                            View Inventory Report
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    getSalesReport() {
-        return `
-            <div class="content-page">
-                <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
+                <h2>Sales Report - ${today}</h2>
                 
                 <div class="summary-stats">
                     <div class="report-cards">
                         <div class="report-card">
+                            <h3>💰 Today's Sales</h3>
+                            <div class="value">₦${todayTotal.toLocaleString()}</div>
+                        </div>
+                        
+                        <div class="report-card">
+                            <h3>📦 Items Sold Today</h3>
+                            <div class="value">${todaySales.length}</div>
+                        </div>
+                        
+                        <div class="report-card">
                             <h3>💰 Total Sales</h3>
-                            <div class="value">₦45,200</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>📦 Items Sold</h3>
-                            <div class="value">42</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>👥 Customers</h3>
-                            <div class="value">15</div>
+                            <div class="value">₦${salesData.totalSales.toLocaleString()}</div>
                         </div>
                     </div>
                 </div>
                 
-                <h3>Recent Sales</h3>
+                ${todaySales.length > 0 ? `
+                <h3>Today's Sales</h3>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -551,36 +480,18 @@ goToHomeDashboard() {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>10:30 AM</td>
-                            <td>Wireless Mouse</td>
-                            <td>2</td>
-                            <td>5,000</td>
-                            <td>John Doe</td>
-                        </tr>
-                        <tr>
-                            <td>11:15 AM</td>
-                            <td>Laptop</td>
-                            <td>1</td>
-                            <td>25,000</td>
-                            <td>Jane Smith</td>
-                        </tr>
-                        <tr>
-                            <td>02:45 PM</td>
-                            <td>Keyboard</td>
-                            <td>1</td>
-                            <td>4,000</td>
-                            <td>Bob Johnson</td>
-                        </tr>
-                        <tr>
-                            <td>04:20 PM</td>
-                            <td>Mouse Pad</td>
-                            <td>5</td>
-                            <td>2,500</td>
-                            <td>Alice Brown</td>
-                        </tr>
+                        ${todaySales.map(sale => `
+                            <tr>
+                                <td>${new Date(sale.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                                <td>${sale.productName || 'Unknown Product'}</td>
+                                <td>${sale.quantity || 1}</td>
+                                <td>${(sale.amount || 0).toLocaleString()}</td>
+                                <td>${sale.customer || 'Walk-in Customer'}</td>
+                            </tr>
+                        `).join('')}
                     </tbody>
                 </table>
+                ` : '<p>No sales recorded today.</p>'}
                 
                 <div class="form-actions-content">
                     <button class="btn-primary" onclick="window.print()">Print Report</button>
@@ -590,75 +501,24 @@ goToHomeDashboard() {
         `;
     }
 
-    getPurchaseReport() {
-        return `
-            <div class="content-page">
-                <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
-                
-                <div class="summary-stats">
-                    <div class="report-cards">
-                        <div class="report-card">
-                            <h3>💰 Total Purchases</h3>
-                            <div class="value">₦28,500</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>📦 Items Bought</h3>
-                            <div class="value">35</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>🏢 Suppliers</h3>
-                            <div class="value">8</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <h3>Recent Purchases</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Product</th>
-                            <th>Quantity</th>
-                            <th>Unit Price (₦)</th>
-                            <th>Supplier</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>09:00 AM</td>
-                            <td>Laptops</td>
-                            <td>3</td>
-                            <td>150,000</td>
-                            <td>ABC Suppliers</td>
-                        </tr>
-                        <tr>
-                            <td>10:30 AM</td>
-                            <td>Mice</td>
-                            <td>10</td>
-                            <td>2,000</td>
-                            <td>XYZ Distributors</td>
-                        </tr>
-                        <tr>
-                            <td>01:15 PM</td>
-                            <td>Keyboards</td>
-                            <td>5</td>
-                            <td>3,500</td>
-                            <td>Global Imports</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div class="form-actions-content">
-                    <button class="btn-primary" onclick="window.print()">Print Report</button>
-                    <button class="btn-secondary" onclick="app.loadMenuContent('reports')">Back</button>
-                </div>
-            </div>
-        `;
-    }
+    async getInventoryReport() {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        let inventoryData = { products: [] };
+        
+        try {
+            if (currentUser) {
+                inventoryData = await api.getUserInventory(currentUser.userID);
+            }
+        } catch (error) {
+            console.error('Error loading inventory:', error);
+        }
+        
+        const productCount = inventoryData.products ? inventoryData.products.length : 0;
+        const totalValue = inventoryData.products ? 
+            inventoryData.products.reduce((sum, product) => sum + (product.quantity * product.sellingPrice || 0), 0) : 0;
+        const lowStockCount = inventoryData.products ? 
+            inventoryData.products.filter(product => product.quantity <= (product.reorderLevel || 5)).length : 0;
 
-    getInventoryReport() {
         return `
             <div class="content-page">
                 <h2>Inventory Report</h2>
@@ -667,21 +527,22 @@ goToHomeDashboard() {
                     <div class="report-cards">
                         <div class="report-card">
                             <h3>📦 Total Items</h3>
-                            <div class="value">25</div>
+                            <div class="value">${productCount}</div>
                         </div>
                         
                         <div class="report-card">
                             <h3>💰 Total Value</h3>
-                            <div class="value">₦250,000</div>
+                            <div class="value">₦${totalValue.toLocaleString()}</div>
                         </div>
                         
                         <div class="report-card">
                             <h3>⚠️ Low Stock</h3>
-                            <div class="value">3</div>
+                            <div class="value">${lowStockCount}</div>
                         </div>
                     </div>
                 </div>
                 
+                ${productCount > 0 ? `
                 <h3>Current Inventory</h3>
                 <table class="data-table">
                     <thead>
@@ -695,40 +556,27 @@ goToHomeDashboard() {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>Laptop</td>
-                            <td>Electronics</td>
-                            <td>5</td>
-                            <td>150,000</td>
-                            <td>750,000</td>
-                            <td><span class="status-active">In Stock</span></td>
-                        </tr>
-                        <tr>
-                            <td>Wireless Mouse</td>
-                            <td>Electronics</td>
-                            <td>12</td>
-                            <td>2,500</td>
-                            <td>30,000</td>
-                            <td><span class="status-active">In Stock</span></td>
-                        </tr>
-                        <tr>
-                            <td>Keyboard</td>
-                            <td>Electronics</td>
-                            <td>8</td>
-                            <td>4,000</td>
-                            <td>32,000</td>
-                            <td><span class="status-active">In Stock</span></td>
-                        </tr>
-                        <tr>
-                            <td>Mouse Pad</td>
-                            <td>Accessories</td>
-                            <td>2</td>
-                            <td>500</td>
-                            <td>1,000</td>
-                            <td><span style="color: #e74c3c;">Low Stock</span></td>
-                        </tr>
+                        ${inventoryData.products.map(product => {
+                            const unitPrice = product.sellingPrice || 0;
+                            const totalValue = unitPrice * (product.quantity || 0);
+                            const isLowStock = (product.quantity || 0) <= (product.reorderLevel || 5);
+                            
+                            return `
+                                <tr>
+                                    <td>${product.name || 'Unnamed Product'}</td>
+                                    <td>${product.category || 'Uncategorized'}</td>
+                                    <td>${product.quantity || 0}</td>
+                                    <td>${unitPrice.toLocaleString()}</td>
+                                    <td>${totalValue.toLocaleString()}</td>
+                                    <td>${isLowStock ? 
+                                        '<span style="color: #e74c3c;">Low Stock</span>' : 
+                                        '<span class="status-active">In Stock</span>'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
+                ` : '<p>No products in inventory.</p>'}
                 
                 <div class="form-actions-content">
                     <button class="btn-primary" onclick="window.print()">Print Report</button>
@@ -738,190 +586,38 @@ goToHomeDashboard() {
         `;
     }
 
-    getSetupContent() {
-        return `
-            <div class="content-page">
-                <h2>System Setup</h2>
-                <p>Configure system settings, manage users, and update business information.</p>
-                
-                <div class="report-cards">
-                    <div class="report-card">
-                        <h3>👤 Total Users</h3>
-                        <div class="value">3</div>
-                        <div class="label">Active system users</div>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3>🏢 Business Info</h3>
-                        <div class="value">1</div>
-                        <div class="label">Business profile</div>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3>🔧 System Status</h3>
-                        <div class="value">✅</div>
-                        <div class="label">All systems operational</div>
-                    </div>
-                </div>
-                
-                <div class="quick-actions">
-                    <h3>Setup Actions</h3>
-                    <div class="action-buttons">
-                        <button class="btn-primary" onclick="app.handleMenuAction('new-user')">
-                            Add New User
-                        </button>
-                        <button class="btn-secondary" onclick="app.handleMenuAction('business-details')">
-                            Update Business Details
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    getNewUserForm() {
-        return `
-            <div class="content-page">
-                <h2>New User Registration</h2>
-                
-                <form id="newSystemUserForm" class="content-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="systemUserID">User ID *</label>
-                            <input type="text" id="systemUserID" required placeholder="Enter user ID">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="systemUserFullName">Full Name *</label>
-                            <input type="text" id="systemUserFullName" required placeholder="Enter full name">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="systemUserPassword">Password *</label>
-                            <input type="password" id="systemUserPassword" required placeholder="Enter password">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="systemUserConfirmPassword">Confirm Password *</label>
-                            <input type="password" id="systemUserConfirmPassword" required placeholder="Confirm password">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="userRole">User Role *</label>
-                            <select id="userRole" required>
-                                <option value="">Select Role</option>
-                                <option value="admin">Administrator</option>
-                                <option value="manager">Manager</option>
-                                <option value="staff">Staff</option>
-                                <option value="cashier">Cashier</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="userEmail">Email Address</label>
-                            <input type="email" id="userEmail" placeholder="user@example.com">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="userPermissions">Permissions</label>
-                        <div class="permissions-checkbox">
-                            <label><input type="checkbox" name="permissions" value="sales"> Sales Management</label>
-                            <label><input type="checkbox" name="permissions" value="purchases"> Purchase Management</label>
-                            <label><input type="checkbox" name="permissions" value="inventory"> Inventory Management</label>
-                            <label><input type="checkbox" name="permissions" value="reports"> View Reports</label>
-                        </div>
-                    </div>
-                    
-                    <div class="form-actions-content">
-                        <button type="submit" class="btn-primary">Create User</button>
-                        <button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        `;
-    }
-
-    getBusinessDetailsForm() {
-        return `
-            <div class="content-page">
-                <h2>Business Details</h2>
-                
-                <form id="businessDetailsForm" class="content-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="businessName">Business Name *</label>
-                            <input type="text" id="businessName" required placeholder="Enter business name" value="WebStarNg Store">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="businessType">Business Type</label>
-                            <select id="businessType">
-                                <option value="retail">Retail</option>
-                                <option value="wholesale">Wholesale</option>
-                                <option value="service">Service</option>
-                                <option value="manufacturing">Manufacturing</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="businessAddress">Address</label>
-                            <textarea id="businessAddress" rows="3" placeholder="Enter business address"></textarea>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="businessPhone">Phone Number</label>
-                            <input type="tel" id="businessPhone" placeholder="+234 800 000 0000">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="businessEmail">Email Address</label>
-                            <input type="email" id="businessEmail" placeholder="business@example.com">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="taxId">Tax ID</label>
-                            <input type="text" id="taxId" placeholder="Enter tax identification number">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="currency">Currency</label>
-                            <select id="currency">
-                                <option value="NGN">Nigerian Naira (₦)</option>
-                                <option value="USD">US Dollar ($)</option>
-                                <option value="EUR">Euro (€)</option>
-                                <option value="GBP">British Pound (£)</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-actions-content">
-                        <button type="submit" class="btn-primary">Save Details</button>
-                        <button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        `;
-    }
+    // ... [Keep other existing methods but update them to use real data] ...
 
     attachContentEventListeners() {
         // New Product Form
         const newProductForm = document.getElementById('newProductForm');
         if (newProductForm) {
-            newProductForm.addEventListener('submit', (e) => {
+            newProductForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                alert('Product saved successfully!');
-                this.loadMenuContent('products');
+                
+                const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+                if (!currentUser) {
+                    alert('Please login first');
+                    return;
+                }
+
+                const productData = {
+                    name: document.getElementById('productName').value,
+                    category: document.getElementById('productCategory').value,
+                    purchasePrice: parseFloat(document.getElementById('purchasePrice').value),
+                    sellingPrice: parseFloat(document.getElementById('sellingPrice').value),
+                    quantity: parseInt(document.getElementById('quantity').value),
+                    reorderLevel: parseInt(document.getElementById('reorderLevel').value) || 5,
+                    description: document.getElementById('productDescription').value
+                };
+
+                try {
+                    await api.addProductToInventory(currentUser.userID, productData);
+                    alert('Product saved successfully to your inventory!');
+                    this.loadMenuContent('products');
+                } catch (error) {
+                    alert('Error saving product: ' + error.message);
+                }
             });
         }
         
@@ -993,6 +689,7 @@ goToHomeDashboard() {
         const quantity = parseInt(document.getElementById('buyQuantity').value) || 1;
         const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
         const total = quantity * unitPrice;
+        const productName = document.getElementById('productSelect').options[document.getElementById('productSelect').selectedIndex].text;
         
         if (total <= 0) {
             alert('Please enter valid quantity and price');
@@ -1008,7 +705,18 @@ goToHomeDashboard() {
                 return;
             }
             
+            // Deduct from wallet
             const newBalance = await api.withdrawFunds(currentUser.userID, total);
+            
+            // Record purchase transaction
+            await api.addPurchaseTransaction(currentUser.userID, {
+                productName: productName.split(' - ')[0],
+                quantity: quantity,
+                unitPrice: unitPrice,
+                amount: total,
+                supplier: document.getElementById('supplier').options[document.getElementById('supplier').selectedIndex].text,
+                description: `Purchase of ${quantity} ${productName.split(' - ')[0]}`
+            });
             
             // Update local session
             currentUser.wallet = newBalance;
@@ -1024,7 +732,12 @@ goToHomeDashboard() {
     }
 
     logout() {
-        auth.logout();
+        // This method is kept for compatibility
+        // Clear session data
+        localStorage.removeItem('webstarng_user');
+        localStorage.removeItem('webstarng_token');
+        // Redirect to login page
+        window.location.href = 'index.html';
     }
 }
 
