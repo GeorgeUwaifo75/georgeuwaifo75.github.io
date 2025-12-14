@@ -9,6 +9,7 @@ class WebStarNgApp {
         this.loadUserData();
         this.setupEventListeners();
         this.setupMenuNavigation();
+        this.salesCart = []; // Initialize sales cart
     }
 
     checkAuth() {
@@ -233,6 +234,11 @@ class WebStarNgApp {
                 subtitle = 'Add funds to your wallet';
                 contentHTML = this.getWalletTopUpForm();
                 break;
+            case 'sell-now':
+                title = 'Sell Products';
+                subtitle = 'Scan or enter barcode to sell products';
+                contentHTML = this.getSellProductsForm();
+                break;
             case 'sales-day':
                 title = 'Sales Report';
                 subtitle = 'Today\'s sales summary';
@@ -270,177 +276,86 @@ class WebStarNgApp {
         this.attachContentEventListeners();
     }
 
-    // Updated Content Templates with real data
-    async getProductsContent() {
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        let inventoryData = { products: [] };
-        
-        try {
-            if (currentUser) {
-                inventoryData = await api.getUserInventory(currentUser.userID);
-            }
-        } catch (error) {
-            console.error('Error loading inventory:', error);
-        }
-        
-        const productCount = inventoryData.products ? inventoryData.products.length : 0;
-        const totalValue = inventoryData.products ? 
-            inventoryData.products.reduce((sum, product) => sum + (product.quantity * product.sellingPrice || 0), 0) : 0;
-        const lowStockCount = inventoryData.products ? 
-            inventoryData.products.filter(product => product.quantity <= (product.reorderLevel || 5)).length : 0;
-
+    // Sell Products Interface
+    getSellProductsForm() {
         return `
             <div class="content-page">
-                <h2>Products Management</h2>
-                <p>Manage your products, inventory, and purchases from this section.</p>
+                <h2>💰 Sell Products</h2>
+                <p>Scan barcode or enter manually to add products to sale</p>
                 
-                <div class="report-cards">
-                    <div class="report-card">
-                        <h3>📦 Total Products</h3>
-                        <div class="value">${productCount}</div>
-                        <div class="label">Active items in inventory</div>
+                <div class="sell-products-container">
+                    <!-- Barcode Input Section -->
+                    <div class="barcode-input-section">
+                        <div class="form-group">
+                            <label for="barcodeInput">
+                                <span class="scan-icon">📷</span> Enter or Scan Barcode
+                            </label>
+                            <div class="barcode-input-wrapper">
+                                <input type="text" 
+                                       id="barcodeInput" 
+                                       class="barcode-input"
+                                       placeholder="Enter barcode or scan product..."
+                                       autocomplete="off"
+                                       autofocus>
+                                <button type="button" id="clearBarcodeBtn" class="btn-small">Clear</button>
+                            </div>
+                            <div class="form-hint">
+                                Press Enter to search manually or use barcode scanner
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="report-card">
-                        <h3>💰 Total Value</h3>
-                        <div class="value">₦${totalValue.toLocaleString()}</div>
-                        <div class="label">Current inventory value</div>
+                    <!-- Cart Items Table -->
+                    <div class="cart-section">
+                        <h3>Sale Items</h3>
+                        <div class="cart-table-container">
+                            <table class="data-table cart-table">
+                                <thead>
+                                    <tr>
+                                        <th width="50">S/No</th>
+                                        <th>Product Description</th>
+                                        <th width="100">Price (₦)</th>
+                                        <th width="100">Quantity</th>
+                                        <th width="120">Subtotal (₦)</th>
+                                        <th width="80">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cartItems">
+                                    <!-- Cart items will be loaded here -->
+                                    <tr id="emptyCartMessage">
+                                        <td colspan="6" class="empty-cart">
+                                            <div class="empty-cart-message">
+                                                <span class="empty-icon">🛒</span>
+                                                <p>No products added yet</p>
+                                                <p class="hint">Scan or enter barcode to add products</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     
-                    <div class="report-card">
-                        <h3>📊 Low Stock</h3>
-                        <div class="value">${lowStockCount}</div>
-                        <div class="label">Items need restocking</div>
+                    <!-- Total and Actions -->
+                    <div class="cart-summary">
+                        <div class="total-amount">
+                            <span class="total-label">Total Amount:</span>
+                            <span class="total-value">₦<span id="totalAmount">0.00</span></span>
+                        </div>
+                        
+                        <div class="cart-actions">
+                            <button type="button" id="payNowBtn" class="btn-primary pay-btn">
+                                <span class="btn-icon">💳</span> Pay Now
+                            </button>
+                            <button type="button" id="cancelSaleBtn" class="btn-secondary">
+                                <span class="btn-icon">❌</span> Cancel Sale
+                            </button>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="quick-actions">
-                    <h3>Quick Actions</h3>
-                    <div class="action-buttons">
-                        <button class="btn-primary" onclick="app.handleMenuAction('new-product')">
-                            ➕ Add New Product
-                        </button>
-                        <button class="btn-secondary" onclick="app.handleMenuAction('buy-products')">
-                            🛒 Buy Products
-                        </button>
-                        <button class="btn-secondary" onclick="app.handleMenuAction('wallet-topup')">
-                            💰 Wallet TopUp
-                        </button>
-                    </div>
-                </div>
-                
-                ${productCount > 0 ? `
-                <h3>Recent Products</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Product Name</th>
-                            <th>Category</th>
-                            <th>Quantity</th>
-                            <th>Price (₦)</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${inventoryData.products.slice(0, 5).map(product => `
-                            <tr>
-                                <td>${product.name || 'Unnamed Product'}</td>
-                                <td>${product.category || 'Uncategorized'}</td>
-                                <td>${product.quantity || 0}</td>
-                                <td>${(product.sellingPrice || 0).toLocaleString()}</td>
-                                <td>${(product.quantity || 0) <= (product.reorderLevel || 5) ? 
-                                    '<span style="color: #e74c3c;">Low Stock</span>' : 
-                                    '<span class="status-active">In Stock</span>'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                ` : ''}
             </div>
         `;
     }
-
-    getNewProductForm() {
-        return `
-            <div class="content-page">
-                <h2>New Product</h2>
-                
-                <form id="newProductForm" class="content-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="productName">Product Name *</label>
-                            <input type="text" id="productName" name="productName" required placeholder="Enter product name">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="productCategory">Category *</label>
-                            <select id="productCategory" name="productCategory" required>
-                                <option value="">Select Category</option>
-                                <option value="electronics">Electronics</option>
-                                <option value="clothing">Clothing</option>
-                                <option value="food">Food & Beverages</option>
-                                <option value="stationery">Stationery</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="productCode">Product Code</label>
-                            <input type="text" id="productCode" name="productCode" placeholder="e.g., PROD-001">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="brand">Brand</label>
-                            <input type="text" id="brand" name="brand" placeholder="Enter brand name">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="purchasePrice">Purchase Price (₦) *</label>
-                            <input type="number" id="purchasePrice" name="purchasePrice" required min="0" step="0.01" placeholder="0.00">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="sellingPrice">Selling Price (₦) *</label>
-                            <input type="number" id="sellingPrice" name="sellingPrice" required min="0" step="0.01" placeholder="0.00">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="quantity">Initial Quantity *</label>
-                            <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="reorderLevel">Reorder Level *</label>
-                            <input type="number" id="reorderLevel" name="reorderLevel" required min="0" placeholder="Minimum stock level" value="5">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="productDescription">Description</label>
-                        <textarea id="productDescription" name="productDescription" rows="4" placeholder="Enter product description"></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="supplier">Supplier</label>
-                        <input type="text" id="supplier" name="supplier" placeholder="Enter supplier name">
-                    </div>
-                    
-                    <div class="form-actions-content">
-                        <button type="submit" class="btn-primary" id="saveProductBtn">Save Product</button>
-                        <button type="button" class="btn-secondary" id="cancelProductBtn">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        `;
-    }
-
-    // ... [Other content template methods remain the same] ...
 
     attachContentEventListeners() {
         // New Product Form - Save Product Button
@@ -485,355 +400,343 @@ class WebStarNgApp {
                 await this.saveNewProduct();
             });
         }
-        
-        // New System User Form
-        const newSystemUserForm = document.getElementById('newSystemUserForm');
-        if (newSystemUserForm) {
-            newSystemUserForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                alert('New user created successfully!');
-                this.loadMenuContent('setup');
+
+        // Sell Products - Barcode Input
+        const barcodeInput = document.getElementById('barcodeInput');
+        if (barcodeInput) {
+            barcodeInput.addEventListener('keypress', async (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const barcode = barcodeInput.value.trim();
+                    if (barcode) {
+                        await this.searchProductByBarcode(barcode);
+                        barcodeInput.value = '';
+                        barcodeInput.focus();
+                    }
+                }
+            });
+
+            // Auto-search on input (for barcode scanners that don't send Enter)
+            let barcodeTimer;
+            barcodeInput.addEventListener('input', (e) => {
+                clearTimeout(barcodeTimer);
+                barcodeTimer = setTimeout(async () => {
+                    const barcode = barcodeInput.value.trim();
+                    if (barcode.length >= 8) { // Assuming barcodes are at least 8 digits
+                        await this.searchProductByBarcode(barcode);
+                        barcodeInput.value = '';
+                        barcodeInput.focus();
+                    }
+                }, 300); // Wait 300ms after last input
             });
         }
-        
-        // Business Details Form
-        const businessDetailsForm = document.getElementById('businessDetailsForm');
-        if (businessDetailsForm) {
-            businessDetailsForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                alert('Business details updated successfully!');
-                this.loadMenuContent('setup');
+
+        // Sell Products - Clear Barcode Button
+        const clearBarcodeBtn = document.getElementById('clearBarcodeBtn');
+        if (clearBarcodeBtn) {
+            clearBarcodeBtn.addEventListener('click', () => {
+                const barcodeInput = document.getElementById('barcodeInput');
+                if (barcodeInput) {
+                    barcodeInput.value = '';
+                    barcodeInput.focus();
+                }
             });
         }
-        
-        // Update wallet balance in forms
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        if (currentUser) {
-            const walletTopupBalance = document.getElementById('walletTopupBalance');
-            const currentBalance = document.getElementById('currentBalance');
-            
-            if (walletTopupBalance) {
-                walletTopupBalance.textContent = `₦${currentUser.wallet.toFixed(2)}`;
-            }
-            
-            if (currentBalance) {
-                currentBalance.textContent = `₦${currentUser.wallet.toFixed(2)}`;
-            }
-        }
-    }
 
-    async saveNewProduct() {
-        // Get form values
-        const productName = document.getElementById('productName').value.trim();
-        const productCategory = document.getElementById('productCategory').value;
-        const productCode = document.getElementById('productCode').value.trim();
-        const brand = document.getElementById('brand').value.trim();
-        const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
-        const sellingPrice = parseFloat(document.getElementById('sellingPrice').value);
-        const quantity = parseInt(document.getElementById('quantity').value);
-        const reorderLevel = parseInt(document.getElementById('reorderLevel').value);
-        const description = document.getElementById('productDescription').value.trim();
-        const supplier = document.getElementById('supplier').value.trim();
-
-        // Validate required fields
-        if (!productName) {
-            alert('Product Name is required');
-            document.getElementById('productName').focus();
-            return;
+        // Sell Products - Pay Now Button
+        const payNowBtn = document.getElementById('payNowBtn');
+        if (payNowBtn) {
+            payNowBtn.addEventListener('click', async () => {
+                await this.processSalePayment();
+            });
         }
 
-        if (!productCategory) {
-            alert('Category is required');
-            document.getElementById('productCategory').focus();
-            return;
-        }
-
-        if (isNaN(purchasePrice) || purchasePrice < 0) {
-            alert('Please enter a valid Purchase Price');
-            document.getElementById('purchasePrice').focus();
-            return;
-        }
-
-        if (isNaN(sellingPrice) || sellingPrice < 0) {
-            alert('Please enter a valid Selling Price');
-            document.getElementById('sellingPrice').focus();
-            return;
-        }
-
-        if (isNaN(quantity) || quantity < 0) {
-            alert('Please enter a valid Quantity');
-            document.getElementById('quantity').focus();
-            return;
-        }
-
-        if (isNaN(reorderLevel) || reorderLevel < 0) {
-            alert('Please enter a valid Reorder Level');
-            document.getElementById('reorderLevel').focus();
-            return;
-        }
-
-        // Get current user
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        if (!currentUser) {
-            alert('Please login first');
-            window.location.href = 'index.html';
-            return;
-        }
-
-        // Create product data object
-        const productData = {
-            name: productName,
-            category: productCategory,
-            code: productCode || `PROD-${Date.now().toString().slice(-6)}`,
-            brand: brand || 'Generic',
-            purchasePrice: purchasePrice,
-            sellingPrice: sellingPrice,
-            quantity: quantity,
-            reorderLevel: reorderLevel,
-            description: description,
-            supplier: supplier || 'Unknown',
-            profitMargin: sellingPrice - purchasePrice,
-            totalValue: quantity * sellingPrice,
-            status: quantity > 0 ? 'In Stock' : 'Out of Stock',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        try {
-            // Disable save button to prevent multiple submissions
-            const saveBtn = document.getElementById('saveProductBtn');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<span class="spinner"></span> Saving...';
-            }
-
-            // Save product to user's inventory bin
-            const result = await api.addProductToInventory(currentUser.userID, productData);
-            
-            if (result && result.record) {
-                // Show success message
-                alert(`Product "${productName}" has been successfully added to your inventory!`);
-                
-                // Clear the form
-                this.clearProductForm();
-                
-                // Return to products page
+        // Sell Products - Cancel Sale Button
+        const cancelSaleBtn = document.getElementById('cancelSaleBtn');
+        if (cancelSaleBtn) {
+            cancelSaleBtn.addEventListener('click', () => {
+                this.clearSalesCart();
                 this.loadMenuContent('products');
-            } else {
-                throw new Error('Failed to save product');
-            }
-        } catch (error) {
-            console.error('Error saving product:', error);
-            
-            // Re-enable save button
-            const saveBtn = document.getElementById('saveProductBtn');
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = 'Save Product';
-            }
-            
-            alert(`Error saving product: ${error.message}. Please try again.`);
+            });
         }
+        
+        // ... [Other existing event listeners] ...
     }
 
-    clearProductForm() {
-        // Clear all form fields
-        const form = document.getElementById('newProductForm');
-        if (form) {
-            form.reset();
-        }
-        
-        // Reset specific fields to defaults
-        const reorderLevel = document.getElementById('reorderLevel');
-        if (reorderLevel) {
-            reorderLevel.value = '5';
-        }
-    }
-
-    async processTopUp() {
-        const amountInput = document.getElementById('topupAmount');
-        const amount = parseFloat(amountInput.value);
-        
-        if (!amount || amount < 100) {
-            alert('Please enter a valid amount (minimum ₦100)');
-            return;
-        }
-        
+    async searchProductByBarcode(barcode) {
         try {
             const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-            if (!currentUser) return;
-            
-            const newBalance = await api.addFunds(currentUser.userID, amount);
-            
-            // Update local session
-            currentUser.wallet = newBalance;
-            localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
-            
-            // Update UI
-            this.updateUserDisplay(currentUser);
-            alert(`Successfully added ₦${amount.toFixed(2)} to your wallet!`);
-            this.loadMenuContent('products');
-        } catch (error) {
-            alert('Error adding funds: ' + error.message);
-        }
-    }
-
-    async processPurchase() {
-        const quantity = parseInt(document.getElementById('buyQuantity').value) || 1;
-        const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
-        const total = quantity * unitPrice;
-        const productName = document.getElementById('productSelect').options[document.getElementById('productSelect').selectedIndex].text;
-        
-        if (total <= 0) {
-            alert('Please enter valid quantity and price');
-            return;
-        }
-        
-        try {
-            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-            if (!currentUser) return;
-            
-            if (total > currentUser.wallet) {
-                alert(`Insufficient funds! Total: ₦${total.toFixed(2)}, Available: ₦${currentUser.wallet.toFixed(2)}`);
+            if (!currentUser) {
+                alert('Please login first');
                 return;
             }
+
+            // Get user's inventory
+            const inventory = await api.getUserInventory(currentUser.userID);
             
-            // Deduct from wallet
-            const newBalance = await api.withdrawFunds(currentUser.userID, total);
+            // Find product by barcode
+            const product = inventory.products.find(p => p.barcode === barcode);
             
-            // Record purchase transaction
-            await api.addPurchaseTransaction(currentUser.userID, {
-                productName: productName.split(' - ')[0],
-                quantity: quantity,
-                unitPrice: unitPrice,
-                amount: total,
-                supplier: document.getElementById('supplier').options[document.getElementById('supplier').selectedIndex].text,
-                description: `Purchase of ${quantity} ${productName.split(' - ')[0]}`
-            });
+            if (!product) {
+                alert(`❌ Product with barcode "${barcode}" not found in inventory`);
+                return;
+            }
+
+            // Check if product is in stock
+            if (product.quantity <= 0) {
+                alert(`❌ "${product.name}" is out of stock!`);
+                return;
+            }
+
+            // Add product to cart
+            this.addProductToCart(product);
             
-            // Update local session
-            currentUser.wallet = newBalance;
-            localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
-            
-            // Update UI
-            this.updateUserDisplay(currentUser);
-            alert(`Purchase successful! ₦${total.toFixed(2)} deducted from your wallet.`);
-            this.loadMenuContent('products');
         } catch (error) {
-            alert('Error processing purchase: ' + error.message);
+            console.error('Error searching product:', error);
+            alert('Error searching product: ' + error.message);
         }
     }
 
-    logout() {
-        // This method is kept for compatibility
-        // Clear session data
-        localStorage.removeItem('webstarng_user');
-        localStorage.removeItem('webstarng_token');
-        // Redirect to login page
-        window.location.href = 'index.html';
-    }
-}
-
-// Global functions for modals (existing functionality)
-function showAddFunds() {
-    const modal = document.getElementById('modalOverlay');
-    const title = document.getElementById('modalTitle');
-    const content = document.getElementById('modalContent');
-    
-    title.textContent = 'Add Funds';
-    content.innerHTML = `
-        <p>Add funds to your wallet:</p>
-        <input type="number" id="fundAmount" placeholder="Enter amount" min="1" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-        <button onclick="addFunds()" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer;">Add Funds</button>
-    `;
-    
-    modal.style.display = 'flex';
-}
-
-function showWithdraw() {
-    const modal = document.getElementById('modalOverlay');
-    const title = document.getElementById('modalTitle');
-    const content = document.getElementById('modalContent');
-    
-    title.textContent = 'Withdraw Funds';
-    content.innerHTML = `
-        <p>Withdraw funds from your wallet:</p>
-        <input type="number" id="withdrawAmount" placeholder="Enter amount" min="1" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-        <button onclick="withdrawFunds()" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Withdraw</button>
-    `;
-    
-    modal.style.display = 'flex';
-}
-
-async function addFunds() {
-    const amount = parseFloat(document.getElementById('fundAmount').value);
-    if (!amount || amount <= 0) {
-        alert('Please enter a valid amount');
-        return;
-    }
-
-    try {
-        const userStr = localStorage.getItem('webstarng_user');
-        if (!userStr) return;
-
-        const user = JSON.parse(userStr);
-        const newBalance = await api.addFunds(user.userID, amount);
+    addProductToCart(product) {
+        // Check if product already exists in cart
+        const existingItemIndex = this.salesCart.findIndex(item => item.id === product.id);
         
-        // Update local session
-        user.wallet = newBalance;
-        localStorage.setItem('webstarng_user', JSON.stringify(user));
-        
-        // Update UI
-        app.updateUserDisplay(user);
-        alert(`Successfully added ₦${amount.toFixed(2)} to your wallet!`);
-        closeModal();
-    } catch (error) {
-        alert('Error adding funds: ' + error.message);
+        if (existingItemIndex !== -1) {
+            // Update quantity if product already in cart
+            this.salesCart[existingItemIndex].quantity += 1;
+            this.salesCart[existingItemIndex].subtotal = 
+                this.salesCart[existingItemIndex].quantity * this.salesCart[existingItemIndex].price;
+        } else {
+            // Add new product to cart
+            const cartItem = {
+                id: product.id,
+                sNo: this.salesCart.length + 1,
+                description: product.name,
+                price: product.sellingPrice || 0,
+                quantity: 1,
+                subtotal: product.sellingPrice || 0,
+                barcode: product.barcode,
+                originalQuantity: product.quantity // Store original stock for validation
+            };
+            this.salesCart.push(cartItem);
+        }
+
+        // Update cart display
+        this.updateCartDisplay();
     }
-}
 
-async function withdrawFunds() {
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    if (!amount || amount <= 0) {
-        alert('Please enter a valid amount');
-        return;
-    }
-
-    try {
-        const userStr = localStorage.getItem('webstarng_user');
-        if (!userStr) return;
-
-        const user = JSON.parse(userStr);
+    updateCartDisplay() {
+        const cartItemsContainer = document.getElementById('cartItems');
+        const totalAmountElement = document.getElementById('totalAmount');
+        const emptyCartMessage = document.getElementById('emptyCartMessage');
         
-        if (amount > user.wallet) {
-            alert('Insufficient funds');
+        if (!cartItemsContainer) return;
+
+        // Clear current cart display
+        cartItemsContainer.innerHTML = '';
+        
+        if (this.salesCart.length === 0) {
+            // Show empty cart message
+            if (emptyCartMessage) {
+                emptyCartMessage.style.display = '';
+            }
+            totalAmountElement.textContent = '0.00';
             return;
         }
 
-        const newBalance = await api.withdrawFunds(user.userID, amount);
-        
-        // Update local session
-        user.wallet = newBalance;
-        localStorage.setItem('webstarng_user', JSON.stringify(user));
-        
-        // Update UI
-        app.updateUserDisplay(user);
-        alert(`Successfully withdrew ₦${amount.toFixed(2)} from your wallet!`);
-        closeModal();
-    } catch (error) {
-        alert('Error withdrawing funds: ' + error.message);
+        // Hide empty cart message
+        if (emptyCartMessage) {
+            emptyCartMessage.style.display = 'none';
+        }
+
+        // Calculate total
+        let total = 0;
+
+        // Add each cart item to display
+        this.salesCart.forEach((item, index) => {
+            item.sNo = index + 1; // Update serial number
+            total += item.subtotal;
+
+            const row = document.createElement('tr');
+            row.className = 'cart-item';
+            row.innerHTML = `
+                <td>${item.sNo}</td>
+                <td>
+                    <div class="product-description">
+                        <strong>${item.description}</strong>
+                        ${item.barcode ? `<div class="barcode-hint">Barcode: ${item.barcode}</div>` : ''}
+                    </div>
+                </td>
+                <td class="price-cell">₦${item.price.toFixed(2)}</td>
+                <td>
+                    <div class="quantity-controls">
+                        <button type="button" class="qty-btn minus" onclick="app.updateCartQuantity(${index}, -1)">-</button>
+                        <span class="quantity-value">${item.quantity}</span>
+                        <button type="button" class="qty-btn plus" onclick="app.updateCartQuantity(${index}, 1)">+</button>
+                    </div>
+                </td>
+                <td class="subtotal-cell">₦${item.subtotal.toFixed(2)}</td>
+                <td>
+                    <button type="button" class="delete-btn" onclick="app.removeFromCart(${index})" title="Remove item">
+                        🗑️
+                    </button>
+                </td>
+            `;
+            cartItemsContainer.appendChild(row);
+        });
+
+        // Update total amount
+        totalAmountElement.textContent = total.toFixed(2);
     }
+
+    updateCartQuantity(itemIndex, change) {
+        const item = this.salesCart[itemIndex];
+        if (!item) return;
+
+        const newQuantity = item.quantity + change;
+        
+        // Validate minimum quantity
+        if (newQuantity < 1) {
+            this.removeFromCart(itemIndex);
+            return;
+        }
+
+        // Validate against original stock
+        if (newQuantity > item.originalQuantity) {
+            alert(`⚠️ Only ${item.originalQuantity} units available in stock!`);
+            return;
+        }
+
+        // Update quantity and subtotal
+        item.quantity = newQuantity;
+        item.subtotal = item.quantity * item.price;
+
+        // Update cart display
+        this.updateCartDisplay();
+    }
+
+    removeFromCart(itemIndex) {
+        if (confirm('Are you sure you want to remove this item from the cart?')) {
+            this.salesCart.splice(itemIndex, 1);
+            this.updateCartDisplay();
+        }
+    }
+
+    clearSalesCart() {
+        if (this.salesCart.length > 0) {
+            if (confirm('Are you sure you want to cancel this sale? All items will be removed.')) {
+                this.salesCart = [];
+                this.updateCartDisplay();
+            }
+        } else {
+            this.salesCart = [];
+            this.updateCartDisplay();
+        }
+    }
+
+    async processSalePayment() {
+        if (this.salesCart.length === 0) {
+            alert('❌ Cart is empty! Add products before processing payment.');
+            return;
+        }
+
+        // Validate stock availability
+        for (const item of this.salesCart) {
+            if (item.quantity > item.originalQuantity) {
+                alert(`❌ Insufficient stock for "${item.description}"! Available: ${item.originalQuantity}`);
+                return;
+            }
+        }
+
+        const totalAmount = this.salesCart.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        if (confirm(`Process payment for ₦${totalAmount.toFixed(2)}?`)) {
+            try {
+                const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+                
+                // Process each item in cart
+                for (const item of this.salesCart) {
+                    // Update inventory (reduce stock)
+                    await this.updateInventoryAfterSale(item);
+                    
+                    // Record sales transaction
+                    await api.addSalesTransaction(currentUser.userID, {
+                        productName: item.description,
+                        barcode: item.barcode,
+                        quantity: item.quantity,
+                        unitPrice: item.price,
+                        amount: item.subtotal,
+                        customer: 'Walk-in Customer',
+                        description: `Sale of ${item.quantity} ${item.description}`
+                    });
+                }
+
+                // Add sale amount to wallet
+                const newBalance = await api.addFunds(currentUser.userID, totalAmount);
+                
+                // Update local session
+                currentUser.wallet = newBalance;
+                localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
+                
+                // Update UI
+                this.updateUserDisplay(currentUser);
+                
+                // Show success message
+                alert(`✅ Sale completed successfully!\n\n` +
+                      `Total: ₦${totalAmount.toFixed(2)}\n` +
+                      `Items: ${this.salesCart.length}\n` +
+                      `New Balance: ₦${newBalance.toFixed(2)}`);
+                
+                // Clear cart and return to products
+                this.salesCart = [];
+                this.loadMenuContent('products');
+                
+            } catch (error) {
+                console.error('Error processing sale:', error);
+                alert('❌ Error processing sale: ' + error.message);
+            }
+        }
+    }
+
+    async updateInventoryAfterSale(cartItem) {
+        try {
+            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+            const inventory = await api.getUserInventory(currentUser.userID);
+            
+            // Find and update the product
+            const productIndex = inventory.products.findIndex(p => p.id === cartItem.id);
+            if (productIndex !== -1) {
+                inventory.products[productIndex].quantity -= cartItem.quantity;
+                inventory.products[productIndex].updatedAt = new Date().toISOString();
+                
+                // Update status if low stock
+                if (inventory.products[productIndex].quantity <= inventory.products[productIndex].reorderLevel) {
+                    inventory.products[productIndex].status = 'Low Stock';
+                }
+                if (inventory.products[productIndex].quantity <= 0) {
+                    inventory.products[productIndex].status = 'Out of Stock';
+                }
+                
+                // Save updated inventory
+                const user = await api.getUser(currentUser.userID);
+                if (user && user.inventoryBinId) {
+                    await fetch(`${api.baseURL}/${user.inventoryBinId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Master-Key': api.apiKey
+                        },
+                        body: JSON.stringify(inventory)
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error updating inventory:', error);
+            throw error;
+        }
+    }
+
+    // ... [Rest of the methods remain the same] ...
 }
 
-function closeModal() {
-    document.getElementById('modalOverlay').style.display = 'none';
-}
-
-// Initialize the app when DOM is loaded
-let app;
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('dashboard.html')) {
-        app = new WebStarNgApp();
-        window.app = app; // Make app available globally
-    }
-});
+// ... [Rest of the global functions remain the same] ...
