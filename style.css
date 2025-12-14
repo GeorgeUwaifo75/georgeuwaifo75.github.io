@@ -1382,3 +1382,223 @@ body {
     content: " *";
     color: #e74c3c;
 }
+
+/* Add these styles to your existing style.css */
+
+/* Sell Products Styles */
+.sell-products-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.barcode-input-section {
+    background: #f8f9fa;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    border: 2px solid #e1e5e9;
+}
+
+.barcode-input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.barcode-input {
+    flex: 1;
+    padding: 15px;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 2px;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    background: white;
+    transition: all 0.3s;
+}
+
+.barcode-input:focus {
+    outline: none;
+    border-color: #2980b9;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.scan-icon {
+    font-size: 1.2em;
+    margin-right: 8px;
+}
+
+/* Cart Section */
+.cart-section {
+    margin: 30px 0;
+}
+
+.cart-table-container {
+    overflow-x: auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+.cart-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cart-table th {
+    background: #2c3e50;
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    text-align: left;
+    position: sticky;
+    top: 0;
+}
+
+.cart-table td {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.cart-item:hover {
+    background: #f8f9fa;
+}
+
+/* Product Description */
+.product-description {
+    line-height: 1.4;
+}
+
+.barcode-hint {
+    font-size: 0.85em;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+/* Quantity Controls */
+.quantity-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qty-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.qty-btn:hover {
+    background: #f8f9fa;
+    border-color: #3498db;
+}
+
+.qty-btn.minus {
+    color: #e74c3c;
+}
+
+.qty-btn.plus {
+    color: #2ecc71;
+}
+
+.quantity-value {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Price and Subtotal Cells */
+.price-cell,
+.subtotal-cell {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Delete Button */
+.delete-btn {
+    background: #ffebee;
+    color: #e74c3c;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 16px;
+}
+
+.delete-btn:hover {
+    background: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+/* Empty Cart Message */
+.empty-cart {
+    text-align: center;
+    padding: 50px !important;
+}
+
+.empty-cart-message {
+    color: #95a5a6;
+}
+
+.empty-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 15px;
+}
+
+.empty-cart-message p {
+    margin: 5px 0;
+}
+
+.empty-cart-message .hint {
+    font-size: 0.9em;
+    color: #bdc3c7;
+}
+
+/* Cart Summary */
+.cart-summary {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    margin-top: 30px;
+}
+
+.total-amount {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 2px solid #eee;
+    margin-bottom: 25px;
+}
+
+.total-label {
+    font-size: 1.2em;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.total-value {
+    font-size: 2em;
+    color: #2ecc71;
+    font-weight: 700;
+}
+
+/* Cart Actions */
+.cart-actions {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+}
