@@ -1382,7 +1382,6 @@ body {
     content: " *";
     color: #e74c3c;
 }
-
 /* Add these styles to your existing style.css */
 
 /* Sell Products Styles */
@@ -1601,4 +1600,88 @@ body {
     display: flex;
     gap: 20px;
     justify-content: flex-end;
+}
+
+/* Add these styles to your existing style.css */
+
+/* Barcode Input Group */
+.barcode-input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.barcode-input-group input {
+    flex: 1;
+}
+
+.btn-small {
+    padding: 8px 15px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.3s;
+}
+
+.btn-small:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
+}
+
+/* Barcode Display */
+.barcode-display {
+    font-family: 'Courier New', monospace;
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    margin: 10px 0;
+    text-align: center;
+    letter-spacing: 2px;
+    font-weight: bold;
+}
+
+/* Form Improvements */
+.form-hint {
+    font-size: 0.85em;
+    color: #7f8c8d;
+    margin-top: 5px;
+    display: block;
+}
+
+.required-field::after {
+    content: " *";
+    color: #e74c3c;
+}
+
+.form-group input:valid:not(:placeholder-shown),
+.form-group select:valid {
+    border-color: #2ecc71 !important;
+}
+
+.form-group input:invalid:not(:placeholder-shown),
+.form-group select:invalid {
+    border-color: #e74c3c !important;
+}
+
+/* Barcode validation styling */
+#barcode.valid {
+    border-color: #2ecc71 !important;
+    background-color: #f8fff9;
+}
+
+#barcode.invalid {
+    border-color: #e74c3c !important;
+    background-color: #fff9f9;
+}
+
+
+/* Button icons */
+.btn-icon {
+    margin-right: 8px;
+    font-size: 1.1em;
 }
