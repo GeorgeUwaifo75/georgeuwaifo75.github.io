@@ -47,6 +47,31 @@ class JSONBinAPI {
         }
     }
 
+//New addition
+   async updateUserInventory(userID, inventoryData) {
+     try {
+        const user = await this.getUser(userID);
+        if (!user || !user.inventoryBinId) {
+            throw new Error('User inventory bin not found');
+        }
+
+        const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(inventoryData)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error updating inventory:', error);
+        throw error;
+    }
+}
+
+
     // Create new bins for a user
     async createUserBins(userID) {
         const timestamp = Date.now();
@@ -259,9 +284,11 @@ class JSONBinAPI {
             return { transactions: [], totalPurchases: 0, userID: userID };
         }
     }
-
+    
+    
+   
     // Add product to user's inventory
-  // Add product to user's inventory
+ // In api.js, update the addProductToInventory method:
 async addProductToInventory(userID, productData) {
     try {
         const user = await this.getUser(userID);
@@ -273,7 +300,7 @@ async addProductToInventory(userID, productData) {
         const newProduct = {
             ...productData,
             id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            // Ensure barcode is included
+            // Generate barcode if not provided
             barcode: productData.barcode || `BC${Date.now().toString().slice(-10)}`,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
