@@ -258,6 +258,11 @@ class WebStarNgApp {
                 subtitle = 'Update your business information';
                 contentHTML = this.getBusinessDetailsForm();
                 break;
+            case 'sell-now':
+                title = 'Sell Products';
+                subtitle = 'Scan or enter barcodes to sell products';
+                contentHTML = this.getSellProductsInterface();
+                break;    
             default:
                 return;
         }
@@ -269,6 +274,383 @@ class WebStarNgApp {
         // Re-attach event listeners for dynamic content
         this.attachContentEventListeners();
     }
+
+
+// Add the getSellProductsInterface method
+getSellProductsInterface() {
+    return `
+        <div class="sell-products-container">
+            <div class="barcode-input-section">
+                <h3>📦 Scan or Enter Barcode</h3>
+                <div class="barcode-input-group">
+                    <input type="text" 
+                           id="barcode" 
+                           class="barcode-input" 
+                           placeholder="Scan barcode or enter manually and press Enter"
+                           autocomplete="off"
+                           autofocus>
+                    <button onclick="app.clearBarcodeInput()" class="btn-small">Clear</button>
+                </div>
+                <div class="barcode-display" id="barcodeDisplay" style="display: none;">
+                    Last scanned: <span id="lastBarcode"></span>
+                </div>
+                <div class="form-hint">
+                    💡 Press Enter after manual entry or scan automatically
+                </div>
+            </div>
+            
+            <div class="cart-section">
+                <h3>🛒 Cart Items</h3>
+                <div class="cart-table-container">
+                    <table class="cart-table" id="cartTable">
+                        <thead>
+                            <tr>
+                                <th>S/No.</th>
+                                <th>Barcode</th>
+                                <th>Description</th>
+                                <th>Price (₦)</th>
+                                <th>Quantity</th>
+                                <th>Subtotal (₦)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cartItems">
+                            <tr class="empty-cart">
+                                <td colspan="7">
+                                    <div class="empty-cart-message">
+                                        <span class="empty-icon">🛒</span>
+                                        <p>No products in cart</p>
+                                        <p class="hint">Start scanning or enter barcodes</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="cart-summary">
+                <div class="total-amount">
+                    <div class="total-label">Total Amount:</div>
+                    <div class="total-value">₦<span id="totalAmount">0.00</span></div>
+                </div>
+                
+                <div class="cart-actions">
+                    <button class="btn-secondary" onclick="app.clearCart()">Clear Cart</button>
+                    <button class="btn-secondary" onclick="app.handleMenuAction('products')">Cancel</button>
+                    <button class="btn-primary" onclick="app.processSale()" id="payNowBtn">
+                        💳 Pay Now (₦<span id="payNowAmount">0.00</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
+// Add cart management methods
+initializeCart() {
+    this.cart = JSON.parse(localStorage.getItem('webstarng_cart')) || [];
+    this.currentCartId = `cart_${Date.now()}`;
+}
+
+addToCart(product) {
+    // Check if product already exists in cart
+    const existingIndex = this.cart.findIndex(item => item.barcode === product.barcode);
+    
+    if (existingIndex > -1) {
+        // Increment quantity of existing item
+        this.cart[existingIndex].quantity += 1;
+        this.cart[existingIndex].subtotal = this.cart[existingIndex].quantity * this.cart[existingIndex].sellingPrice;
+    } else {
+        // Add new item to cart
+        const cartItem = {
+            id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            sNo: this.cart.length + 1,
+            barcode: product.barcode,
+            name: product.name,
+            description: product.description || product.name,
+            sellingPrice: product.sellingPrice,
+            quantity: 1,
+            subtotal: product.sellingPrice,
+            productId: product.id,
+            category: product.category,
+            timestamp: new Date().toISOString()
+        };
+        this.cart.push(cartItem);
+    }
+    
+    this.saveCart();
+    this.renderCart();
+}
+
+removeFromCart(itemId) {
+    this.cart = this.cart.filter(item => item.id !== itemId);
+    // Recalculate serial numbers
+    this.cart.forEach((item, index) => {
+        item.sNo = index + 1;
+    });
+    this.saveCart();
+    this.renderCart();
+}
+
+updateQuantity(itemId, newQuantity) {
+    if (newQuantity < 1) {
+        this.removeFromCart(itemId);
+        return;
+    }
+    
+    const item = this.cart.find(item => item.id === itemId);
+    if (item) {
+        item.quantity = newQuantity;
+        item.subtotal = item.quantity * item.sellingPrice;
+        this.saveCart();
+        this.renderCart();
+    }
+}
+
+saveCart() {
+    localStorage.setItem('webstarng_cart', JSON.stringify(this.cart));
+}
+
+
+clearCart() {
+    if (this.cart.length === 0) return;
+    
+    if (confirm('Are you sure you want to clear all items from the cart?')) {
+        this.cart = [];
+        this.saveCart();
+        this.renderCart();
+    }
+}
+
+renderCart() {
+    const cartItemsContainer = document.getElementById('cartItems');
+    const totalAmountElement = document.getElementById('totalAmount');
+    const payNowAmountElement = document.getElementById('payNowAmount');
+    
+    if (!cartItemsContainer) return;
+    
+    // Calculate total
+    const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    if (this.cart.length === 0) {
+        cartItemsContainer.innerHTML = `
+            <tr class="empty-cart">
+                <td colspan="7">
+                    <div class="empty-cart-message">
+                        <span class="empty-icon">🛒</span>
+                        <p>No products in cart</p>
+                        <p class="hint">Start scanning or enter barcodes</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    } else {
+        cartItemsContainer.innerHTML = this.cart.map(item => `
+            <tr class="cart-item" data-item-id="${item.id}">
+                <td>${item.sNo}</td>
+                <td>
+                    <div class="barcode-hint">${item.barcode}</div>
+                </td>
+                <td>
+                    <div class="product-description">
+                        <strong>${item.name}</strong><br>
+                        <small>${item.description}</small>
+                    </div>
+                </td>
+                <td class="price-cell">${item.sellingPrice.toLocaleString()}</td>
+                <td>
+                    <div class="quantity-controls">
+                        <button class="qty-btn minus" onclick="app.updateQuantity('${item.id}', ${item.quantity - 1})">−</button>
+                        <span class="quantity-value">${item.quantity}</span>
+                        <button class="qty-btn plus" onclick="app.updateQuantity('${item.id}', ${item.quantity + 1})">+</button>
+                    </div>
+                </td>
+                <td class="subtotal-cell">${item.subtotal.toLocaleString()}</td>
+                <td>
+                    <button class="delete-btn" onclick="app.removeFromCart('${item.id}')" title="Remove item">
+                        🗑️
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    // Update total amounts
+    if (totalAmountElement) {
+        totalAmountElement.textContent = total.toFixed(2);
+    }
+    if (payNowAmountElement) {
+        payNowAmountElement.textContent = total.toFixed(2);
+    }
+    
+    // Update pay now button state
+    const payNowBtn = document.getElementById('payNowBtn');
+    if (payNowBtn) {
+        payNowBtn.disabled = this.cart.length === 0;
+    }
+}
+
+
+// Add barcode search functionality
+async searchBarcode(barcodeValue) {
+    if (!barcodeValue || barcodeValue.trim() === '') {
+        this.showBarcodeError('Please enter a barcode');
+        return null;
+    }
+    
+    // Show loading
+    this.showBarcodeLoading(true);
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showBarcodeError('Please login first');
+            return null;
+        }
+        
+        // Get user's inventory
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        // Search for product by barcode
+        const product = products.find(p => p.barcode === barcodeValue);
+        
+        if (product) {
+            // Update barcode display
+            this.updateBarcodeDisplay(barcodeValue);
+            
+            // Check if product has enough quantity
+            const cartItem = this.cart.find(item => item.barcode === barcodeValue);
+            const currentCartQuantity = cartItem ? cartItem.quantity : 0;
+            
+            if (currentCartQuantity >= product.quantity) {
+                this.showBarcodeError(`Only ${product.quantity} items available in stock`);
+                return null;
+            }
+            
+            return product;
+        } else {
+            this.showBarcodeError(`Product with barcode "${barcodeValue}" not found in inventory`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error searching barcode:', error);
+        this.showBarcodeError('Error searching inventory. Please try again.');
+        return null;
+    } finally {
+        this.showBarcodeLoading(false);
+    }
+}
+
+showBarcodeError(message) {
+    const barcodeInput = document.getElementById('barcode');
+    if (barcodeInput) {
+        barcodeInput.classList.add('invalid');
+        barcodeInput.setAttribute('title', message);
+        
+        // Show temporary error
+        setTimeout(() => {
+            barcodeInput.classList.remove('invalid');
+            barcodeInput.removeAttribute('title');
+        }, 3000);
+    }
+    
+    // Optional: Show toast notification
+    alert(message);
+}
+
+
+showBarcodeLoading(show) {
+    const barcodeInput = document.getElementById('barcode');
+    if (barcodeInput) {
+        if (show) {
+            barcodeInput.disabled = true;
+            barcodeInput.placeholder = 'Searching inventory...';
+        } else {
+            barcodeInput.disabled = false;
+            barcodeInput.placeholder = 'Scan barcode or enter manually and press Enter';
+            barcodeInput.focus();
+        }
+    }
+}
+
+updateBarcodeDisplay(barcodeValue) {
+    const display = document.getElementById('barcodeDisplay');
+    const lastBarcodeSpan = document.getElementById('lastBarcode');
+    
+    if (display && lastBarcodeSpan) {
+        lastBarcodeSpan.textContent = barcodeValue;
+        display.style.display = 'block';
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+            display.style.display = 'none';
+        }, 5000);
+    }
+}
+
+clearBarcodeInput() {
+    const barcodeInput = document.getElementById('barcode');
+    if (barcodeInput) {
+        barcodeInput.value = '';
+        barcodeInput.focus();
+    }
+}
+
+// Add barcode event listener setup
+setupBarcodeInput() {
+    const barcodeInput = document.getElementById('barcode');
+    if (!barcodeInput) return;
+    
+    // Clear previous event listeners by cloning
+    const newInput = barcodeInput.cloneNode(true);
+    barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
+    
+    // Add new event listeners
+    newInput.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const barcodeValue = newInput.value.trim();
+            
+            if (barcodeValue) {
+                const product = await this.searchBarcode(barcodeValue);
+                if (product) {
+                    this.addToCart(product);
+                    newInput.value = '';
+                }
+            }
+        }
+    });
+    
+    // Auto-search on input (for barcode scanners that don't send Enter)
+    let scannerTimeout;
+    newInput.addEventListener('input', async (e) => {
+        const value = e.target.value.trim();
+        
+        // Clear previous timeout
+        if (scannerTimeout) clearTimeout(scannerTimeout);
+        
+        // Set timeout to detect scanner input (scanners typically input quickly)
+        scannerTimeout = setTimeout(async () => {
+            if (value.length >= 3) { // Barcodes are typically at least 3 chars
+                const product = await this.searchBarcode(value);
+                if (product) {
+                    this.addToCart(product);
+                    newInput.value = '';
+                }
+            }
+        }, 100); // Wait 100ms after last input
+    });
+    
+    // Focus on input when page loads
+    newInput.focus();
+}
+
+
+
+
 
     // Updated Content Templates with real data
     async getProductsContent() {
@@ -506,6 +888,16 @@ class WebStarNgApp {
             });
         }
         
+        
+        // Sell Products specific listeners
+          if (document.getElementById('barcode')) {
+              this.initializeCart();
+              this.setupBarcodeInput();
+              this.renderCart();
+          }
+              
+        
+        
         // Update wallet balance in forms
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
         if (currentUser) {
@@ -521,6 +913,109 @@ class WebStarNgApp {
             }
         }
     }
+
+
+// Add processSale method
+async processSale() {
+    if (this.cart.length === 0) {
+        alert('Cart is empty. Add products before processing sale.');
+        return;
+    }
+    
+    const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    // Confirm sale
+    if (!confirm(`Process sale for ₦${total.toFixed(2)}?`)) {
+        return;
+    }
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login first');
+            return;
+        }
+        
+        // Get current inventory to check stock
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        // Check stock availability
+        for (const cartItem of this.cart) {
+            const product = products.find(p => p.id === cartItem.productId);
+            if (!product) {
+                throw new Error(`Product "${cartItem.name}" no longer exists in inventory`);
+            }
+            
+            if (product.quantity < cartItem.quantity) {
+                throw new Error(`Insufficient stock for "${cartItem.name}". Available: ${product.quantity}, Requested: ${cartItem.quantity}`);
+            }
+        }
+        
+        // Process each item
+        for (const cartItem of this.cart) {
+            // Update inventory quantity
+            const product = products.find(p => p.id === cartItem.productId);
+            const newQuantity = product.quantity - cartItem.quantity;
+            
+            // Update product in inventory
+            const updatedProduct = {
+                ...product,
+                quantity: newQuantity,
+                updatedAt: new Date().toISOString()
+            };
+            
+            // Find product index and update
+            const productIndex = products.findIndex(p => p.id === cartItem.productId);
+            products[productIndex] = updatedProduct;
+            
+            // Save updated inventory
+            inventoryData.products = products;
+            inventoryData.lastUpdated = new Date().toISOString();
+            
+            await api.updateUserInventory(currentUser.userID, inventoryData);
+            
+            // Record sale transaction
+            await api.addSalesTransaction(currentUser.userID, {
+                productId: cartItem.productId,
+                productName: cartItem.name,
+                barcode: cartItem.barcode,
+                quantity: cartItem.quantity,
+                unitPrice: cartItem.sellingPrice,
+                amount: cartItem.subtotal,
+                transactionId: this.currentCartId,
+                paymentMethod: 'cash',
+                customerInfo: 'Walk-in Customer',
+                notes: `Sold ${cartItem.quantity} ${cartItem.name}`
+            });
+        }
+        
+        // Add funds to wallet (sales revenue)
+        const newBalance = await api.addFunds(currentUser.userID, total);
+        
+        // Update user session
+        currentUser.wallet = newBalance;
+        localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
+        
+        // Clear cart
+        this.cart = [];
+        this.saveCart();
+        
+        // Show success message
+        alert(`✅ Sale completed successfully!\n\nTotal: ₦${total.toFixed(2)}\nNew Balance: ₦${newBalance.toFixed(2)}`);
+        
+        // Update UI and return to products page
+        this.updateUserDisplay(currentUser);
+        this.loadMenuContent('products');
+        
+    } catch (error) {
+        console.error('Error processing sale:', error);
+        alert(`❌ Sale failed: ${error.message}`);
+    }
+}
+
+
+
 
     async saveNewProduct() {
         // Get form values
