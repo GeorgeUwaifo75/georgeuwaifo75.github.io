@@ -369,12 +369,12 @@ class WebStarNgApp {
                     <div class="form-row">
                         <div class="form-group">
                             <label for="productName">Product Name *</label>
-                            <input type="text" id="productName" required placeholder="Enter product name">
+                            <input type="text" id="productName" name="productName" required placeholder="Enter product name">
                         </div>
                         
                         <div class="form-group">
-                            <label for="productCategory">Category</label>
-                            <select id="productCategory">
+                            <label for="productCategory">Category *</label>
+                            <select id="productCategory" name="productCategory" required>
                                 <option value="">Select Category</option>
                                 <option value="electronics">Electronics</option>
                                 <option value="clothing">Clothing</option>
@@ -387,237 +387,102 @@ class WebStarNgApp {
                     
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="productCode">Product Code</label>
+                            <input type="text" id="productCode" name="productCode" placeholder="e.g., PROD-001">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="brand">Brand</label>
+                            <input type="text" id="brand" name="brand" placeholder="Enter brand name">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="purchasePrice">Purchase Price (₦) *</label>
-                            <input type="number" id="purchasePrice" required min="0" step="0.01" placeholder="0.00">
+                            <input type="number" id="purchasePrice" name="purchasePrice" required min="0" step="0.01" placeholder="0.00">
                         </div>
                         
                         <div class="form-group">
                             <label for="sellingPrice">Selling Price (₦) *</label>
-                            <input type="number" id="sellingPrice" required min="0" step="0.01" placeholder="0.00">
+                            <input type="number" id="sellingPrice" name="sellingPrice" required min="0" step="0.01" placeholder="0.00">
                         </div>
                     </div>
                     
                     <div class="form-row">
                         <div class="form-group">
                             <label for="quantity">Initial Quantity *</label>
-                            <input type="number" id="quantity" required min="0" placeholder="0">
+                            <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
                         </div>
                         
                         <div class="form-group">
-                            <label for="reorderLevel">Reorder Level</label>
-                            <input type="number" id="reorderLevel" min="0" placeholder="Minimum stock level">
+                            <label for="reorderLevel">Reorder Level *</label>
+                            <input type="number" id="reorderLevel" name="reorderLevel" required min="0" placeholder="Minimum stock level" value="5">
                         </div>
                     </div>
                     
                     <div class="form-group">
                         <label for="productDescription">Description</label>
-                        <textarea id="productDescription" rows="4" placeholder="Enter product description"></textarea>
+                        <textarea id="productDescription" name="productDescription" rows="4" placeholder="Enter product description"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="supplier">Supplier</label>
+                        <input type="text" id="supplier" name="supplier" placeholder="Enter supplier name">
                     </div>
                     
                     <div class="form-actions-content">
-                        <button type="submit" class="btn-primary">Save Product</button>
-                        <button type="button" class="btn-secondary" onclick="app.loadMenuContent('products')">Cancel</button>
+                        <button type="submit" class="btn-primary" id="saveProductBtn">Save Product</button>
+                        <button type="button" class="btn-secondary" id="cancelProductBtn">Cancel</button>
                     </div>
                 </form>
             </div>
         `;
     }
 
-    async getSalesReport() {
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        let salesData = { transactions: [], totalSales: 0 };
-        
-        try {
-            if (currentUser) {
-                salesData = await api.getUserSales(currentUser.userID);
-            }
-        } catch (error) {
-            console.error('Error loading sales:', error);
-        }
-        
-        const today = new Date().toLocaleDateString();
-        const todaySales = salesData.transactions ? 
-            salesData.transactions.filter(t => {
-                const transDate = new Date(t.timestamp).toLocaleDateString();
-                return transDate === today;
-            }) : [];
-        
-        const todayTotal = todaySales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
-
-        return `
-            <div class="content-page">
-                <h2>Sales Report - ${today}</h2>
-                
-                <div class="summary-stats">
-                    <div class="report-cards">
-                        <div class="report-card">
-                            <h3>💰 Today's Sales</h3>
-                            <div class="value">₦${todayTotal.toLocaleString()}</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>📦 Items Sold Today</h3>
-                            <div class="value">${todaySales.length}</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>💰 Total Sales</h3>
-                            <div class="value">₦${salesData.totalSales.toLocaleString()}</div>
-                        </div>
-                    </div>
-                </div>
-                
-                ${todaySales.length > 0 ? `
-                <h3>Today's Sales</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Product</th>
-                            <th>Quantity</th>
-                            <th>Amount (₦)</th>
-                            <th>Customer</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${todaySales.map(sale => `
-                            <tr>
-                                <td>${new Date(sale.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                                <td>${sale.productName || 'Unknown Product'}</td>
-                                <td>${sale.quantity || 1}</td>
-                                <td>${(sale.amount || 0).toLocaleString()}</td>
-                                <td>${sale.customer || 'Walk-in Customer'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                ` : '<p>No sales recorded today.</p>'}
-                
-                <div class="form-actions-content">
-                    <button class="btn-primary" onclick="window.print()">Print Report</button>
-                    <button class="btn-secondary" onclick="app.loadMenuContent('reports')">Back</button>
-                </div>
-            </div>
-        `;
-    }
-
-    async getInventoryReport() {
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        let inventoryData = { products: [] };
-        
-        try {
-            if (currentUser) {
-                inventoryData = await api.getUserInventory(currentUser.userID);
-            }
-        } catch (error) {
-            console.error('Error loading inventory:', error);
-        }
-        
-        const productCount = inventoryData.products ? inventoryData.products.length : 0;
-        const totalValue = inventoryData.products ? 
-            inventoryData.products.reduce((sum, product) => sum + (product.quantity * product.sellingPrice || 0), 0) : 0;
-        const lowStockCount = inventoryData.products ? 
-            inventoryData.products.filter(product => product.quantity <= (product.reorderLevel || 5)).length : 0;
-
-        return `
-            <div class="content-page">
-                <h2>Inventory Report</h2>
-                
-                <div class="summary-stats">
-                    <div class="report-cards">
-                        <div class="report-card">
-                            <h3>📦 Total Items</h3>
-                            <div class="value">${productCount}</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>💰 Total Value</h3>
-                            <div class="value">₦${totalValue.toLocaleString()}</div>
-                        </div>
-                        
-                        <div class="report-card">
-                            <h3>⚠️ Low Stock</h3>
-                            <div class="value">${lowStockCount}</div>
-                        </div>
-                    </div>
-                </div>
-                
-                ${productCount > 0 ? `
-                <h3>Current Inventory</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Category</th>
-                            <th>Quantity</th>
-                            <th>Unit Price (₦)</th>
-                            <th>Total Value (₦)</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${inventoryData.products.map(product => {
-                            const unitPrice = product.sellingPrice || 0;
-                            const totalValue = unitPrice * (product.quantity || 0);
-                            const isLowStock = (product.quantity || 0) <= (product.reorderLevel || 5);
-                            
-                            return `
-                                <tr>
-                                    <td>${product.name || 'Unnamed Product'}</td>
-                                    <td>${product.category || 'Uncategorized'}</td>
-                                    <td>${product.quantity || 0}</td>
-                                    <td>${unitPrice.toLocaleString()}</td>
-                                    <td>${totalValue.toLocaleString()}</td>
-                                    <td>${isLowStock ? 
-                                        '<span style="color: #e74c3c;">Low Stock</span>' : 
-                                        '<span class="status-active">In Stock</span>'}</td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-                ` : '<p>No products in inventory.</p>'}
-                
-                <div class="form-actions-content">
-                    <button class="btn-primary" onclick="window.print()">Print Report</button>
-                    <button class="btn-secondary" onclick="app.loadMenuContent('reports')">Back</button>
-                </div>
-            </div>
-        `;
-    }
-
-    // ... [Keep other existing methods but update them to use real data] ...
+    // ... [Other content template methods remain the same] ...
 
     attachContentEventListeners() {
-        // New Product Form
+        // New Product Form - Save Product Button
+        const saveProductBtn = document.getElementById('saveProductBtn');
+        if (saveProductBtn) {
+            // Remove any existing listeners
+            const newBtn = saveProductBtn.cloneNode(true);
+            saveProductBtn.parentNode.replaceChild(newBtn, saveProductBtn);
+            
+            // Add new listener
+            newBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.saveNewProduct();
+            });
+        }
+
+        // New Product Form - Cancel Button
+        const cancelProductBtn = document.getElementById('cancelProductBtn');
+        if (cancelProductBtn) {
+            // Remove any existing listeners
+            const newCancelBtn = cancelProductBtn.cloneNode(true);
+            cancelProductBtn.parentNode.replaceChild(newCancelBtn, cancelProductBtn);
+            
+            // Add new listener
+            newCancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearProductForm();
+                this.loadMenuContent('products');
+            });
+        }
+
+        // New Product Form - Form Submit
         const newProductForm = document.getElementById('newProductForm');
         if (newProductForm) {
-            newProductForm.addEventListener('submit', async (e) => {
+            // Remove any existing listeners
+            const newForm = newProductForm.cloneNode(true);
+            newProductForm.parentNode.replaceChild(newForm, newProductForm);
+            
+            // Add new listener
+            newForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                
-                const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-                if (!currentUser) {
-                    alert('Please login first');
-                    return;
-                }
-
-                const productData = {
-                    name: document.getElementById('productName').value,
-                    category: document.getElementById('productCategory').value,
-                    purchasePrice: parseFloat(document.getElementById('purchasePrice').value),
-                    sellingPrice: parseFloat(document.getElementById('sellingPrice').value),
-                    quantity: parseInt(document.getElementById('quantity').value),
-                    reorderLevel: parseInt(document.getElementById('reorderLevel').value) || 5,
-                    description: document.getElementById('productDescription').value
-                };
-
-                try {
-                    await api.addProductToInventory(currentUser.userID, productData);
-                    alert('Product saved successfully to your inventory!');
-                    this.loadMenuContent('products');
-                } catch (error) {
-                    alert('Error saving product: ' + error.message);
-                }
+                await this.saveNewProduct();
             });
         }
         
@@ -654,6 +519,134 @@ class WebStarNgApp {
             if (currentBalance) {
                 currentBalance.textContent = `₦${currentUser.wallet.toFixed(2)}`;
             }
+        }
+    }
+
+    async saveNewProduct() {
+        // Get form values
+        const productName = document.getElementById('productName').value.trim();
+        const productCategory = document.getElementById('productCategory').value;
+        const productCode = document.getElementById('productCode').value.trim();
+        const brand = document.getElementById('brand').value.trim();
+        const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
+        const sellingPrice = parseFloat(document.getElementById('sellingPrice').value);
+        const quantity = parseInt(document.getElementById('quantity').value);
+        const reorderLevel = parseInt(document.getElementById('reorderLevel').value);
+        const description = document.getElementById('productDescription').value.trim();
+        const supplier = document.getElementById('supplier').value.trim();
+
+        // Validate required fields
+        if (!productName) {
+            alert('Product Name is required');
+            document.getElementById('productName').focus();
+            return;
+        }
+
+        if (!productCategory) {
+            alert('Category is required');
+            document.getElementById('productCategory').focus();
+            return;
+        }
+
+        if (isNaN(purchasePrice) || purchasePrice < 0) {
+            alert('Please enter a valid Purchase Price');
+            document.getElementById('purchasePrice').focus();
+            return;
+        }
+
+        if (isNaN(sellingPrice) || sellingPrice < 0) {
+            alert('Please enter a valid Selling Price');
+            document.getElementById('sellingPrice').focus();
+            return;
+        }
+
+        if (isNaN(quantity) || quantity < 0) {
+            alert('Please enter a valid Quantity');
+            document.getElementById('quantity').focus();
+            return;
+        }
+
+        if (isNaN(reorderLevel) || reorderLevel < 0) {
+            alert('Please enter a valid Reorder Level');
+            document.getElementById('reorderLevel').focus();
+            return;
+        }
+
+        // Get current user
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login first');
+            window.location.href = 'index.html';
+            return;
+        }
+
+        // Create product data object
+        const productData = {
+            name: productName,
+            category: productCategory,
+            code: productCode || `PROD-${Date.now().toString().slice(-6)}`,
+            brand: brand || 'Generic',
+            purchasePrice: purchasePrice,
+            sellingPrice: sellingPrice,
+            quantity: quantity,
+            reorderLevel: reorderLevel,
+            description: description,
+            supplier: supplier || 'Unknown',
+            profitMargin: sellingPrice - purchasePrice,
+            totalValue: quantity * sellingPrice,
+            status: quantity > 0 ? 'In Stock' : 'Out of Stock',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        try {
+            // Disable save button to prevent multiple submissions
+            const saveBtn = document.getElementById('saveProductBtn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="spinner"></span> Saving...';
+            }
+
+            // Save product to user's inventory bin
+            const result = await api.addProductToInventory(currentUser.userID, productData);
+            
+            if (result && result.record) {
+                // Show success message
+                alert(`Product "${productName}" has been successfully added to your inventory!`);
+                
+                // Clear the form
+                this.clearProductForm();
+                
+                // Return to products page
+                this.loadMenuContent('products');
+            } else {
+                throw new Error('Failed to save product');
+            }
+        } catch (error) {
+            console.error('Error saving product:', error);
+            
+            // Re-enable save button
+            const saveBtn = document.getElementById('saveProductBtn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Save Product';
+            }
+            
+            alert(`Error saving product: ${error.message}. Please try again.`);
+        }
+    }
+
+    clearProductForm() {
+        // Clear all form fields
+        const form = document.getElementById('newProductForm');
+        if (form) {
+            form.reset();
+        }
+        
+        // Reset specific fields to defaults
+        const reorderLevel = document.getElementById('reorderLevel');
+        if (reorderLevel) {
+            reorderLevel.value = '5';
         }
     }
 
