@@ -261,39 +261,52 @@ class JSONBinAPI {
     }
 
     // Add product to user's inventory
-    async addProductToInventory(userID, productData) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.inventoryBinId) {
-                throw new Error('User inventory bin not found');
-            }
-
-            const inventory = await this.getUserInventory(userID);
-            const newProduct = {
-                ...productData,
-                id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-
-            inventory.products.push(newProduct);
-            inventory.lastUpdated = new Date().toISOString();
-
-            const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey
-                },
-                body: JSON.stringify(inventory)
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error adding product:', error);
-            throw error;
+  // Add product to user's inventory
+async addProductToInventory(userID, productData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.inventoryBinId) {
+            throw new Error('User inventory bin not found');
         }
+
+        const inventory = await this.getUserInventory(userID);
+        const newProduct = {
+            ...productData,
+            id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            // Ensure barcode is included
+            barcode: productData.barcode || `BC${Date.now().toString().slice(-10)}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Check for duplicate barcode
+        if (inventory.products) {
+            const duplicateBarcode = inventory.products.find(p => p.barcode === newProduct.barcode);
+            if (duplicateBarcode) {
+                // Generate unique barcode if duplicate found
+                newProduct.barcode = `BC${Date.now()}${Math.floor(Math.random() * 1000)}`;
+            }
+        }
+
+        inventory.products = inventory.products || [];
+        inventory.products.push(newProduct);
+        inventory.lastUpdated = new Date().toISOString();
+
+        const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(inventory)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error adding product:', error);
+        throw error;
     }
+}
 
     // Add sales transaction
     async addSalesTransaction(userID, transactionData) {
