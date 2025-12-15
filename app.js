@@ -261,11 +261,34 @@ class WebStarNgApp {
                 subtitle = 'Today\'s purchases summary';
                 contentHTML = this.getPurchaseReport();
                 break;
-            case 'inventory-report':
+                
+          
+          case 'inventory-report':
+                  title = 'Inventory Report';
+                  subtitle = "Current inventory status";
+                  // Don't use await - handle it differently
+                  this.getInventoryReport().then(html => {
+                      contentHTML = html;
+                      // Update the UI here
+                      contentTitle.textContent = title;
+                      contentSubtitle.textContent = subtitle;
+                      dynamicContent.innerHTML = contentHTML;
+                      this.attachContentEventListeners();
+                  }).catch(error => {
+                      console.error('Error loading inventory report:', error);
+                      contentHTML = '<div class="error-message">Error loading sales report</div>';
+                  });
+                  break;  
+             
+          
+                
+           /* case 'inventory-report':
                 title = 'Inventory Report';
                 subtitle = 'Current inventory status';
                 contentHTML = this.getInventoryReport();
                 break;
+                */
+                
             case 'new-user':
                 title = 'New User';
                 subtitle = 'Create a new system user';
@@ -1859,6 +1882,302 @@ async processSale() {
         `;
     }
 }
+ 
+// Export methods for inventory report
+async exportInventoryToCSV() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export inventory report');
+            return;
+        }
+        
+        // Get inventory data
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        if (products.length === 0) {
+            alert('No inventory data to export');
+            return;
+        }
+        
+        // Sort products
+        const sortedProducts = [...products].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        
+        // Calculate totals
+        const totalProducts = products.length;
+        const totalQuantity = products.reduce((sum, p) => sum + (parseInt(p.quantity) || 0), 0);
+        const totalValue = products.reduce((sum, p) => sum + ((p.quantity || 0) * (p.sellingPrice || 0)), 0);
+        
+        // Create CSV content
+        let csvContent = "S/No.,Barcode,Product Name,Category,Brand,Supplier,Quantity,Unit,Reorder Level,Cost Price (₦),Selling Price (₦),Total Value (₦),Profit Margin (₦),Status,Location,Description\n";
+        
+        // Add each product
+        sortedProducts.forEach((product, index) => {
+            const quantity = parseInt(product.quantity) || 0;
+            const reorderLevel = parseInt(product.reorderLevel) || 5;
+            const costPrice = parseFloat(product.purchasePrice) || 0;
+            const sellingPrice = parseFloat(product.sellingPrice) || 0;
+            const totalValue = quantity * sellingPrice;
+            const profitMargin = sellingPrice - costPrice;
+            
+            let status = '';
+            if (quantity === 0) {
+                status = 'Out of Stock';
+            } else if (quantity <= reorderLevel) {
+                status = 'Low Stock';
+            } else {
+                status = 'In Stock';
+            }
+            
+            const row = [
+                index + 1,
+                `"${product.barcode || ''}"`,
+                `"${product.name || ''}"`,
+                `"${product.category || ''}"`,
+                `"${product.brand || ''}"`,
+                `"${product.supplier || ''}"`,
+                quantity,
+                `"${product.unit || 'units'}"`,
+                reorderLevel,
+                costPrice.toFixed(2),
+                sellingPrice.toFixed(2),
+                totalValue.toFixed(2),
+                profitMargin.toFixed(2),
+                status,
+                `"${product.location || ''}"`,
+                `"${product.description || ''}"`
+            ];
+            csvContent += row.join(',') + '\n';
+        });
+        
+        // Add summary rows
+        csvContent += '\n';
+        csvContent += 'INVENTORY SUMMARY\n';
+        csvContent += `Total Products,${totalProducts}\n`;
+        csvContent += `Total Quantity,${totalQuantity}\n`;
+        csvContent += `Total Inventory Value (₦),${totalValue.toFixed(2)}\n`;
+        csvContent += `Average Product Value (₦),${(totalValue / totalProducts || 0).toFixed(2)}\n`;
+        csvContent += `\nReport Information\n`;
+        csvContent += `Generated On,${new Date().toLocaleString()}\n`;
+        csvContent += `User,${currentUser.userID}\n`;
+        csvContent += `Business,WebStarNg\n`;
+        
+        // Create and download CSV file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.setAttribute('href', url);
+        link.setAttribute('download', `inventory_report_${dateStr}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Inventory CSV report downloaded!\n\n📊 Products: ${totalProducts}\n📦 Total Items: ${totalQuantity}\n💰 Total Value: ₦${totalValue.toFixed(2)}`);
+        
+    } catch (error) {
+        console.error('Error exporting inventory CSV:', error);
+        alert('Error exporting inventory CSV: ' + error.message);
+    }
+}
+
+async exportInventoryToExcel() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export inventory report');
+            return;
+        }
+        
+        // Get inventory data
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        if (products.length === 0) {
+            alert('No inventory data to export');
+            return;
+        }
+        
+        // Sort products
+        const sortedProducts = [...products].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        
+        // Calculate totals
+        const totalProducts = products.length;
+        const totalQuantity = products.reduce((sum, p) => sum + (parseInt(p.quantity) || 0), 0);
+        const totalValue = products.reduce((sum, p) => sum + ((p.quantity || 0) * (p.sellingPrice || 0)), 0);
+        
+        // Create Excel content
+        let excelContent = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="UTF-8">
+                <!--[if gte mso 9]>
+                <xml>
+                    <x:ExcelWorkbook>
+                        <x:ExcelWorksheets>
+                            <x:ExcelWorksheet>
+                                <x:Name>Inventory Report</x:Name>
+                                <x:WorksheetOptions>
+                                    <x:DisplayGridlines/>
+                                </x:WorksheetOptions>
+                            </x:ExcelWorksheet>
+                        </x:ExcelWorksheets>
+                    </x:ExcelWorkbook>
+                </xml>
+                <![endif]-->
+                <style>
+                    table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 12px; }
+                    th { background: #2c3e50; color: white; padding: 8px; text-align: left; font-weight: bold; border: 1px solid #1a252f; }
+                    td { padding: 6px; border: 1px solid #ddd; }
+                    .summary-row { background: #f8f9fa; font-weight: bold; }
+                    .header { font-size: 16px; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
+                    .subheader { font-size: 12px; color: #666; margin-bottom: 15px; }
+                    .summary-section { margin-top: 20px; padding: 10px; background: #f8f9fa; border: 1px solid #ddd; }
+                    .summary-title { font-weight: bold; margin-bottom: 8px; color: #2c3e50; font-size: 14px; }
+                    .in-stock { color: #27ae60; font-weight: bold; }
+                    .low-stock { color: #f39c12; font-weight: bold; }
+                    .out-of-stock { color: #e74c3c; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <div class="header">Inventory Report - ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="subheader">Generated on: ${new Date().toLocaleString()} | User: ${currentUser.userID}</div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>S/No.</th>
+                            <th>Barcode</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Brand</th>
+                            <th>Supplier</th>
+                            <th>Quantity</th>
+                            <th>Unit</th>
+                            <th>Reorder Level</th>
+                            <th>Cost Price (₦)</th>
+                            <th>Selling Price (₦)</th>
+                            <th>Total Value (₦)</th>
+                            <th>Profit Margin (₦)</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Add products
+        sortedProducts.forEach((product, index) => {
+            const quantity = parseInt(product.quantity) || 0;
+            const reorderLevel = parseInt(product.reorderLevel) || 5;
+            const costPrice = parseFloat(product.purchasePrice) || 0;
+            const sellingPrice = parseFloat(product.sellingPrice) || 0;
+            const totalValue = quantity * sellingPrice;
+            const profitMargin = sellingPrice - costPrice;
+            
+            let status = '';
+            let statusClass = '';
+            if (quantity === 0) {
+                status = 'Out of Stock';
+                statusClass = 'out-of-stock';
+            } else if (quantity <= reorderLevel) {
+                status = 'Low Stock';
+                statusClass = 'low-stock';
+            } else {
+                status = 'In Stock';
+                statusClass = 'in-stock';
+            }
+            
+            excelContent += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${product.barcode || ''}</td>
+                    <td>${product.name || ''}</td>
+                    <td>${product.category || ''}</td>
+                    <td>${product.brand || ''}</td>
+                    <td>${product.supplier || ''}</td>
+                    <td>${quantity}</td>
+                    <td>${product.unit || 'units'}</td>
+                    <td>${reorderLevel}</td>
+                    <td>${costPrice.toFixed(2)}</td>
+                    <td>${sellingPrice.toFixed(2)}</td>
+                    <td>${totalValue.toFixed(2)}</td>
+                    <td>${profitMargin.toFixed(2)}</td>
+                    <td class="${statusClass}">${status}</td>
+                    <td>${product.location || ''}</td>
+                </tr>
+            `;
+        });
+        
+        // Add summary
+        excelContent += `
+                    </tbody>
+                </table>
+                
+                <div class="summary-section">
+                    <div class="summary-title">Inventory Summary</div>
+                    <table style="width: 50%; margin-top: 10px;">
+                        <tr>
+                            <td><strong>Total Products:</strong></td>
+                            <td>${totalProducts}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Quantity:</strong></td>
+                            <td>${totalQuantity}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Inventory Value:</strong></td>
+                            <td>₦${totalValue.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Average Product Value:</strong></td>
+                            <td>₦${(totalValue / totalProducts || 0).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Average Quantity per Product:</strong></td>
+                            <td>${(totalQuantity / totalProducts).toFixed(1)}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="summary-section" style="margin-top: 10px;">
+                    <div class="summary-title">Report Information</div>
+                    <p><strong>Generated By:</strong> ${currentUser.userID}</p>
+                    <p><strong>Business:</strong> WebStarNg</p>
+                    <p><strong>Report Date:</strong> ${new Date().toLocaleDateString()}</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        // Create and download Excel file
+        const blob = new Blob([excelContent], { 
+            type: 'application/vnd.ms-excel' 
+        });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.setAttribute('href', url);
+        link.setAttribute('download', `inventory_report_${dateStr}.xls`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Inventory Excel report downloaded!\n\n📊 Products: ${totalProducts}\n📦 Total Items: ${totalQuantity}\n💰 Total Value: ₦${totalValue.toFixed(2)}`);
+        
+    } catch (error) {
+        console.error('Error exporting inventory Excel:', error);
+        alert('Error exporting inventory Excel: ' + error.message);
+    }
+} 
+ 
     
  // Export methods for sales report
 async exportSalesToCSV() {
@@ -2100,7 +2419,270 @@ async exportSalesToExcel() {
         console.error('Error exporting Excel:', error);
         alert('Error exporting Excel: ' + error.message);
     }
-}   
+} 
+
+
+async getInventoryReport() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            return '<div class="error-message">Please login to view inventory report</div>';
+        }
+        
+        // Get inventory data using the user's inventoryBinId
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        if (products.length === 0) {
+            return `
+                <div class="content-page">
+                    <h2>Inventory Report</h2>
+                    <div class="empty-inventory-message">
+                        <div class="empty-icon">📦</div>
+                        <h3>No Products in Inventory</h3>
+                        <p>Your inventory is currently empty. Add products to manage your stock.</p>
+                        <button class="btn-primary" onclick="app.handleMenuAction('new-product')">
+                            ➕ Add New Product
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Calculate inventory statistics
+        const totalProducts = products.length;
+        const totalValue = products.reduce((sum, product) => {
+            return sum + ((product.quantity || 0) * (product.sellingPrice || 0));
+        }, 0);
+        
+        const totalQuantity = products.reduce((sum, product) => {
+            return sum + (parseInt(product.quantity) || 0);
+        }, 0);
+        
+        const lowStockProducts = products.filter(product => {
+            const quantity = parseInt(product.quantity) || 0;
+            const reorderLevel = parseInt(product.reorderLevel) || 5;
+            return quantity <= reorderLevel && quantity > 0;
+        });
+        
+        const outOfStockProducts = products.filter(product => {
+            return (parseInt(product.quantity) || 0) === 0;
+        });
+        
+        // Sort products by category, then by name
+        const sortedProducts = [...products].sort((a, b) => {
+            // First by category
+            const categoryCompare = (a.category || '').localeCompare(b.category || '');
+            if (categoryCompare !== 0) return categoryCompare;
+            // Then by name
+            return (a.name || '').localeCompare(b.name || '');
+        });
+        
+        return `
+            <div class="content-page">
+                <div class="report-header">
+                    <div>
+                        <h2>Inventory Report</h2>
+                        <p class="report-date">Generated: ${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn csv-btn" onclick="app.exportInventoryToCSV()">
+                            📥 Export CSV
+                        </button>
+                        <button class="export-btn excel-btn" onclick="app.exportInventoryToExcel()">
+                            📊 Export Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Inventory Summary -->
+                <div class="inventory-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Total Products</span>
+                        <span class="summary-value">${totalProducts}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Quantity</span>
+                        <span class="summary-value">${totalQuantity}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Value</span>
+                        <span class="summary-value">₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Low Stock</span>
+                        <span class="summary-value warning">${lowStockProducts.length}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Out of Stock</span>
+                        <span class="summary-value danger">${outOfStockProducts.length}</span>
+                    </div>
+                </div>
+                
+                <!-- Inventory Statistics -->
+                <div class="inventory-stats">
+                    <div class="stat-card">
+                        <h3>📊 Stock Status</h3>
+                        <div class="stat-details">
+                            <div class="stat-item">
+                                <span class="stat-label">In Stock:</span>
+                                <span class="stat-value">${totalProducts - lowStockProducts.length - outOfStockProducts.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Low Stock:</span>
+                                <span class="stat-value warning">${lowStockProducts.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Out of Stock:</span>
+                                <span class="stat-value danger">${outOfStockProducts.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>💰 Value Breakdown</h3>
+                        <div class="stat-details">
+                            <div class="stat-item">
+                                <span class="stat-label">Avg. Price:</span>
+                                <span class="stat-value">₦${(totalValue / totalQuantity || 0).toFixed(2)}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Avg. Qty per Product:</span>
+                                <span class="stat-value">${(totalQuantity / totalProducts).toFixed(1)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Products List -->
+                <h3>📋 Product Inventory</h3>
+                
+                <div class="inventory-filters">
+                    <input type="text" id="searchInventory" placeholder="🔍 Search products..." class="search-input">
+                    <select id="filterCategory" class="filter-select">
+                        <option value="">All Categories</option>
+                        ${Array.from(new Set(products.map(p => p.category).filter(Boolean))).map(category => `
+                            <option value="${category}">${category}</option>
+                        `).join('')}
+                    </select>
+                    <select id="filterStatus" class="filter-select">
+                        <option value="">All Status</option>
+                        <option value="in-stock">In Stock</option>
+                        <option value="low-stock">Low Stock</option>
+                        <option value="out-of-stock">Out of Stock</option>
+                    </select>
+                </div>
+                
+                <div class="inventory-list">
+                    ${sortedProducts.map((product, index) => {
+                        const quantity = parseInt(product.quantity) || 0;
+                        const reorderLevel = parseInt(product.reorderLevel) || 5;
+                        const sellingPrice = parseFloat(product.sellingPrice) || 0;
+                        const totalValue = quantity * sellingPrice;
+                        
+                        let statusClass = '';
+                        let statusText = '';
+                        if (quantity === 0) {
+                            statusClass = 'out-of-stock';
+                            statusText = 'Out of Stock';
+                        } else if (quantity <= reorderLevel) {
+                            statusClass = 'low-stock';
+                            statusText = 'Low Stock';
+                        } else {
+                            statusClass = 'in-stock';
+                            statusText = 'In Stock';
+                        }
+                        
+                        return `
+                            <div class="inventory-item" data-category="${product.category || ''}" data-status="${statusClass}">
+                                <div class="inventory-header">
+                                    <span class="item-number">${index + 1}.</span>
+                                    <span class="item-barcode"><code>${product.barcode || 'N/A'}</code></span>
+                                    <span class="item-status ${statusClass}">${statusText}</span>
+                                </div>
+                                <div class="inventory-details">
+                                    <div class="item-info">
+                                        <div class="item-name">
+                                            <strong>${product.name || 'Unnamed Product'}</strong>
+                                            <div class="item-category">${product.category || 'Uncategorized'}</div>
+                                        </div>
+                                        <div class="item-description">${product.description || 'No description'}</div>
+                                    </div>
+                                    <div class="item-stats">
+                                        <div class="stat-row">
+                                            <div class="stat">
+                                                <span class="stat-label">Quantity:</span>
+                                                <span class="stat-value">${quantity} ${product.unit || 'units'}</span>
+                                            </div>
+                                            <div class="stat">
+                                                <span class="stat-label">Reorder Level:</span>
+                                                <span class="stat-value">${reorderLevel}</span>
+                                            </div>
+                                        </div>
+                                        <div class="stat-row">
+                                            <div class="stat">
+                                                <span class="stat-label">Cost Price:</span>
+                                                <span class="stat-value">₦${(product.purchasePrice || 0).toFixed(2)}</span>
+                                            </div>
+                                            <div class="stat">
+                                                <span class="stat-label">Selling Price:</span>
+                                                <span class="stat-value">₦${sellingPrice.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                        <div class="stat-row">
+                                            <div class="stat">
+                                                <span class="stat-label">Total Value:</span>
+                                                <span class="stat-value total">₦${totalValue.toFixed(2)}</span>
+                                            </div>
+                                            <div class="stat">
+                                                <span class="stat-label">Profit Margin:</span>
+                                                <span class="stat-value profit">₦${((product.sellingPrice || 0) - (product.purchasePrice || 0)).toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="item-meta">
+                                    ${product.supplier ? `<span class="meta-item">Supplier: ${product.supplier}</span>` : ''}
+                                    ${product.code ? `<span class="meta-item">Code: ${product.code}</span>` : ''}
+                                    ${product.brand ? `<span class="meta-item">Brand: ${product.brand}</span>` : ''}
+                                    ${product.location ? `<span class="meta-item">Location: ${product.location}</span>` : ''}
+                                    ${product.createdAt ? `<span class="meta-item">Added: ${new Date(product.createdAt).toLocaleDateString()}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div class="inventory-summary-footer">
+                    <div class="summary-total">
+                        <span class="total-label">TOTAL INVENTORY VALUE:</span>
+                        <span class="total-amount">₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                </div>
+                
+                <div class="report-footer">
+                    <p>Report generated on ${new Date().toLocaleString()}</p>
+                    <p>User: ${currentUser.userID} | Total Products: ${totalProducts} | Total Items: ${totalQuantity}</p>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error generating inventory report:', error);
+        return `
+            <div class="content-page">
+                <div class="error-message">
+                    <h3>Error Loading Inventory Report</h3>
+                    <p>Unable to load inventory data. Please try again.</p>
+                    <button class="btn-primary" onclick="app.handleMenuAction('inventory-report')">
+                        🔄 Retry
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+
 }
 
 // Global functions for modals (existing functionality)
