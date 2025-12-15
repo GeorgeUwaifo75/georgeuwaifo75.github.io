@@ -659,124 +659,49 @@ setupBarcodeField() {
     const newInput = barcodeInput.cloneNode(true);
     barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
     
-    // Track last processed barcode to prevent duplicates
-    let lastProcessedBarcode = '';
-    let lastProcessedTime = 0;
-    let isProcessing = false;
+    // SIMPLE FLAG to prevent duplicates
+    let hasScanned = false;
+    let lastScanTime = 0;
     
-    // Single handler for barcode input
-    const handleBarcodeInput = async (value, source = 'manual') => {
-        // Clean and validate the barcode
-        const cleanedBarcode = value.trim();
-        
-        // Skip if empty
-        if (!cleanedBarcode) return;
-        
-        // Check if this is the same barcode processed recently (within 1 second)
-        const now = Date.now();
-        if (cleanedBarcode === lastProcessedBarcode && (now - lastProcessedTime) < 1000) {
-            console.log(`Skipping duplicate barcode "${cleanedBarcode}" processed ${(now - lastProcessedTime)}ms ago`);
-            return;
-        }
-        
-        // Check if already processing
-        if (isProcessing) {
-            console.log('Already processing a barcode, skipping...');
-            return;
-        }
-        
-        // Validate barcode length
-        if (cleanedBarcode.length < 3) {
-            this.showBarcodeStatus('Barcode must be at least 3 characters', 'error');
-            return;
-        }
-        
-        // Set processing flag
-        isProcessing = true;
-        lastProcessedBarcode = cleanedBarcode;
-        lastProcessedTime = now;
-        
-        try {
-            // Validate the barcode
-            await this.validateBarcode(cleanedBarcode);
-        } catch (error) {
-            console.error('Error processing barcode:', error);
-        } finally {
-            // Reset processing flag after a delay
-            setTimeout(() => {
-                isProcessing = false;
-            }, 500);
-            
-            // Clear the input field after processing (but keep it for display)
-            // We'll clear it only if it matches what we just processed
-            if (newInput.value.trim() === cleanedBarcode) {
-                setTimeout(() => {
-                    newInput.value = '';
-                }, 100);
-            }
-        }
-    };
-    
-    // Handle manual entry with Enter key
+    // ONLY handle keydown (Enter key)
     newInput.addEventListener('keydown', async (e) => {
-        // Only handle Enter key
-        if (e.key !== 'Enter') return;
-        
-        e.preventDefault();
-        const value = newInput.value.trim();
-        
-        if (value) {
-            await handleBarcodeInput(value, 'enter');
-        }
-    });
-    
-    // Handle barcode scanner input (detects rapid input)
-    let scannerInput = '';
-    let scannerTimer = null;
-    const SCANNER_DELAY = 50; // ms between characters for scanner detection
-    
-    newInput.addEventListener('input', (e) => {
-        const value = e.target.value;
-        
-        // Clear any existing timer
-        if (scannerTimer) {
-            clearTimeout(scannerTimer);
-        }
-        
-        // Check if this looks like scanner input (rapid sequential input)
-        if (value.length > scannerInput.length) {
-            // Character was added
-            scannerInput = value;
+        if (e.key === 'Enter') {
+            e.preventDefault();
             
-            // Set timer to detect end of scanner input
-            scannerTimer = setTimeout(async () => {
-                // This is likely the end of scanner input
-                await handleBarcodeInput(scannerInput, 'scanner');
-                scannerInput = '';
-            }, SCANNER_DELAY);
-        } else {
-            // User is deleting/editing manually, reset scanner detection
-            scannerInput = value;
-        }
-    });
-    
-    // Also handle keyup for scanners that might not trigger input events properly
-    newInput.addEventListener('keyup', (e) => {
-        // If Enter key was pressed and we already handled it in keydown, skip
-        if (e.key === 'Enter') return;
-        
-        const value = newInput.value.trim();
-        
-        // For scanners that input quickly, process after a short delay
-        if (value.length >= 3) {
-            if (scannerTimer) {
-                clearTimeout(scannerTimer);
+            const value = newInput.value.trim();
+            
+            // Basic validation
+            if (!value || value.length < 3) return;
+            
+            // Prevent rapid duplicate scans
+            const now = Date.now();
+            if (hasScanned && (now - lastScanTime) < 2000) {
+                console.log('Too soon after last scan, ignoring');
+                newInput.value = '';
+                return;
             }
             
-            scannerTimer = setTimeout(async () => {
-                await handleBarcodeInput(value, 'keyup');
-            }, 150); // Longer delay for manual typing
+            hasScanned = true;
+            lastScanTime = now;
+            
+            // Process the barcode
+            await this.validateBarcode(value);
+            
+            // Clear input immediately
+            newInput.value = '';
+            
+            // Reset flag after 2 seconds
+            setTimeout(() => {
+                hasScanned = false;
+            }, 2000);
         }
+    });
+    
+    // IGNORE input events completely for scanners
+    // This prevents the duplicate from input + enter
+    newInput.addEventListener('input', (e) => {
+        // Do nothing - let the Enter key handler handle everything
+        // This prevents the timer-based duplicate
     });
     
     // Focus on barcode field
@@ -1889,4 +1814,18 @@ document.addEventListener('DOMContentLoaded', () => {
         app = new WebStarNgApp();
         window.app = app; // Make app available globally
     }
+});
+
+//New addition Dec 15th
+// Test if events are firing twice
+document.getElementById('productBarcode').addEventListener('input', (e) => {
+    console.log('INPUT EVENT:', e.target.value);
+});
+
+document.getElementById('productBarcode').addEventListener('keydown', (e) => {
+    console.log('KEYDOWN EVENT:', e.key, 'value:', e.target.value);
+});
+
+document.getElementById('productBarcode').addEventListener('keyup', (e) => {
+    console.log('KEYUP EVENT:', e.key, 'value:', e.target.value);
 });
