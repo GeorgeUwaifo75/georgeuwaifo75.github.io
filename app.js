@@ -648,9 +648,316 @@ setupBarcodeInput() {
     newInput.focus();
 }
 
+//New addition Dec 15th
+
+// Barcode management methods
+setupBarcodeField() {
+    const barcodeInput = document.getElementById('productBarcode');
+    if (!barcodeInput) return;
+    
+    // Clone to remove previous listeners
+    const newInput = barcodeInput.cloneNode(true);
+    barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
+    
+    // Track last processed barcode to prevent duplicates
+    let lastProcessedBarcode = '';
+    let lastProcessedTime = 0;
+    let isProcessing = false;
+    
+    // Single handler for barcode input
+    const handleBarcodeInput = async (value, source = 'manual') => {
+        // Clean and validate the barcode
+        const cleanedBarcode = value.trim();
+        
+        // Skip if empty
+        if (!cleanedBarcode) return;
+        
+        // Check if this is the same barcode processed recently (within 1 second)
+        const now = Date.now();
+        if (cleanedBarcode === lastProcessedBarcode && (now - lastProcessedTime) < 1000) {
+            console.log(`Skipping duplicate barcode "${cleanedBarcode}" processed ${(now - lastProcessedTime)}ms ago`);
+            return;
+        }
+        
+        // Check if already processing
+        if (isProcessing) {
+            console.log('Already processing a barcode, skipping...');
+            return;
+        }
+        
+        // Validate barcode length
+        if (cleanedBarcode.length < 3) {
+            this.showBarcodeStatus('Barcode must be at least 3 characters', 'error');
+            return;
+        }
+        
+        // Set processing flag
+        isProcessing = true;
+        lastProcessedBarcode = cleanedBarcode;
+        lastProcessedTime = now;
+        
+        try {
+            // Validate the barcode
+            await this.validateBarcode(cleanedBarcode);
+        } catch (error) {
+            console.error('Error processing barcode:', error);
+        } finally {
+            // Reset processing flag after a delay
+            setTimeout(() => {
+                isProcessing = false;
+            }, 500);
+            
+            // Clear the input field after processing (but keep it for display)
+            // We'll clear it only if it matches what we just processed
+            if (newInput.value.trim() === cleanedBarcode) {
+                setTimeout(() => {
+                    newInput.value = '';
+                }, 100);
+            }
+        }
+    };
+    
+    // Handle manual entry with Enter key
+    newInput.addEventListener('keydown', async (e) => {
+        // Only handle Enter key
+        if (e.key !== 'Enter') return;
+        
+        e.preventDefault();
+        const value = newInput.value.trim();
+        
+        if (value) {
+            await handleBarcodeInput(value, 'enter');
+        }
+    });
+    
+    // Handle barcode scanner input (detects rapid input)
+    let scannerInput = '';
+    let scannerTimer = null;
+    const SCANNER_DELAY = 50; // ms between characters for scanner detection
+    
+    newInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        
+        // Clear any existing timer
+        if (scannerTimer) {
+            clearTimeout(scannerTimer);
+        }
+        
+        // Check if this looks like scanner input (rapid sequential input)
+        if (value.length > scannerInput.length) {
+            // Character was added
+            scannerInput = value;
+            
+            // Set timer to detect end of scanner input
+            scannerTimer = setTimeout(async () => {
+                // This is likely the end of scanner input
+                await handleBarcodeInput(scannerInput, 'scanner');
+                scannerInput = '';
+            }, SCANNER_DELAY);
+        } else {
+            // User is deleting/editing manually, reset scanner detection
+            scannerInput = value;
+        }
+    });
+    
+    // Also handle keyup for scanners that might not trigger input events properly
+    newInput.addEventListener('keyup', (e) => {
+        // If Enter key was pressed and we already handled it in keydown, skip
+        if (e.key === 'Enter') return;
+        
+        const value = newInput.value.trim();
+        
+        // For scanners that input quickly, process after a short delay
+        if (value.length >= 3) {
+            if (scannerTimer) {
+                clearTimeout(scannerTimer);
+            }
+            
+            scannerTimer = setTimeout(async () => {
+                await handleBarcodeInput(value, 'keyup');
+            }, 150); // Longer delay for manual typing
+        }
+    });
+    
+    // Focus on barcode field
+    newInput.focus();
+}
+async validateBarcode(barcodeValue) {
+    // Prevent empty barcodes
+    if (!barcodeValue || barcodeValue.trim() === '') {
+        this.showBarcodeStatus('Please enter or scan a barcode', 'error');
+        return false;
+    }
+    
+    // Show loading status
+    this.showBarcodeStatus('Checking barcode availability...', 'loading');
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showBarcodeStatus('Please login first', 'error');
+            return false;
+        }
+        
+        // Get inventory and check for duplicate barcode
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        const existingProduct = products.find(p => p.barcode === barcodeValue);
+        
+        if (existingProduct) {
+            this.showBarcodeStatus(
+                `⚠️ Barcode already exists for: "${existingProduct.name}"`, 
+                'warning'
+            );
+            return false;
+        }
+        
+        // Barcode is available
+        this.showBarcodeStatus(
+            `✅ Barcode "${barcodeValue}" is available`, 
+            'success'
+        );
+        
+        // Show preview
+        this.showBarcodePreview(barcodeValue);
+        
+        // Auto-focus next field
+        setTimeout(() => {
+            document.getElementById('productName')?.focus();
+        }, 300);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error validating barcode:', error);
+        this.showBarcodeStatus('Error checking barcode', 'error');
+        return false;
+    }
+}
+
+showBarcodeStatus(message, type = 'info') {
+    const statusElement = document.getElementById('barcodeStatus');
+    if (!statusElement) return;
+    
+    statusElement.textContent = message;
+    statusElement.style.display = 'block';
+    
+    // Set color based on type
+    switch(type) {
+        case 'success':
+            statusElement.style.backgroundColor = '#d4edda';
+            statusElement.style.color = '#155724';
+            statusElement.style.border = '1px solid #c3e6cb';
+            break;
+        case 'error':
+            statusElement.style.backgroundColor = '#f8d7da';
+            statusElement.style.color = '#721c24';
+            statusElement.style.border = '1px solid #f5c6cb';
+            break;
+        case 'warning':
+            statusElement.style.backgroundColor = '#fff3cd';
+            statusElement.style.color = '#856404';
+            statusElement.style.border = '1px solid #ffeaa7';
+            break;
+        case 'loading':
+            statusElement.style.backgroundColor = '#d1ecf1';
+            statusElement.style.color = '#0c5460';
+            statusElement.style.border = '1px solid #bee5eb';
+            statusElement.innerHTML = `<span class="spinner"></span> ${message}`;
+            break;
+        default:
+            statusElement.style.backgroundColor = '#e2e3e5';
+            statusElement.style.color = '#383d41';
+            statusElement.style.border = '1px solid #d6d8db';
+    }
+}
+
+showBarcodePreview(barcodeValue) {
+    const preview = document.getElementById('barcodePreview');
+    const display = document.getElementById('barcodeValueDisplay');
+    
+    if (preview && display) {
+        display.textContent = barcodeValue;
+        preview.style.display = 'block';
+    }
+}
+
+generateBarcode() {
+    // Generate a unique barcode
+    const timestamp = Date.now().toString();
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const barcode = `BC${timestamp.slice(-8)}${random}`;
+    
+    const barcodeInput = document.getElementById('productBarcode');
+    if (barcodeInput) {
+        barcodeInput.value = barcode;
+        this.validateBarcode(barcode);
+    }
+}
+
+
+// Calculation methods
+calculateProfit() {
+    const purchasePrice = parseFloat(document.getElementById('purchasePrice').value) || 0;
+    const sellingPrice = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    
+    const profitMargin = sellingPrice - purchasePrice;
+    const profitPercentage = purchasePrice > 0 ? ((profitMargin / purchasePrice) * 100) : 0;
+    
+    const profitMarginField = document.getElementById('profitMargin');
+    const profitPercentageField = document.getElementById('profitPercentage');
+    
+    if (profitMarginField) {
+        profitMarginField.value = profitMargin.toFixed(2);
+    }
+    
+    if (profitPercentageField) {
+        profitPercentageField.value = profitPercentage.toFixed(2);
+    }
+    
+    // Validate pricing
+    if (sellingPrice < purchasePrice) {
+        this.showPricingWarning('Selling price should be higher than cost price');
+    } else {
+        this.clearPricingWarning();
+    }
+}
+
+calculateTotalValue() {
+    const quantity = parseInt(document.getElementById('quantity').value) || 0;
+    const sellingPrice = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    
+    const totalValue = quantity * sellingPrice;
+    const totalValueField = document.getElementById('totalValue');
+    
+    if (totalValueField) {
+        totalValueField.value = totalValue.toFixed(2);
+    }
+}
+
+showPricingWarning(message) {
+    const sellingPriceField = document.getElementById('sellingPrice');
+    if (sellingPriceField) {
+        sellingPriceField.style.borderColor = '#e74c3c';
+        sellingPriceField.style.backgroundColor = '#fff9f9';
+        sellingPriceField.setAttribute('title', message);
+    }
+}
+
+clearPricingWarning() {
+    const sellingPriceField = document.getElementById('sellingPrice');
+    if (sellingPriceField) {
+        sellingPriceField.style.borderColor = '';
+        sellingPriceField.style.backgroundColor = '';
+        sellingPriceField.removeAttribute('title');
+    }
+}
 
 
 
+
+
+//End addition Dec 15th
 
     // Updated Content Templates with real data
     async getProductsContent() {
@@ -716,19 +1023,21 @@ setupBarcodeInput() {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Product Name</th>
-                            <th>Category</th>
-                            <th>Quantity</th>
-                            <th>Price (₦)</th>
-                            <th>Status</th>
+                          <th>Barcode</th>
+                          <th>Product Name</th>
+                          <th>Category</th>
+                          <th>Quantity</th>
+                          <th>Price (₦)</th>
+                          <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${inventoryData.products.slice(0, 5).map(product => `
                             <tr>
+                               <td><code>${product.barcode || 'N/A'}</code></td>
                                 <td>${product.name || 'Unnamed Product'}</td>
                                 <td>${product.category || 'Uncategorized'}</td>
-                                <td>${product.quantity || 0}</td>
+                                <td>${product.quantity || 0} ${product.unit || ''}</td>
                                 <td>${(product.sellingPrice || 0).toLocaleString()}</td>
                                 <td>${(product.quantity || 0) <= (product.reorderLevel || 5) ? 
                                     '<span style="color: #e74c3c;">Low Stock</span>' : 
@@ -742,85 +1051,224 @@ setupBarcodeInput() {
         `;
     }
 
-    getNewProductForm() {
-        return `
-            <div class="content-page">
-                <h2>New Product</h2>
+   getNewProductForm() {
+    return `
+        <div class="content-page">
+            <h2>New Product</h2>
+            
+            <form id="newProductForm" class="content-form">
+                <!-- Barcode Section (Most Important) -->
+                <div class="barcode-input-section" style="margin-bottom: 30px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">
+                        <span class="menu-icon">📊</span> Product Barcode
+                    </h3>
+                    <p class="form-hint" style="margin-bottom: 15px;">
+                        Scan barcode with scanner or enter manually. This unique identifier is required for sales.
+                    </p>
+                    
+                    <div class="form-group">
+                        <label for="productBarcode" class="required-field">Barcode *</label>
+                        <div class="barcode-input-group">
+                            <input type="text" 
+                                   id="productBarcode" 
+                                   name="productBarcode" 
+                                   required 
+                                   placeholder="Scan barcode or enter manually"
+                                   class="barcode-input"
+                                   autocomplete="off"
+                                   autofocus>
+                            <button type="button" class="btn-small" onclick="app.generateBarcode()">
+                                Generate
+                            </button>
+                        </div>
+                        <div class="form-hint">
+                            💡 Press Enter after manual entry or scan automatically. This barcode will be used for sales.
+                        </div>
+                        <div id="barcodeStatus" style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px;">
+                        </div>
+                    </div>
+                </div>
                 
-                <form id="newProductForm" class="content-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="productName">Product Name *</label>
-                            <input type="text" id="productName" name="productName" required placeholder="Enter product name">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="productCategory">Category *</label>
-                            <select id="productCategory" name="productCategory" required>
-                                <option value="">Select Category</option>
-                                <option value="electronics">Electronics</option>
-                                <option value="clothing">Clothing</option>
-                                <option value="food">Food & Beverages</option>
-                                <option value="stationery">Stationery</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="productCode">Product Code</label>
-                            <input type="text" id="productCode" name="productCode" placeholder="e.g., PROD-001">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="brand">Brand</label>
-                            <input type="text" id="brand" name="brand" placeholder="Enter brand name">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="purchasePrice">Purchase Price (₦) *</label>
-                            <input type="number" id="purchasePrice" name="purchasePrice" required min="0" step="0.01" placeholder="0.00">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="sellingPrice">Selling Price (₦) *</label>
-                            <input type="number" id="sellingPrice" name="sellingPrice" required min="0" step="0.01" placeholder="0.00">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="quantity">Initial Quantity *</label>
-                            <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="reorderLevel">Reorder Level *</label>
-                            <input type="number" id="reorderLevel" name="reorderLevel" required min="0" placeholder="Minimum stock level" value="5">
-                        </div>
+                <!-- Basic Product Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">📋</span> Product Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productName" class="required-field">Product Name *</label>
+                        <input type="text" id="productName" name="productName" required 
+                               placeholder="Enter product name">
                     </div>
                     
                     <div class="form-group">
-                        <label for="productDescription">Description</label>
-                        <textarea id="productDescription" name="productDescription" rows="4" placeholder="Enter product description"></textarea>
+                        <label for="productCategory" class="required-field">Category *</label>
+                        <select id="productCategory" name="productCategory" required>
+                            <option value="">Select Category</option>
+                            <option value="electronics">Electronics</option>
+                            <option value="clothing">Clothing & Apparel</option>
+                            <option value="food">Food & Beverages</option>
+                            <option value="pharmacy">Pharmacy & Health</option>
+                            <option value="stationery">Stationery & Office</option>
+                            <option value="home">Home & Kitchen</option>
+                            <option value="beauty">Beauty & Cosmetics</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productCode">Product Code/SKU</label>
+                        <input type="text" id="productCode" name="productCode" 
+                               placeholder="e.g., SKU-001, PROD-2024">
                     </div>
                     
+                    <div class="form-group">
+                        <label for="brand">Brand/Manufacturer</label>
+                        <input type="text" id="brand" name="brand" 
+                               placeholder="Enter brand or manufacturer name">
+                    </div>
+                </div>
+                
+                <!-- Pricing Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">💰</span> Pricing Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="purchasePrice" class="required-field">Cost Price (₦) *</label>
+                        <input type="number" id="purchasePrice" name="purchasePrice" 
+                               required min="0" step="0.01" placeholder="0.00"
+                               oninput="app.calculateProfit()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="sellingPrice" class="required-field">Selling Price (₦) *</label>
+                        <input type="number" id="sellingPrice" name="sellingPrice" 
+                               required min="0" step="0.01" placeholder="0.00"
+                               oninput="app.calculateProfit()">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="profitMargin" readonly>Profit Margin (₦)</label>
+                        <input type="number" id="profitMargin" name="profitMargin" 
+                               readonly class="readonly-field" placeholder="Auto-calculated">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profitPercentage" readonly>Profit Percentage (%)</label>
+                        <input type="number" id="profitPercentage" name="profitPercentage" 
+                               readonly class="readonly-field" placeholder="Auto-calculated">
+                    </div>
+                </div>
+                
+                <!-- Stock Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">📦</span> Stock Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="quantity" class="required-field">Initial Stock Quantity *</label>
+                        <input type="number" id="quantity" name="quantity" 
+                               required min="0" placeholder="0"
+                               oninput="app.calculateTotalValue()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="reorderLevel" class="required-field">Reorder Level *</label>
+                        <input type="number" id="reorderLevel" name="reorderLevel" 
+                               required min="0" placeholder="Minimum stock level" 
+                               value="5">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="totalValue" readonly>Total Stock Value (₦)</label>
+                        <input type="number" id="totalValue" name="totalValue" 
+                               readonly class="readonly-field" placeholder="Auto-calculated">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="unit">Unit of Measure</label>
+                        <select id="unit" name="unit">
+                            <option value="piece">Piece</option>
+                            <option value="pack">Pack</option>
+                            <option value="box">Box</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="liter">Liter</option>
+                            <option value="meter">Meter</option>
+                            <option value="dozen">Dozen</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Additional Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">📝</span> Additional Information
+                </h3>
+                
+                <div class="form-group">
+                    <label for="productDescription">Product Description</label>
+                    <textarea id="productDescription" name="productDescription" 
+                              rows="4" placeholder="Enter detailed product description..."></textarea>
+                </div>
+                
+                <div class="form-row">
                     <div class="form-group">
                         <label for="supplier">Supplier</label>
-                        <input type="text" id="supplier" name="supplier" placeholder="Enter supplier name">
+                        <input type="text" id="supplier" name="supplier" 
+                               placeholder="Enter supplier name">
                     </div>
                     
-                    <div class="form-actions-content">
-                        <button type="submit" class="btn-primary" id="saveProductBtn">Save Product</button>
-                        <button type="button" class="btn-secondary" id="cancelProductBtn">Cancel</button>
+                    <div class="form-group">
+                        <label for="supplierCode">Supplier Code</label>
+                        <input type="text" id="supplierCode" name="supplierCode" 
+                               placeholder="Supplier reference code">
                     </div>
-                </form>
-            </div>
-        `;
-    }
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="location">Storage Location</label>
+                        <input type="text" id="location" name="location" 
+                               placeholder="e.g., Shelf A5, Warehouse Zone 2">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="expiryDate">Expiry Date (if applicable)</label>
+                        <input type="date" id="expiryDate" name="expiryDate">
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="form-actions-content">
+                    <button type="submit" class="btn-primary" id="saveProductBtn">
+                        <span class="menu-icon">💾</span> Save Product
+                    </button>
+                    <button type="button" class="btn-secondary" id="cancelProductBtn">
+                        <span class="menu-icon">↩️</span> Cancel
+                    </button>
+                    <button type="button" class="btn-small" onclick="app.clearProductForm()">
+                        <span class="menu-icon">🗑️</span> Clear Form
+                    </button>
+                </div>
+                
+                <!-- Barcode Preview -->
+                <div id="barcodePreview" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Barcode Preview</h4>
+                    <div id="barcodeValueDisplay" style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; letter-spacing: 2px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"></div>
+                    <small style="color: #7f8c8d;">This barcode will be used for scanning during sales</small>
+                </div>
+            </form>
+        </div>
+    `;
+}
 
     // ... [Other content template methods remain the same] ...
 
@@ -838,6 +1286,7 @@ setupBarcodeInput() {
                 await this.saveNewProduct();
             });
         }
+
 
         // New Product Form - Cancel Button
         const cancelProductBtn = document.getElementById('cancelProductBtn');
@@ -895,8 +1344,28 @@ setupBarcodeInput() {
               this.setupBarcodeInput();
               this.renderCart();
           }
+         
+         //New addition Dec 15th     
+          if (document.getElementById('productBarcode')) {
+              this.setupBarcodeField();
               
+              // Add calculation listeners
+              const purchasePrice = document.getElementById('purchasePrice');
+              const sellingPrice = document.getElementById('sellingPrice');
+              const quantity = document.getElementById('quantity');
+              
+              if (purchasePrice) {
+                  purchasePrice.addEventListener('input', () => this.calculateProfit());
+              }
+              if (sellingPrice) {
+                  sellingPrice.addEventListener('input', () => this.calculateProfit());
+              }
+              if (quantity) {
+                  quantity.addEventListener('input', () => this.calculateTotalValue());
+              }
+          }
         
+        //End new addition Dec 15th
         
         // Update wallet balance in forms
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
@@ -1019,6 +1488,9 @@ async processSale() {
 
     async saveNewProduct() {
         // Get form values
+        
+        const barcode = document.getElementById('productBarcode').value.trim();
+        
         const productName = document.getElementById('productName').value.trim();
         const productCategory = document.getElementById('productCategory').value;
         const productCode = document.getElementById('productCode').value.trim();
@@ -1075,61 +1547,119 @@ async processSale() {
             return;
         }
 
+//New addition Dec 15th
+
+        // Validate barcode first
+            if (!barcode) {
+                alert('Barcode is required. Please scan or enter a barcode.');
+                document.getElementById('productBarcode').focus();
+                return;
+            }
+            
+            // Validate barcode length
+            if (barcode.length < 3) {
+                alert('Barcode must be at least 3 characters long.');
+                document.getElementById('productBarcode').focus();
+                return;
+            }
+            
+            // Check if barcode already exists
+            try {
+                const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+                if (!currentUser) {
+                    alert('Please login first');
+                    window.location.href = 'index.html';
+                    return;
+                }
+                
+                const inventoryData = await api.getUserInventory(currentUser.userID);
+                const existingProduct = inventoryData.products?.find(p => p.barcode === barcode);
+                
+                if (existingProduct) {
+                    alert(`Barcode "${barcode}" already exists for product: "${existingProduct.name}". Please use a different barcode.`);
+                    document.getElementById('productBarcode').focus();
+                    return;
+                }
+            } catch (error) {
+                console.error('Error checking barcode:', error);
+                // Continue anyway, API will validate
+            }
+
+
+          
+              
+              
+              
+//End Addition Dec 15th
+//New addition Dec 15th
         // Create product data object
-        const productData = {
-            name: productName,
-            category: productCategory,
-            code: productCode || `PROD-${Date.now().toString().slice(-6)}`,
-            brand: brand || 'Generic',
-            purchasePrice: purchasePrice,
-            sellingPrice: sellingPrice,
-            quantity: quantity,
-            reorderLevel: reorderLevel,
-            description: description,
-            supplier: supplier || 'Unknown',
-            profitMargin: sellingPrice - purchasePrice,
-            totalValue: quantity * sellingPrice,
-            status: quantity > 0 ? 'In Stock' : 'Out of Stock',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
+           const productData = {
+                  barcode: barcode, // This is now the primary identifier
+                  name: productName,
+                  category: productCategory,
+                  code: productCode || `SKU-${Date.now().toString().slice(-6)}`,
+                  brand: brand || 'Generic',
+                  purchasePrice: purchasePrice,
+                  sellingPrice: sellingPrice,
+                  quantity: quantity,
+                  reorderLevel: reorderLevel,
+                  description: description,
+                  supplier: supplier || 'Unknown',
+                  supplierCode: supplierCode,
+                  location: location,
+                  expiryDate: expiryDate || null,
+                  unit: unit,
+                  profitMargin: sellingPrice - purchasePrice,
+                  profitPercentage: purchasePrice > 0 ? ((sellingPrice - purchasePrice) / purchasePrice * 100) : 0,
+                  totalValue: quantity * sellingPrice,
+                  status: quantity > 0 ? (quantity <= reorderLevel ? 'Low Stock' : 'In Stock') : 'Out of Stock',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+              };
+          
+              try {
+                  // Disable save button to prevent multiple submissions
+                  const saveBtn = document.getElementById('saveProductBtn');
+                  if (saveBtn) {
+                      saveBtn.disabled = true;
+                      saveBtn.innerHTML = '<span class="spinner"></span> Saving Product...';
+                  }
+          
+                  // Save product to user's inventory bin
+                  const result = await api.addProductToInventory(currentUser.userID, productData);
+                  
+                  if (result && result.record) {
+                      // Show success message with barcode
+                      alert(`✅ Product "${productName}" has been successfully saved!\n\n📊 Barcode: ${barcode}\n💰 Price: ₦${sellingPrice.toFixed(2)}\n📦 Quantity: ${quantity} ${unit}`);
+                      
+                      // Clear the form
+                      this.clearProductForm();
+                      
+                      // Return to products page
+                      this.loadMenuContent('products');
+                  } else {
+                      throw new Error('Failed to save product');
+                  }
+              } catch (error) {
+                  console.error('Error saving product:', error);
+                  
+                  // Re-enable save button
+                  const saveBtn = document.getElementById('saveProductBtn');
+                  if (saveBtn) {
+                      saveBtn.disabled = false;
+                      saveBtn.innerHTML = '<span class="menu-icon">💾</span> Save Product';
+                  }
+                  
+                  if (error.message.includes('barcode')) {
+                      alert(`❌ Error: ${error.message}\n\nPlease use a different barcode.`);
+                      document.getElementById('productBarcode').focus();
+                  } else {
+                      alert(`❌ Error saving product: ${error.message}\n\nPlease try again.`);
+                  }
+              }
+          }
 
-        try {
-            // Disable save button to prevent multiple submissions
-            const saveBtn = document.getElementById('saveProductBtn');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<span class="spinner"></span> Saving...';
-            }
-
-            // Save product to user's inventory bin
-            const result = await api.addProductToInventory(currentUser.userID, productData);
-            
-            if (result && result.record) {
-                // Show success message
-                alert(`Product "${productName}" has been successfully added to your inventory!`);
-                
-                // Clear the form
-                this.clearProductForm();
-                
-                // Return to products page
-                this.loadMenuContent('products');
-            } else {
-                throw new Error('Failed to save product');
-            }
-        } catch (error) {
-            console.error('Error saving product:', error);
-            
-            // Re-enable save button
-            const saveBtn = document.getElementById('saveProductBtn');
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = 'Save Product';
-            }
-            
-            alert(`Error saving product: ${error.message}. Please try again.`);
-        }
-    }
+//End new addition Dec 15t
 
     clearProductForm() {
         // Clear all form fields
@@ -1143,6 +1673,34 @@ async processSale() {
         if (reorderLevel) {
             reorderLevel.value = '5';
         }
+        
+         const unit = document.getElementById('unit');
+    if (unit) {
+        unit.value = 'piece';
+    }
+    
+    
+    // Clear calculated fields
+    const profitMargin = document.getElementById('profitMargin');
+    const profitPercentage = document.getElementById('profitPercentage');
+    const totalValue = document.getElementById('totalValue');
+    
+    if (profitMargin) profitMargin.value = '';
+    if (profitPercentage) profitPercentage.value = '';
+    if (totalValue) totalValue.value = '';
+    
+    // Hide barcode preview and status
+    const preview = document.getElementById('barcodePreview');
+    const status = document.getElementById('barcodeStatus');
+    
+    if (preview) preview.style.display = 'none';
+    if (status) status.style.display = 'none';
+    
+    // Focus on barcode field
+    document.getElementById('productBarcode')?.focus();
+        
+        
+        
     }
 
     async processTopUp() {
