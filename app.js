@@ -233,11 +233,29 @@ class WebStarNgApp {
                 subtitle = 'Add funds to your wallet';
                 contentHTML = this.getWalletTopUpForm();
                 break;
-            case 'sales-day':
+            /*case 'sales-day':
                 title = 'Sales Report';
                 subtitle = 'Today\'s sales summary';
                 contentHTML = this.getSalesReport();
-                break;
+                break;*/ 
+          
+             case 'sales-day':
+                  title = 'Sales Report';
+                  subtitle = "Today's sales summary";
+                  // Don't use await - handle it differently
+                  this.getSalesReport().then(html => {
+                      contentHTML = html;
+                      // Update the UI here
+                      contentTitle.textContent = title;
+                      contentSubtitle.textContent = subtitle;
+                      dynamicContent.innerHTML = contentHTML;
+                      this.attachContentEventListeners();
+                  }).catch(error => {
+                      console.error('Error loading sales report:', error);
+                      contentHTML = '<div class="error-message">Error loading sales report</div>';
+                  });
+                  break;  
+                
             case 'purchase-day':
                 title = 'Purchase Report';
                 subtitle = 'Today\'s purchases summary';
@@ -1710,6 +1728,379 @@ async processSale() {
         // Redirect to login page
         window.location.href = 'index.html';
     }
+    
+   async getSalesReport() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            return '<div class="error-message">Please login to view sales report</div>';
+        }
+        
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get sales data using the user's salesBinId
+        const salesData = await api.getUserSales(currentUser.userID);
+        const transactions = salesData.transactions || [];
+        
+        // Filter today's transactions
+        const todayTransactions = transactions.filter(transaction => {
+            if (!transaction.timestamp) return false;
+            const transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+            return transactionDate === today;
+        });
+        
+        // Calculate total sales for today
+        const totalSales = todayTransactions.reduce((sum, transaction) => {
+            return sum + (parseFloat(transaction.amount) || 0);
+        }, 0);
+        
+        if (todayTransactions.length === 0) {
+            return `
+                <div class="content-page">
+                    <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
+                    <div class="no-sales-message">
+                        <div class="no-sales-icon">📊</div>
+                        <h3>No Sales Today</h3>
+                        <p>There are no sales transactions recorded for today (${today}).</p>
+                        <button class="btn-primary" onclick="app.handleMenuAction('sell-now')">
+                            Start Selling
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Sort transactions by timestamp (newest first)
+        todayTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        return `
+            <div class="content-page">
+                <div class="report-header">
+                    <div>
+                        <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
+                        <p class="report-date">Date: ${today}</p>
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn csv-btn" onclick="app.exportSalesToCSV()">
+                            📥 Export CSV
+                        </button>
+                        <button class="export-btn excel-btn" onclick="app.exportSalesToExcel()">
+                            📊 Export Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="sales-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Total Transactions:</span>
+                        <span class="summary-value">${todayTransactions.length}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Amount:</span>
+                        <span class="summary-value">₦${totalSales.toFixed(2)}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Items:</span>
+                        <span class="summary-value">${todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0)}</span>
+                    </div>
+                </div>
+                
+                <h3>Today's Sales Transactions</h3>
+                
+                <div class="sales-list">
+                    ${todayTransactions.map((transaction, index) => `
+                        <div class="sale-item">
+                            <div class="sale-header">
+                                <span class="sale-number">${index + 1}.</span>
+                                <span class="sale-time">${new Date(transaction.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span class="sale-id">ID: ${transaction.transactionId || transaction.id || 'N/A'}</span>
+                            </div>
+                            <div class="sale-details">
+                                <div class="sale-product">
+                                    <strong>${transaction.productName || 'Unknown Product'}</strong>
+                                    ${transaction.description ? `<div class="sale-description">${transaction.description}</div>` : ''}
+                                </div>
+                                <div class="sale-info">
+                                    <div class="sale-quantity">Qty: ${transaction.quantity || 1}</div>
+                                    <div class="sale-price">₦${(transaction.unitPrice || transaction.amount || 0).toFixed(2)} each</div>
+                                    <div class="sale-amount">₦${(transaction.amount || 0).toFixed(2)}</div>
+                                </div>
+                            </div>
+                            ${transaction.barcode ? `<div class="sale-barcode">Barcode: <code>${transaction.barcode}</code></div>` : ''}
+                            ${transaction.paymentMethod ? `<div class="sale-payment">Payment: ${transaction.paymentMethod}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="sales-total">
+                    <div class="total-label">TOTAL SALES FOR TODAY:</div>
+                    <div class="total-amount">₦${totalSales.toFixed(2)}</div>
+                </div>
+                
+                <div class="report-footer">
+                    <p>Report generated on ${new Date().toLocaleString()}</p>
+                    <p>User: ${currentUser.userID} | Report ID: ${Date.now()}</p>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error generating sales report:', error);
+        return `
+            <div class="content-page">
+                <div class="error-message">
+                    <h3>Error Loading Sales Report</h3>
+                    <p>Unable to load sales data. Please try again.</p>
+                    <button class="btn-primary" onclick="app.handleMenuAction('sales-day')">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+    
+ // Export methods for sales report
+async exportSalesToCSV() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export sales report');
+            return;
+        }
+        
+        // Get today's sales data
+        const today = new Date().toISOString().split('T')[0];
+        const salesData = await api.getUserSales(currentUser.userID);
+        const transactions = salesData.transactions || [];
+        
+        const todayTransactions = transactions.filter(transaction => {
+            if (!transaction.timestamp) return false;
+            const transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+            return transactionDate === today;
+        });
+        
+        if (todayTransactions.length === 0) {
+            alert('No sales data to export for today');
+            return;
+        }
+        
+        // Sort transactions
+        todayTransactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate totals
+        const totalSales = todayTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const totalItems = todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0);
+        
+        // Create CSV content
+        let csvContent = "S/No.,Time,Date,Transaction ID,Product Name,Barcode,Quantity,Unit Price (₦),Amount (₦),Payment Method,Customer,Description\n";
+        
+        // Add each transaction
+        todayTransactions.forEach((transaction, index) => {
+            const row = [
+                index + 1,
+                new Date(transaction.timestamp).toLocaleTimeString(),
+                new Date(transaction.timestamp).toISOString().split('T')[0],
+                `"${transaction.transactionId || transaction.id || ''}"`,
+                `"${transaction.productName || ''}"`,
+                `"${transaction.barcode || ''}"`,
+                transaction.quantity || 1,
+                transaction.unitPrice || transaction.amount || 0,
+                transaction.amount || 0,
+                transaction.paymentMethod || 'cash',
+                `"${transaction.customerInfo || 'Walk-in Customer'}"`,
+                `"${transaction.description || ''}"`
+            ];
+            csvContent += row.join(',') + '\n';
+        });
+        
+        // Add summary rows
+        csvContent += '\n';
+        csvContent += 'SUMMARY\n';
+        csvContent += `Total Transactions,${todayTransactions.length}\n`;
+        csvContent += `Total Items Sold,${totalItems}\n`;
+        csvContent += `Total Sales Amount (₦),${totalSales.toFixed(2)}\n`;
+        csvContent += `\nReport Information\n`;
+        csvContent += `Generated On,${new Date().toLocaleString()}\n`;
+        csvContent += `User,${currentUser.userID}\n`;
+        csvContent += `Business,WebStarNg\n`;
+        
+        // Create and download CSV file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.setAttribute('href', url);
+        link.setAttribute('download', `sales_report_${dateStr}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ CSV report downloaded!\n\n📊 Transactions: ${todayTransactions.length}\n💰 Total: ₦${totalSales.toFixed(2)}`);
+        
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        alert('Error exporting CSV: ' + error.message);
+    }
+}
+
+async exportSalesToExcel() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export sales report');
+            return;
+        }
+        
+        // Get today's sales data
+        const today = new Date().toISOString().split('T')[0];
+        const salesData = await api.getUserSales(currentUser.userID);
+        const transactions = salesData.transactions || [];
+        
+        const todayTransactions = transactions.filter(transaction => {
+            if (!transaction.timestamp) return false;
+            const transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+            return transactionDate === today;
+        });
+        
+        if (todayTransactions.length === 0) {
+            alert('No sales data to export for today');
+            return;
+        }
+        
+        // Sort transactions
+        todayTransactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate totals
+        const totalSales = todayTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const totalItems = todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0);
+        
+        // Create Excel content (HTML table that Excel can open)
+        let excelContent = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="UTF-8">
+                <!--[if gte mso 9]>
+                <xml>
+                    <x:ExcelWorkbook>
+                        <x:ExcelWorksheets>
+                            <x:ExcelWorksheet>
+                                <x:Name>Sales Report ${today}</x:Name>
+                                <x:WorksheetOptions>
+                                    <x:DisplayGridlines/>
+                                </x:WorksheetOptions>
+                            </x:ExcelWorksheet>
+                        </x:ExcelWorksheets>
+                    </x:ExcelWorkbook>
+                </xml>
+                <![endif]-->
+                <style>
+                    table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+                    th { background: #2c3e50; color: white; padding: 10px; text-align: left; font-weight: bold; border: 1px solid #1a252f; }
+                    td { padding: 8px; border: 1px solid #ddd; }
+                    .total-row { background: #f8f9fa; font-weight: bold; }
+                    .header { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+                    .subheader { font-size: 14px; color: #666; margin-bottom: 20px; }
+                    .summary { margin-top: 30px; padding: 15px; background: #f8f9fa; border: 1px solid #ddd; }
+                    .summary-title { font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+                </style>
+            </head>
+            <body>
+                <div class="header">Sales Report - ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="subheader">Generated on: ${new Date().toLocaleString()} | User: ${currentUser.userID}</div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>S/No.</th>
+                            <th>Time</th>
+                            <th>Date</th>
+                            <th>Transaction ID</th>
+                            <th>Product Name</th>
+                            <th>Barcode</th>
+                            <th>Quantity</th>
+                            <th>Unit Price (₦)</th>
+                            <th>Amount (₦)</th>
+                            <th>Payment Method</th>
+                            <th>Customer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Add transactions
+        todayTransactions.forEach((transaction, index) => {
+            excelContent += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${new Date(transaction.timestamp).toLocaleTimeString()}</td>
+                    <td>${new Date(transaction.timestamp).toISOString().split('T')[0]}</td>
+                    <td>${transaction.transactionId || transaction.id || ''}</td>
+                    <td>${transaction.productName || ''}</td>
+                    <td>${transaction.barcode || ''}</td>
+                    <td>${transaction.quantity || 1}</td>
+                    <td>${(transaction.unitPrice || transaction.amount || 0).toFixed(2)}</td>
+                    <td>${(transaction.amount || 0).toFixed(2)}</td>
+                    <td>${transaction.paymentMethod || 'cash'}</td>
+                    <td>${transaction.customerInfo || 'Walk-in Customer'}</td>
+                </tr>
+            `;
+        });
+        
+        // Add summary
+        excelContent += `
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="6" style="text-align: right;"><strong>TOTAL:</strong></td>
+                            <td><strong>${totalItems}</strong></td>
+                            <td></td>
+                            <td><strong>₦${totalSales.toFixed(2)}</strong></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div class="summary">
+                    <div class="summary-title">Report Summary</div>
+                    <p><strong>Total Transactions:</strong> ${todayTransactions.length}</p>
+                    <p><strong>Total Items Sold:</strong> ${totalItems}</p>
+                    <p><strong>Total Sales Amount:</strong> ₦${totalSales.toFixed(2)}</p>
+                    <p><strong>Average Transaction Value:</strong> ₦${(totalSales / todayTransactions.length).toFixed(2)}</p>
+                    <p><strong>Report Period:</strong> ${today}</p>
+                    <p><strong>Generated By:</strong> ${currentUser.userID}</p>
+                    <p><strong>Business:</strong> WebStarNg</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        // Create and download Excel file
+        const blob = new Blob([excelContent], { 
+            type: 'application/vnd.ms-excel' 
+        });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.setAttribute('href', url);
+        link.setAttribute('download', `sales_report_${dateStr}.xls`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Excel report downloaded!\n\n📊 Transactions: ${todayTransactions.length}\n💰 Total: ₦${totalSales.toFixed(2)}`);
+        
+    } catch (error) {
+        console.error('Error exporting Excel:', error);
+        alert('Error exporting Excel: ' + error.message);
+    }
+}   
 }
 
 // Global functions for modals (existing functionality)
