@@ -1360,7 +1360,7 @@ async processSale() {
     const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
     
     // Confirm sale
-    if (!confirm(`Process sale for ₦${total.toFixed(2)}?`)) {
+    if (!confirm(`Process sale for ₦${total.toFixed(2)}?\n\nA transaction fee of ₦25 will be deducted from your wallet.`)) {
         return;
     }
     
@@ -1368,6 +1368,12 @@ async processSale() {
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
         if (!currentUser) {
             alert('Please login first');
+            return;
+        }
+        
+        // Check if user has at least ₦25 in wallet
+        if (currentUser.wallet < 25) {
+            alert(`Insufficient funds for transaction fee.\n\nRequired: ₦25.00\nAvailable: ₦${currentUser.wallet.toFixed(2)}\n\nPlease add funds to your wallet.`);
             return;
         }
         
@@ -1387,7 +1393,7 @@ async processSale() {
             }
         }
         
-        // Process each item
+        // Process each item (update inventory)
         for (const cartItem of this.cart) {
             // Update inventory quantity
             const product = products.find(p => p.id === cartItem.productId);
@@ -1425,10 +1431,13 @@ async processSale() {
             });
         }
         
-        // Add funds to wallet (sales revenue)
-        const newBalance = await api.addFunds(currentUser.userID, total);
+        // DEDUCT ₦25 from wallet (transaction fee) instead of adding sale amount
+        const newBalance = currentUser.wallet - 25;
         
-        // Update user session
+        // Update user's wallet balance in the database
+        await api.updateUser(currentUser.userID, { wallet: newBalance });
+        
+        // Update local session
         currentUser.wallet = newBalance;
         localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
         
@@ -1437,7 +1446,7 @@ async processSale() {
         this.saveCart();
         
         // Show success message
-        alert(`✅ Sale completed successfully!\n\nTotal: ₦${total.toFixed(2)}\nNew Balance: ₦${newBalance.toFixed(2)}`);
+        alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💳 Transaction Fee: ₦25.00\n💰 New Balance: ₦${newBalance.toFixed(2)}\n\nNote: Transaction fee of ₦25 deducted from wallet.`);
         
         // Update UI and return to products page
         this.updateUserDisplay(currentUser);
