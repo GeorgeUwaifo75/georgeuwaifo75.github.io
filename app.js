@@ -1448,9 +1448,11 @@ async processSale() {
         // Show success message
         alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💳 Transaction Fee: ₦25.00\n💰 New Balance: ₦${newBalance.toFixed(2)}\n\nNote: Transaction fee of ₦25 deducted from wallet.`);
         
-        // Update UI and return to products page
+        // Update UI with new balance
         this.updateUserDisplay(currentUser);
-        this.loadMenuContent('products');
+        
+        // RETURN TO REFRESHED SALES INTERFACE instead of products page
+        this.loadSellProductsInterface();
         
     } catch (error) {
         console.error('Error processing sale:', error);
@@ -2691,7 +2693,50 @@ async getInventoryReport() {
     }
 }
 
-
+// Add this method to refresh the sales interface
+loadSellProductsInterface() {
+    const contentTitle = document.getElementById('contentTitle');
+    const contentSubtitle = document.getElementById('contentSubtitle');
+    const dynamicContent = document.getElementById('dynamicContent');
+    const defaultContent = document.getElementById('defaultContent');
+    
+    defaultContent.style.display = 'none';
+    dynamicContent.style.display = 'block';
+    
+    contentTitle.textContent = 'Sell Products';
+    contentSubtitle.textContent = 'Scan or enter barcodes to sell products';
+    
+    // Load the sales interface
+    dynamicContent.innerHTML = this.getSellProductsInterface();
+    
+    // Re-initialize the sales interface
+    this.initializeCart();
+    this.setupBarcodeInput();
+    this.renderCart();
+    
+    // Focus on the barcode input field for next scan
+    setTimeout(() => {
+        const barcodeInput = document.getElementById('barcode');
+        if (barcodeInput) {
+            barcodeInput.focus();
+        }
+    }, 100);
+    
+    // Update menu highlighting if needed
+    const allMenuLinks = document.querySelectorAll('.menu-link');
+    allMenuLinks.forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Find and activate the sell-now menu item if it exists in the menu
+    const sellMenuItem = document.querySelector('[data-action="sell-now"]');
+    if (sellMenuItem) {
+        const menuItem = sellMenuItem.closest('.menu-item');
+        if (menuItem) {
+            menuItem.classList.add('active');
+        }
+    }
+}
 }
 
 // Global functions for modals (existing functionality)
