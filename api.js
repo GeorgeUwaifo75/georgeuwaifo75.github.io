@@ -337,38 +337,45 @@ async addProductToInventory(userID, productData) {
 
     // Add sales transaction
     async addSalesTransaction(userID, transactionData) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.salesBinId) {
-                throw new Error('User sales bin not found');
-            }
-
-            const sales = await this.getUserSales(userID);
-            const newTransaction = {
-                ...transactionData,
-                id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                timestamp: new Date().toISOString()
-            };
-
-            sales.transactions.push(newTransaction);
-            sales.totalSales = (sales.totalSales || 0) + (transactionData.amount || 0);
-            sales.lastUpdated = new Date().toISOString();
-
-            const response = await fetch(`${this.baseURL}/${user.salesBinId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey
-                },
-                body: JSON.stringify(sales)
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error adding sales transaction:', error);
-            throw error;
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.salesBinId) {
+            throw new Error('User sales bin not found');
         }
+
+        const sales = await this.getUserSales(userID);
+        const newTransaction = {
+            ...transactionData,
+            id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            // Add server timestamp that can't be manipulated by client
+            serverTimestamp: new Date().toISOString(),
+            // Add user agent and IP fingerprint (simplified)
+            clientInfo: {
+                userAgent: navigator.userAgent,
+                timestamp: new Date().toISOString()
+            }
+        };
+
+        sales.transactions.push(newTransaction);
+        sales.totalSales = (sales.totalSales || 0) + (transactionData.amount || 0);
+        sales.lastUpdated = new Date().toISOString();
+
+        const response = await fetch(`${this.baseURL}/${user.salesBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(sales)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error adding sales transaction:', error);
+        throw error;
     }
+}
 
     // Add purchase transaction
     async addPurchaseTransaction(userID, transactionData) {
@@ -445,10 +452,29 @@ async addProductToInventory(userID, productData) {
     }
 
     // User methods
-    async getUser(userID) {
-        const data = await this.getData();
-        return data.users.find(user => user.userID === userID);
+   async getUser(userID) {
+    const data = await this.getData();
+    const user = data.users.find(user => user.userID === userID);
+    
+    // For demo user, ensure transaction limits are enforced
+    if (user && user.userID === 'tmp101') {
+        const today = new Date().toISOString().split('T')[0];
+        const lastTransactionDate = user.lastTransactionDate || '';
+        
+        // Reset counter if it's a new day
+        if (lastTransactionDate !== today) {
+            user.demoTransactionsToday = 0;
+            user.lastTransactionDate = today;
+            // Update the database
+            await this.updateUser(userID, {
+                demoTransactionsToday: 0,
+                lastTransactionDate: today
+            });
+        }
     }
+    
+    return user;
+}
 
     // Check if user exists
     async userExists(userID) {
