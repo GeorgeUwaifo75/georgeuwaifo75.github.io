@@ -2917,3 +2917,36 @@ textarea {
         margin-left: 0;
     }
 }
+
+/* Demo user limit warning */
+.demo-limit-warning {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: #fff3cd;
+    border: 2px solid #ffeaa7;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    color: #856404;
+}
+
+.warning-icon {
+    font-size: 2em;
+}
+
+.warning-content {
+    flex: 1;
+}
+
+.warning-content strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+
+.warning-content p {
+    margin: 3px 0;
+    font-size: 0.95em;
+}
+
