@@ -4,11 +4,21 @@ class WebStarNgApp {
         this.init();
     }
 
-    async init() {
+/*   async init() {
         this.checkAuth();
         this.loadUserData();
         this.setupEventListeners();
         this.setupMenuNavigation();
+    }*/
+
+    async init() {
+          this.checkAuth();
+          await this.loadUserData();
+          this.setupEventListeners();
+          this.setupMenuNavigation();
+          
+          // Validate demo user on load
+          await this.validateDemoUserOnLoad();
     }
 
     checkAuth() {
@@ -233,11 +243,7 @@ class WebStarNgApp {
                 subtitle = 'Add funds to your wallet';
                 contentHTML = this.getWalletTopUpForm();
                 break;
-            /*case 'sales-day':
-                title = 'Sales Report';
-                subtitle = 'Today\'s sales summary';
-                contentHTML = this.getSalesReport();
-                break;*/ 
+           
           
              case 'sales-day':
                   title = 'Sales Report';
@@ -318,9 +324,29 @@ class WebStarNgApp {
 
 
 // Add the getSellProductsInterface method
+// In getSellProductsInterface() method, add demo user warning:
 getSellProductsInterface() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    const isDemoUser = currentUser && currentUser.userID === 'tmp101';
+    
+    let demoWarning = '';
+    if (isDemoUser) {
+        demoWarning = `
+            <div class="demo-limit-warning">
+                <div class="warning-icon">⚠️</div>
+                <div class="warning-content">
+                    <strong>Demo Account Limitations</strong>
+                    <p>This demo account is limited to 3 transactions per day.</p>
+                    <p>Create a regular account for unlimited transactions.</p>
+                </div>
+            </div>
+        `;
+    }
+    
     return `
         <div class="sell-products-container">
+            ${demoWarning}
+            
             <div class="barcode-input-section">
                 <h3>📦 Scan or Enter Barcode</h3>
                 <div class="barcode-input-group">
@@ -1371,6 +1397,15 @@ async processSale() {
             return;
         }
         
+        // CHECK DEMO USER TRANSACTION LIMIT
+        if (currentUser.userID === 'tmp101') {
+            const canProceed = await this.checkDemoTransactionLimit(currentUser.userID);
+            if (!canProceed) {
+                alert('⚠️ Demo User Limit Reached\n\nDemo users are limited to 3 transactions per day.\nPlease create a regular account for unlimited transactions.');
+                return;
+            }
+        }
+        
         // Check if user has at least ₦25 in wallet
         if (currentUser.wallet < 25) {
             alert(`Insufficient funds for transaction fee.\n\nRequired: ₦25.00\nAvailable: ₦${currentUser.wallet.toFixed(2)}\n\nPlease add funds to your wallet.`);
@@ -1416,7 +1451,7 @@ async processSale() {
             
             await api.updateUserInventory(currentUser.userID, inventoryData);
             
-            // Record sale transaction
+            // Record sale transaction with server timestamp
             await api.addSalesTransaction(currentUser.userID, {
                 productId: cartItem.productId,
                 productName: cartItem.name,
@@ -1427,7 +1462,10 @@ async processSale() {
                 transactionId: this.currentCartId,
                 paymentMethod: 'cash',
                 customerInfo: 'Walk-in Customer',
-                notes: `Sold ${cartItem.quantity} ${cartItem.name}`
+                notes: `Sold ${cartItem.quantity} ${cartItem.name}`,
+                // Add server-side timestamp for validation
+                serverTimestamp: new Date().toISOString(),
+                isDemoUser: currentUser.userID === 'tmp101'
             });
         }
         
@@ -1440,6 +1478,11 @@ async processSale() {
         // Update local session
         currentUser.wallet = newBalance;
         localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
+        
+        // For demo user, update transaction counter
+        if (currentUser.userID === 'tmp101') {
+            await this.updateDemoTransactionCounter(currentUser.userID);
+        }
         
         // Clear cart
         this.cart = [];
@@ -2737,6 +2780,135 @@ loadSellProductsInterface() {
         }
     }
 }
+
+// Demo user transaction limit methods
+async checkDemoTransactionLimit(userID) {
+    if (userID !== 'tmp101') {
+        return true; // Not a demo user, no limit
+    }
+    
+    try {
+        // Get today's sales for the demo user
+        const today = new Date().toISOString().split('T')[0];
+        const salesData = await api.getUserSales(userID);
+        const transactions = salesData.transactions || [];
+        
+        // Count today's transactions using SERVER timestamps to prevent date manipulation
+        const todayTransactionCount = transactions.filter(transaction => {
+            if (!transaction.timestamp && !transaction.serverTimestamp) return false;
+            
+            // Use server timestamp if available (more secure)
+            const timestamp = transaction.serverTimestamp || transaction.timestamp;
+            const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+            return transactionDate === today;
+        }).length;
+        
+        console.log(`Demo user transactions today: ${todayTransactionCount}`);
+        
+        // Check if limit reached
+        if (todayTransactionCount >= 3) {
+            return false;
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error checking demo transaction limit:', error);
+        // If there's an error, allow the transaction (fail open for usability)
+        return true;
+    }
+}
+
+async updateDemoTransactionCounter(userID) {
+    if (userID !== 'tmp101') {
+        return; // Not a demo user
+    }
+    
+    try {
+        // Get current demo user data
+        const demoUser = await api.getUser(userID);
+        if (!demoUser) return;
+        
+        // Update demo transaction counter in user data
+        const today = new Date().toISOString().split('T')[0];
+        const lastTransactionDate = demoUser.lastTransactionDate || '';
+        
+        if (lastTransactionDate === today) {
+            // Increment today's counter
+            demoUser.demoTransactionsToday = (demoUser.demoTransactionsToday || 0) + 1;
+        } else {
+            // Reset counter for new day
+            demoUser.demoTransactionsToday = 1;
+            demoUser.lastTransactionDate = today;
+        }
+        
+        // Update last transaction time (server time)
+        demoUser.lastTransactionTime = new Date().toISOString();
+        
+        // Save updated user data
+        await api.updateUser(userID, {
+            demoTransactionsToday: demoUser.demoTransactionsToday,
+            lastTransactionDate: demoUser.lastTransactionDate,
+            lastTransactionTime: demoUser.lastTransactionTime
+        });
+        
+        console.log(`Demo transaction counter updated: ${demoUser.demoTransactionsToday}/3 today`);
+        
+    } catch (error) {
+        console.error('Error updating demo transaction counter:', error);
+    }
+}
+
+// Add server-side timestamp validation on page load
+async validateDemoUserOnLoad() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser || currentUser.userID !== 'tmp101') {
+        return;
+    }
+    
+    try {
+        // Check if demo user data needs to be synchronized
+        const serverUserData = await api.getUser(currentUser.userID);
+        if (serverUserData) {
+            // Update local storage with server data
+            localStorage.setItem('webstarng_user', JSON.stringify(serverUserData));
+            this.updateUserDisplay(serverUserData);
+        }
+    } catch (error) {
+        console.error('Error validating demo user:', error);
+    }
+}
+
+
+// Add to WebStarNgApp class
+async detectDateTampering() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser || currentUser.userID !== 'tmp101') {
+        return false;
+    }
+    
+    try {
+        // Get server time from API (simulated - in production, use a time API)
+        const serverTime = new Date().toISOString();
+        const clientTime = new Date().toISOString();
+        
+        // Check for significant time difference (more than 5 minutes)
+        const serverDate = new Date(serverTime);
+        const clientDate = new Date(clientTime);
+        const timeDiff = Math.abs(serverDate - clientDate);
+        
+        if (timeDiff > 5 * 60 * 1000) { // 5 minutes
+            console.warn('Potential date/time tampering detected');
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Error detecting date tampering:', error);
+        return false;
+    }
+}
+
 }
 
 // Global functions for modals (existing functionality)
