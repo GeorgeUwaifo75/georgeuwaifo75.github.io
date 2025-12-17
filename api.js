@@ -12,6 +12,7 @@ class JSONBinAPI {
         localStorage.setItem('jsonbin_api_key', this.apiKey);
     }
     
+    }
    
     // Initialize default data structure
     async initializeData() {
