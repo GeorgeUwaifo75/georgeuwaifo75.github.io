@@ -8,9 +8,6 @@ class JSONBinAPI {
         this.baseURL = 'https://api.jsonbin.io/v3/b';
     }
     
-    
-   
-
 
     // Initialize default data structure
     async initializeData() {
