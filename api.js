@@ -3,7 +3,7 @@ class JSONBinAPI {
    
   constructor() {
         this.apiKey = CONFIG.API_KEY;
-        this.mainBinId = CONFIG2.API_KEY ; // Your JSONBin.io main bin ID for users
+        this.mainBinId = '693b1ac443b1c97be9e786b2' ; // Your JSONBin.io main bin ID for users
         this.baseURL = 'https://api.jsonbin.io/v3/b';
        
     // OR prompt user for their own JSONBin key
