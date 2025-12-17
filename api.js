@@ -3,7 +3,7 @@ class JSONBinAPI {
    
   constructor() {
         this.apiKey = CONFIG.API_KEY;
-        this.mainBinId = '693b1ac443b1c97be9e786b2'; // Your JSONBin.io main bin ID for users
+        this.mainBinId = CONFIG2.API_KEY ; // Your JSONBin.io main bin ID for users
         this.baseURL = 'https://api.jsonbin.io/v3/b';
        
     // OR prompt user for their own JSONBin key
@@ -11,8 +11,14 @@ class JSONBinAPI {
         this.apiKey = prompt("Enter your JSONBin.io API Key:");
         localStorage.setItem('jsonbin_api_key', this.apiKey);
     }
+     if (!this.mainBinId) {
+        this.mainBinId = prompt("Enter your JSONBin.io Main bin value:");
+        localStorage.setItem('jsonbin_mb_value', this.mainBinId);
+    }
 
-     
+
+     // this.mainBinId = '693b1ac443b1c97be9e786b2'; // Your JSONBin.io main bin ID for users
+       
     // Initialize default data structure
     async initializeData() {
         const defaultData = {
