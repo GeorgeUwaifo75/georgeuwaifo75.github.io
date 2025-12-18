@@ -675,12 +675,12 @@ setupBarcodeInput() {
     const newInput = barcodeInput.cloneNode(true);
     barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
     
-    // Add new event listeners
+    // ONLY keep Enter key listener - no auto-search
     newInput.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             const barcodeValue = newInput.value.trim();
-            
+         
             if (barcodeValue) {
                 const product = await this.searchBarcode(barcodeValue);
                 if (product) {
@@ -691,25 +691,7 @@ setupBarcodeInput() {
         }
     });
     
-    // Auto-search on input (for barcode scanners that don't send Enter)
-    let scannerTimeout;
-    newInput.addEventListener('input', async (e) => {
-        const value = e.target.value.trim();
-        
-        // Clear previous timeout
-        if (scannerTimeout) clearTimeout(scannerTimeout);
-        
-        // Set timeout to detect scanner input (scanners typically input quickly)
-        scannerTimeout = setTimeout(async () => {
-            if (value.length >= 3) { // Barcodes are typically at least 3 chars
-                const product = await this.searchBarcode(value);
-                if (product) {
-                    this.addToCart(product);
-                    newInput.value = '';
-                }
-            }
-        }, 100); // Wait 100ms after last input
-    });
+    // REMOVED the auto-search on input event
     
     // Focus on input when page loads
     newInput.focus();
