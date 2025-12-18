@@ -82,98 +82,98 @@ class AuthManager {
         }
     }
 
-    async handleRegistration(event) {
-        event.preventDefault();
-        
-        const newUserID = document.getElementById('newUserID').value.trim();
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        const fullName = document.getElementById('fullName').value.trim();
-        const initialBalance = parseFloat(document.getElementById('initialBalance').value) || 0;
-        
-        const errorElement = document.getElementById('registrationError');
-        const successElement = document.getElementById('registrationSuccess');
-
-        // Clear previous messages
-        errorElement.style.display = 'none';
-        errorElement.textContent = '';
-        successElement.style.display = 'none';
-        successElement.innerHTML = '';
-
-        // Validate form
-        if (!newUserID || !newPassword || !fullName) {
-            errorElement.textContent = 'Please fill in all required fields';
-            errorElement.style.display = 'block';
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            errorElement.textContent = 'Passwords do not match';
-            errorElement.style.display = 'block';
-            return;
-        }
-
-        if (newPassword.length < 4) {
-            errorElement.textContent = 'Password must be at least 4 characters long';
-            errorElement.textContent = 'Password must be at least 4 characters long';
-            errorElement.style.display = 'block';
-            return;
-        }
-
-        try {
-            // Check if user already exists
-            const userExists = await api.userExists(newUserID);
-            if (userExists) {
-                errorElement.textContent = 'User ID already exists. Please choose a different one.';
-                errorElement.style.display = 'block';
-                return;
-            }
-
-            // Create new user object
-            const newUser = {
-                userID: newUserID,
-                password: newPassword,
-                fullName: fullName,
-                wallet: initialBalance
-            };
-
-            // Save user to JSONBin.io (this will also create bins)
-            const createdUser = await api.createUser(newUser);
-            
-            // Show success message with bin information
-            successElement.innerHTML = `
-                <div class="registration-success">
-                    <h3>🎉 Account Created Successfully!</h3>
-                    <p>Your account has been created with unique storage bins.</p>
-                    <div class="user-created-info">
-                        <p><strong>User ID:</strong> ${createdUser.userID}</p>
-                        <p><strong>Full Name:</strong> ${createdUser.fullName}</p>
-                        <p><strong>Initial Balance:</strong> ₦${createdUser.wallet.toFixed(2)}</p>
-                        <p><strong>Inventory Bin:</strong> ${createdUser.inventoryBinId}</p>
-                        <p><strong>Sales Bin:</strong> ${createdUser.salesBinId}</p>
-                        <p><strong>Purchases Bin:</strong> ${createdUser.purchasesBinId}</p>
-                        <p><strong>Account Created:</strong> ${new Date(createdUser.createdAt).toLocaleString()}</p>
-                    </div>
-                    <p style="margin-top: 15px;">You can now login with your new credentials.</p>
-                </div>
-            `;
-            successElement.style.display = 'block';
-
-            // Clear form
-            document.getElementById('registrationForm').reset();
-
-            // Auto-login the new user after 3 seconds
-            setTimeout(() => {
-                this.setSession(createdUser);
-                window.location.href = 'dashboard.html';
-            }, 3000);
-
-        } catch (error) {
-            console.error('Registration error:', error);
-            errorElement.textContent = 'Error creating account: ' + error.message;
-            errorElement.style.display = 'block';
-        }
+  async handleRegistration(event) {
+    event.preventDefault();
+ 
+    const newUserID = document.getElementById('newUserID').value.trim();
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const fullName = document.getElementById('fullName').value.trim();
+    // REMOVED: const initialBalance = parseFloat(document.getElementById('initialBalance').value) || 0;
+ 
+    const errorElement = document.getElementById('registrationError');
+    const successElement = document.getElementById('registrationSuccess');
+ 
+    // Clear previous messages
+    errorElement.style.display = 'none';
+    errorElement.textContent = '';
+    successElement.style.display = 'none';
+    successElement.innerHTML = '';
+ 
+    // Validate form
+    if (!newUserID || !newPassword || !fullName) {
+        errorElement.textContent = 'Please fill in all required fields';
+        errorElement.style.display = 'block';
+        return;
     }
+ 
+    if (newPassword !== confirmPassword) {
+        errorElement.textContent = 'Passwords do not match';
+        errorElement.style.display = 'block';
+        return;
+    }
+ 
+    if (newPassword.length < 4) {
+        errorElement.textContent = 'Password must be at least 4 characters long';
+        errorElement.textContent = 'Password must be at least 4 characters long';
+        errorElement.style.display = 'block';
+        return;
+    }
+ 
+    try {
+        // Check if user already exists
+        const userExists = await api.userExists(newUserID);
+        if (userExists) {
+            errorElement.textContent = 'User ID already exists. Please choose a different one.';
+            errorElement.style.display = 'block';
+            return;
+        }
+ 
+        // Create new user object
+        const newUser = {
+            userID: newUserID,
+            password: newPassword,
+            fullName: fullName,
+            // REMOVED: wallet: initialBalance - Now defaults to 0 in createUser()
+        };
+ 
+        // Save user to JSONBin.io (this will also create bins)
+        const createdUser = await api.createUser(newUser);
+     
+        // Show success message with bin information
+        successElement.innerHTML = `
+            <div class="registration-success">
+                <h3>🎉 Account Created Successfully!</h3>
+                <p>Your account has been created with unique storage bins.</p>
+                <div class="user-created-info">
+                    <p><strong>User ID:</strong> ${createdUser.userID}</p>
+                    <p><strong>Full Name:</strong> ${createdUser.fullName}</p>
+                    <p><strong>Initial Wallet Balance:</strong> ₦${createdUser.wallet.toFixed(2)}</p>
+                    <p><strong>Inventory Bin:</strong> ${createdUser.inventoryBinId}</p>
+                    <p><strong>Sales Bin:</strong> ${createdUser.salesBinId}</p>
+                    <p><strong>Purchases Bin:</strong> ${createdUser.purchasesBinId}</p>
+                    <p><strong>Account Created:</strong> ${new Date(createdUser.createdAt).toLocaleString()}</p>
+                </div>
+                <p style="margin-top: 15px;">You can now login with your new credentials.</p>
+            </div>
+        `;
+        successElement.style.display = 'block';
+ 
+        // Clear form
+        document.getElementById('registrationForm').reset();
+ 
+        // Auto-login the new user after 3 seconds
+        setTimeout(() => {
+            this.setSession(createdUser);
+            window.location.href = 'dashboard.html';
+        }, 3000);
+ 
+    } catch (error) {
+        console.error('Registration error:', error);
+        errorElement.textContent = 'Error creating account: ' + error.message;
+        errorElement.style.display = 'block';
+    }
+}
 
     showRegistrationForm(userID = '', userExists = false) {
         const loginBox = document.getElementById('loginBox');
