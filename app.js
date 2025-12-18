@@ -4,12 +4,7 @@ class WebStarNgApp {
         this.init();
     }
 
-/*   async init() {
-        this.checkAuth();
-        this.loadUserData();
-        this.setupEventListeners();
-        this.setupMenuNavigation();
-    }*/
+
 
     async init() {
           this.checkAuth();
@@ -286,14 +281,6 @@ class WebStarNgApp {
                   });
                   break;  
              
-          
-                
-           /* case 'inventory-report':
-                title = 'Inventory Report';
-                subtitle = 'Current inventory status';
-                contentHTML = this.getInventoryReport();
-                break;
-                */
                 
             case 'new-user':
                 title = 'New User';
@@ -322,6 +309,111 @@ class WebStarNgApp {
         this.attachContentEventListeners();
     }
 
+
+
+getBusinessDetailsForm() {
+    // Get current user to pre-fill existing values
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    
+    return `
+        <div class="content-page">
+            <h2>Business Details</h2>
+            <p>Update your business information for invoices and reports</p>
+            
+            <form id="businessDetailsForm" class="content-form">
+                <!-- User Group (Read-only for basic users) -->
+                <div class="form-group">
+                    <label for="userGroup">User Group</label>
+                    <input type="text" 
+                           id="userGroup" 
+                           name="userGroup" 
+                           value="${currentUser?.userGroup === 0 ? 'Basic User' : currentUser?.userGroup || 'Basic User'}" 
+                           readonly 
+                           class="readonly-field">
+                    <div class="form-hint">Basic users can upgrade to access advanced features</div>
+                </div>
+                
+                <!-- Business Information Section -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">🏢</span> Business Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="businessName">Business Name</label>
+                        <input type="text" 
+                               id="businessName" 
+                               name="businessName" 
+                               value="${currentUser?.businessName || 'Company name'}"
+                               placeholder="Enter your business name">
+                    </div>
+                </div>
+                
+                <!-- Contact Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">📞</span> Contact Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="telephone">Telephone</label>
+                        <input type="tel" 
+                               id="telephone" 
+                               name="telephone" 
+                               value="${currentUser?.telephone || '070 56 7356 63'}"
+                               placeholder="Enter business telephone">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" 
+                               id="email" 
+                               name="email" 
+                               value="${currentUser?.email || 'xemail@xmail.com'}"
+                               placeholder="Enter business email">
+                    </div>
+                </div>
+                
+                <!-- Address Information -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
+                    <span class="menu-icon">📍</span> Address Information
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="addressLine1">Address Line 1</label>
+                        <input type="text" 
+                               id="addressLine1" 
+                               name="addressLine1" 
+                               value="${currentUser?.addressLine1 || 'Address line 1'}"
+                               placeholder="Street address, P.O. box, company name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="addressLine2">Address Line 2</label>
+                        <input type="text" 
+                               id="addressLine2" 
+                               name="addressLine2" 
+                               value="${currentUser?.addressLine2 || 'Address line 2'}"
+                               placeholder="Apartment, suite, unit, building, floor">
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="form-actions-content">
+                    <button type="submit" class="btn-primary" id="saveBusinessDetailsBtn">
+                        <span class="menu-icon">💾</span> Save Business Details
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">
+                        <span class="menu-icon">↩️</span> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+}
 
 // Add the getSellProductsInterface method
 // In getSellProductsInterface() method, add demo user warning:
@@ -1301,6 +1393,7 @@ clearPricingWarning() {
             });
         }
         
+        /*
         // Business Details Form
         const businessDetailsForm = document.getElementById('businessDetailsForm');
         if (businessDetailsForm) {
@@ -1310,6 +1403,35 @@ clearPricingWarning() {
                 this.loadMenuContent('setup');
             });
         }
+        */
+        // Business Details Form
+          const businessDetailsForm = document.getElementById('businessDetailsForm');
+          if (businessDetailsForm) {
+              // Remove any existing listeners
+              const newForm = businessDetailsForm.cloneNode(true);
+              businessDetailsForm.parentNode.replaceChild(newForm, businessDetailsForm);
+              
+              // Add new listener
+              newForm.addEventListener('submit', async (e) => {
+                  e.preventDefault();
+                  await this.saveBusinessDetails();
+              });
+          }
+    
+    // Business Details Save Button
+    const saveBusinessDetailsBtn = document.getElementById('saveBusinessDetailsBtn');
+    if (saveBusinessDetailsBtn) {
+        // Remove any existing listeners
+        const newBtn = saveBusinessDetailsBtn.cloneNode(true);
+        saveBusinessDetailsBtn.parentNode.replaceChild(newBtn, saveBusinessDetailsBtn);
+        
+        // Add new listener
+        newBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.saveBusinessDetails();
+        });
+    }
+    
         
         
         // Sell Products specific listeners
@@ -2888,6 +3010,68 @@ async detectDateTampering() {
     } catch (error) {
         console.error('Error detecting date tampering:', error);
         return false;
+    }
+}
+
+
+// Add this method to save business details
+async saveBusinessDetails() {
+    const businessName = document.getElementById('businessName').value.trim();
+    const addressLine1 = document.getElementById('addressLine1').value.trim();
+    const addressLine2 = document.getElementById('addressLine2').value.trim();
+    const telephone = document.getElementById('telephone').value.trim();
+    const email = document.getElementById('email').value.trim();
+    
+    // Basic validation
+    if (!businessName) {
+        alert('Business name is required');
+        return;
+    }
+    
+    if (!email) {
+        alert('Email is required');
+        return;
+    }
+    
+    // Simple email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        return;
+    }
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login first');
+            return;
+        }
+        
+        // Prepare updates
+        const updates = {
+            businessName: businessName || 'Company name',
+            addressLine1: addressLine1 || 'Address line 1',
+            addressLine2: addressLine2 || 'Address line 2',
+            telephone: telephone || '070 56 7356 63',
+            email: email || 'xemail@xmail.com'
+        };
+        
+        // Update user in database
+        const updatedUser = await api.updateUser(currentUser.userID, updates);
+        
+        // Update local session
+        const mergedUser = { ...currentUser, ...updates };
+        localStorage.setItem('webstarng_user', JSON.stringify(mergedUser));
+        
+        // Show success message
+        alert('✅ Business details updated successfully!');
+        
+        // Return to setup menu
+        this.loadMenuContent('setup');
+        
+    } catch (error) {
+        console.error('Error saving business details:', error);
+        alert('❌ Error saving business details: ' + error.message);
     }
 }
 
