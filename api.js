@@ -504,7 +504,7 @@ async addProductToInventory(userID, productData) {
     }
 
     // Create new user with bins
-    // Create new user with bins
+// Create new user with bins
 async createUser(userData) {
     const data = await this.getData();
  
@@ -520,6 +520,7 @@ async createUser(userData) {
     // Add user with metadata, bin IDs, and default business info
     const newUser = {
         ...userData,
+        wallet: 0.00, // NEW: Default wallet value set to 0
         contacts: [],
         createdAt: new Date().toISOString(),
         lastLogin: null,
