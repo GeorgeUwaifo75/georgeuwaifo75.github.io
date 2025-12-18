@@ -14,44 +14,52 @@ class JSONBinAPI {
  }
 
     // Initialize default data structure
-    async initializeData() {
-        const defaultData = {
-            users: [
-                {
-                    userID: 'tmp101',
-                    password: '12345',
-                    fullName: 'Demo Test User',
-                    wallet: 5000.00,
-                    contacts: [],
-                    createdAt: new Date().toISOString(),
-                    lastLogin: null,
-                    inventoryBinId: 'inventory_tmp101', // Default inventory bin for demo user
-                    salesBinId: 'sales_tmp101', // Default sales bin for demo user
-                    purchasesBinId: 'purchases_tmp101' // Default purchases bin for demo user
-                }
-            ],
-            contacts: []
-        };
+   // Update the defaultData structure in initializeData() method
+async initializeData() {
+    const defaultData = {
+        users: [
+            {
+                userID: 'tmp101',
+                password: '12345',
+                fullName: 'Demo Test User',
+                wallet: 5000.00,
+                contacts: [],
+                createdAt: new Date().toISOString(),
+                lastLogin: null,
+                inventoryBinId: 'inventory_tmp101',
+                salesBinId: 'sales_tmp101',
+                purchasesBinId: 'purchases_tmp101',
+                // NEW FIELDS:
+                userGroup: 0, // 0 = basic user
+                businessName: 'Company name',
+                addressLine1: 'Address line 1',
+                addressLine2: 'Address line 2',
+                telephone: '070 56 7356 63',
+                email: 'xemail@xmail.com'
+            }
+        ],
+        contacts: []
+    };
 
-        try {
-            const response = await fetch(`${this.baseURL}/${this.mainBinId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey,
-                    'X-Bin-Versioning': 'false'
-                },
-                body: JSON.stringify(defaultData)
-            });
+    try {
+        const response = await fetch(`${this.baseURL}/${this.mainBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey,
+                'X-Bin-Versioning': 'false'
+            },
+            body: JSON.stringify(defaultData)
+        });
 
-            return await response.json();
-        } catch (error) {
-            console.error('Error initializing data:', error);
-            // Fallback to localStorage if API fails
-            this.useLocalStorage();
-            return this.getLocalData();
-        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error initializing data:', error);
+        // Fallback to localStorage if API fails
+        this.useLocalStorage();
+        return this.getLocalData();
     }
+}
 
 //New addition
    async updateUserInventory(userID, inventoryData) {
@@ -436,26 +444,33 @@ async addProductToInventory(userID, productData) {
     }
 
     initializeLocalData() {
-        const defaultData = {
-            users: [
-                {
-                    userID: 'tmp101',
-                    password: '12345',
-                    fullName: 'Demo Test User',
-                    wallet: 5000.00,
-                    contacts: [],
-                    createdAt: new Date().toISOString(),
-                    lastLogin: null,
-                    inventoryBinId: 'inventory_tmp101_local',
-                    salesBinId: 'sales_tmp101_local',
-                    purchasesBinId: 'purchases_tmp101_local'
-                }
-            ],
-            contacts: []
-        };
-        this.setLocalData(defaultData);
-        return defaultData;
-    }
+    const defaultData = {
+        users: [
+            {
+                userID: 'tmp101',
+                password: '12345',
+                fullName: 'Demo Test User',
+                wallet: 5000.00,
+                contacts: [],
+                createdAt: new Date().toISOString(),
+                lastLogin: null,
+                inventoryBinId: 'inventory_tmp101_local',
+                salesBinId: 'sales_tmp101_local',
+                purchasesBinId: 'purchases_tmp101_local',
+                // NEW FIELDS:
+                userGroup: 0, // 0 = basic user
+                businessName: 'Company name',
+                addressLine1: 'Address line 1',
+                addressLine2: 'Address line 2',
+                telephone: '070 56 7356 63',
+                email: 'xemail@xmail.com'
+            }
+        ],
+        contacts: []
+    };
+    this.setLocalData(defaultData);
+    return defaultData;
+}
 
     // User methods
    async getUser(userID) {
@@ -489,36 +504,44 @@ async addProductToInventory(userID, productData) {
     }
 
     // Create new user with bins
-    async createUser(userData) {
-        const data = await this.getData();
-        
-        // Check if user already exists
-        const existingUser = data.users.find(u => u.userID === userData.userID);
-        if (existingUser) {
-            throw new Error('User ID already exists');
-        }
-        
-        // Create bins for the new user
-        const bins = await this.createUserBins(userData.userID);
-        
-        // Add user with metadata and bin IDs
-        const newUser = {
-            ...userData,
-            contacts: [],
-            createdAt: new Date().toISOString(),
-            lastLogin: null,
-            inventoryBinId: bins.inventoryBinId,
-            salesBinId: bins.salesBinId,
-            purchasesBinId: bins.purchasesBinId
-        };
-        
-        data.users.push(newUser);
-        
-        // Update data
-        await this.updateData(data);
-        
-        return newUser;
+    // Create new user with bins
+async createUser(userData) {
+    const data = await this.getData();
+ 
+    // Check if user already exists
+    const existingUser = data.users.find(u => u.userID === userData.userID);
+    if (existingUser) {
+        throw new Error('User ID already exists');
     }
+ 
+    // Create bins for the new user
+    const bins = await this.createUserBins(userData.userID);
+ 
+    // Add user with metadata, bin IDs, and default business info
+    const newUser = {
+        ...userData,
+        contacts: [],
+        createdAt: new Date().toISOString(),
+        lastLogin: null,
+        inventoryBinId: bins.inventoryBinId,
+        salesBinId: bins.salesBinId,
+        purchasesBinId: bins.purchasesBinId,
+        // NEW FIELDS WITH DEFAULTS:
+        userGroup: 0, // Default to basic user (0)
+        businessName: 'Company name',
+        addressLine1: 'Address line 1',
+        addressLine2: 'Address line 2',
+        telephone: '070 56 7356 63',
+        email: 'xemail@xmail.com'
+    };
+ 
+    data.users.push(newUser);
+ 
+    // Update data
+    await this.updateData(data);
+ 
+    return newUser;
+}
 
     async updateUser(userID, updates) {
         const data = await this.getData();
