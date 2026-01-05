@@ -1,6 +1,8 @@
 // Main Application Module
 class WebStarNgApp {
     constructor() {
+       this.currentProduct = null; // Add this line
+  
         this.init();
     }
 
@@ -1117,6 +1119,190 @@ clearPricingWarning() {
         `;
     }
 
+
+getBuyProductsForm() {
+    return `
+        <div class="content-page">
+            <h2>🛒 Buy Products</h2>
+            <p>Add quantities to existing products in your inventory</p>
+            
+            <div class="buy-products-container">
+                <!-- Barcode Search Section -->
+                <div class="barcode-search-section" style="margin-bottom: 30px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">
+                        <span class="menu-icon">🔍</span> Find Product
+                    </h3>
+                    
+                    <div class="form-group">
+                        <label for="searchProductBarcode" class="required-field">Search by Barcode *</label>
+                        <div class="search-input-group">
+                            <input type="text"
+                                   id="searchProductBarcode"
+                                   name="searchProductBarcode"
+                                   required
+                                   placeholder="Enter product barcode"
+                                   class="barcode-input"
+                                   autocomplete="off"
+                                   autofocus>
+                            <button type="button" class="btn-primary" id="searchProductBtn">
+                                Search Product
+                            </button>
+                        </div>
+                        <div class="form-hint">
+                            💡 Enter the barcode of the product you want to add stock to
+                        </div>
+                        <div id="searchStatus" style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Product Information Display -->
+                <div id="productDisplaySection" style="display: none; margin-bottom: 30px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">
+                        <span class="menu-icon">📋</span> Product Information
+                    </h3>
+                    
+                    <div class="product-info-card">
+                        <div class="product-info-row">
+                            <div class="info-column">
+                                <div class="info-item">
+                                    <span class="info-label">Product Name:</span>
+                                    <span class="info-value" id="productNameDisplay"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Barcode:</span>
+                                    <span class="info-value" id="productBarcodeDisplay"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Category:</span>
+                                    <span class="info-value" id="productCategoryDisplay"></span>
+                                </div>
+                            </div>
+                            <div class="info-column">
+                                <div class="info-item">
+                                    <span class="info-label">Current Stock:</span>
+                                    <span class="info-value" id="currentStockDisplay"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Cost Price:</span>
+                                    <span class="info-value" id="costPriceDisplay"></span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Selling Price:</span>
+                                    <span class="info-value" id="sellingPriceDisplay"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Purchase Form -->
+                <div id="purchaseFormSection" style="display: none;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">
+                        <span class="menu-icon">📦</span> Purchase Details
+                    </h3>
+                    
+                    <form id="purchaseForm" class="content-form">
+                        <input type="hidden" id="productId" name="productId">
+                        <input type="hidden" id="productBarcode" name="productBarcode">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="purchaseQuantity" class="required-field">Quantity to Add *</label>
+                                <input type="number" 
+                                       id="purchaseQuantity" 
+                                       name="purchaseQuantity"
+                                       required
+                                       min="1"
+                                       step="1"
+                                       placeholder="Enter quantity"
+                                       oninput="app.calculatePurchaseTotal()">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="unitCost" class="required-field">Unit Cost (₦) *</label>
+                                <input type="number" 
+                                       id="unitCost" 
+                                       name="unitCost"
+                                       required
+                                       min="0.01"
+                                       step="0.01"
+                                       placeholder="Enter cost per unit"
+                                       oninput="app.calculatePurchaseTotal()">
+                                <div class="form-hint">Cost price for this purchase</div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="totalCost" readonly>Total Cost (₦)</label>
+                                <input type="number" 
+                                       id="totalCost" 
+                                       name="totalCost"
+                                       readonly 
+                                       class="readonly-field"
+                                       placeholder="Auto-calculated">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="supplier">Supplier Name</label>
+                                <input type="text" 
+                                       id="supplier" 
+                                       name="supplier"
+                                       placeholder="Enter supplier name">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="purchaseDate">Purchase Date</label>
+                                <input type="date" 
+                                       id="purchaseDate" 
+                                       name="purchaseDate"
+                                       value="${new Date().toISOString().split('T')[0]}">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="purchaseNotes">Notes</label>
+                                <input type="text" 
+                                       id="purchaseNotes" 
+                                       name="purchaseNotes"
+                                       placeholder="Any additional notes">
+                            </div>
+                        </div>
+                        
+                      <!-- Current Balance Display (Optional - for information only) -->
+                      <div class="balance-display" style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                          <div class="balance-info">
+                              <span class="balance-label">Current Wallet Balance:</span>
+                              <span class="balance-amount" id="currentWalletBalance">₦0.00</span>
+                          </div>
+                      </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="form-actions-content">
+                            <button type="submit" class="btn-primary" id="processPurchaseBtn">
+                                <span class="menu-icon">💾</span> Process Purchase
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="app.clearPurchaseForm()">
+                                <span class="menu-icon">🗑️</span> Clear Form
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="app.loadMenuContent('products')">
+                                <span class="menu-icon">↩️</span> Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Success/Error Message Area -->
+                <div id="purchaseMessage" style="display: none; margin-top: 20px;">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
    getNewProductForm() {
     return `
         <div class="content-page">
@@ -1393,17 +1579,58 @@ clearPricingWarning() {
             });
         }
         
-        /*
-        // Business Details Form
-        const businessDetailsForm = document.getElementById('businessDetailsForm');
-        if (businessDetailsForm) {
-            businessDetailsForm.addEventListener('submit', (e) => {
+        
+     // Buy Products Search Button
+    const searchProductBtn = document.getElementById('searchProductBtn');
+    if (searchProductBtn) {
+        const newBtn = searchProductBtn.cloneNode(true);
+        searchProductBtn.parentNode.replaceChild(newBtn, searchProductBtn);
+        
+        newBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.searchProductByBarcode();
+        });
+    }
+    
+    // Buy Products Barcode Input
+    const searchProductBarcode = document.getElementById('searchProductBarcode');
+    if (searchProductBarcode) {
+        const newInput = searchProductBarcode.cloneNode(true);
+        searchProductBarcode.parentNode.replaceChild(newInput, searchProductBarcode);
+        
+        newInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
                 e.preventDefault();
-                alert('Business details updated successfully!');
-                this.loadMenuContent('setup');
-            });
-        }
-        */
+                await this.searchProductByBarcode();
+            }
+        });
+    }
+    
+    // Purchase Form Submit
+    const purchaseForm = document.getElementById('purchaseForm');
+    if (purchaseForm) {
+        const newForm = purchaseForm.cloneNode(true);
+        purchaseForm.parentNode.replaceChild(newForm, purchaseForm);
+        
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.processPurchase();
+        });
+    }
+    
+    // Process Purchase Button
+    const processPurchaseBtn = document.getElementById('processPurchaseBtn');
+    if (processPurchaseBtn) {
+        const newBtn = processPurchaseBtn.cloneNode(true);
+        processPurchaseBtn.parentNode.replaceChild(newBtn, processPurchaseBtn);
+        
+        newBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.processPurchase();
+        });
+    }    
+        
+        
         // Business Details Form
           const businessDetailsForm = document.getElementById('businessDetailsForm');
           if (businessDetailsForm) {
@@ -1855,51 +2082,170 @@ async processSale() {
         }
     }
 
-    async processPurchase() {
-        const quantity = parseInt(document.getElementById('buyQuantity').value) || 1;
-        const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
-        const total = quantity * unitPrice;
-        const productName = document.getElementById('productSelect').options[document.getElementById('productSelect').selectedIndex].text;
-        
-        if (total <= 0) {
-            alert('Please enter valid quantity and price');
+   async processPurchase() {
+    // Get form values
+    const productId = document.getElementById('productId').value;
+    const productBarcode = document.getElementById('productBarcode').value;
+    const quantity = parseInt(document.getElementById('purchaseQuantity').value);
+    const unitCost = parseFloat(document.getElementById('unitCost').value);
+    const totalCost = parseFloat(document.getElementById('totalCost').value);
+    const supplier = document.getElementById('supplier').value.trim();
+    const purchaseDate = document.getElementById('purchaseDate').value;
+    const notes = document.getElementById('purchaseNotes').value.trim();
+    
+    // Validate
+    if (!productId) {
+        this.showPurchaseMessage('Please search for a product first', 'error');
+        return;
+    }
+    
+    if (!quantity || quantity < 1) {
+        this.showPurchaseMessage('Please enter a valid quantity (minimum 1)', 'error');
+        document.getElementById('purchaseQuantity').focus();
+        return;
+    }
+    
+    if (!unitCost || unitCost <= 0) {
+        this.showPurchaseMessage('Please enter a valid unit cost', 'error');
+        document.getElementById('unitCost').focus();
+        return;
+    }
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showPurchaseMessage('Please login first', 'error');
             return;
         }
         
-        try {
-            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-            if (!currentUser) return;
-            
-            if (total > currentUser.wallet) {
-                alert(`Insufficient funds! Total: ₦${total.toFixed(2)}, Available: ₦${currentUser.wallet.toFixed(2)}`);
-                return;
-            }
-            
-            // Deduct from wallet
-            const newBalance = await api.withdrawFunds(currentUser.userID, total);
-            
-            // Record purchase transaction
-            await api.addPurchaseTransaction(currentUser.userID, {
-                productName: productName.split(' - ')[0],
-                quantity: quantity,
-                unitPrice: unitPrice,
-                amount: total,
-                supplier: document.getElementById('supplier').options[document.getElementById('supplier').selectedIndex].text,
-                description: `Purchase of ${quantity} ${productName.split(' - ')[0]}`
-            });
-            
-            // Update local session
-            currentUser.wallet = newBalance;
-            localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
-            
-            // Update UI
-            this.updateUserDisplay(currentUser);
-            alert(`Purchase successful! ₦${total.toFixed(2)} deducted from your wallet.`);
-            this.loadMenuContent('products');
-        } catch (error) {
-            alert('Error processing purchase: ' + error.message);
+        // Disable process button
+        const processBtn = document.getElementById('processPurchaseBtn');
+        if (processBtn) {
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span class="spinner"></span> Processing...';
+        }
+        
+        // Get current product info before update
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        const product = products.find(p => p.id === productId);
+        
+        if (!product) {
+            throw new Error('Product not found in inventory');
+        }
+        
+        const oldQuantity = product.quantity || 0;
+        const newQuantity = oldQuantity + quantity;
+        
+        // 1. Update product quantity in inventory
+        await api.updateProductQuantity(currentUser.userID, productId, quantity);
+        
+        // 2. Record purchase transaction (NO WALLET DEDUCTION)
+        await api.addPurchaseTransaction(currentUser.userID, {
+            productId: productId,
+            productName: product.name,
+            barcode: productBarcode,
+            quantity: quantity,
+            unitPrice: unitCost,
+            amount: totalCost,
+            supplier: supplier || product.supplier || 'Unknown',
+            purchaseDate: purchaseDate || new Date().toISOString().split('T')[0],
+            notes: notes,
+            type: 'restock',
+            previousStock: oldQuantity,
+            newStock: newQuantity,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Show success message
+        this.showPurchaseMessage(`
+            <div class="success-card">
+                <div class="success-icon">✅</div>
+                <div class="success-details">
+                    <h3>Purchase Recorded Successfully!</h3>
+                    <div class="success-grid">
+                        <div class="success-item">
+                            <span class="success-label">Product:</span>
+                            <span class="success-value">${product.name}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Barcode:</span>
+                            <span class="success-value">${productBarcode}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Quantity Added:</span>
+                            <span class="success-value">${quantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Previous Stock:</span>
+                            <span class="success-value">${oldQuantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">New Stock:</span>
+                            <span class="success-value">${newQuantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Unit Cost:</span>
+                            <span class="success-value">₦${unitCost.toFixed(2)}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Total Cost:</span>
+                            <span class="success-value">₦${totalCost.toFixed(2)}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Wallet Balance:</span>
+                            <span class="success-value">₦${currentUser.wallet.toFixed(2)} (unchanged)</span>
+                        </div>
+                        ${supplier ? `
+                        <div class="success-item">
+                            <span class="success-label">Supplier:</span>
+                            <span class="success-value">${supplier}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="success-note" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; color: #1565c0;">
+                        💡 Note: Purchase recorded without affecting wallet balance.
+                    </div>
+                </div>
+                <div class="success-actions">
+                    <button class="btn-primary" onclick="app.clearPurchaseForm()">
+                        Add Another Product
+                    </button>
+                    <button class="btn-secondary" onclick="app.handleMenuAction('products')">
+                        Back to Products
+                    </button>
+                </div>
+            </div>
+        `, 'success');
+        
+        // Clear form for next entry
+        document.getElementById('purchaseQuantity').value = '';
+        document.getElementById('unitCost').value = '';
+        document.getElementById('totalCost').value = '';
+        document.getElementById('supplier').value = '';
+        document.getElementById('purchaseNotes').value = '';
+        
+        // Update displayed current stock
+        document.getElementById('currentStockDisplay').textContent = 
+            `${newQuantity} ${product.unit || 'units'}`;
+        
+        // Update current product reference
+        if (this.currentProduct) {
+            this.currentProduct.quantity = newQuantity;
+        }
+        
+    } catch (error) {
+        console.error('Error processing purchase:', error);
+        this.showPurchaseMessage(`❌ Error: ${error.message}`, 'error');
+    } finally {
+        // Re-enable process button
+        const processBtn = document.getElementById('processPurchaseBtn');
+        if (processBtn) {
+            processBtn.disabled = false;
+            processBtn.innerHTML = '<span class="menu-icon">💾</span> Process Purchase';
         }
     }
+}
 
     logout() {
         // This method is kept for compatibility
@@ -3075,6 +3421,413 @@ async saveBusinessDetails() {
     }
 }
 
+
+
+// Search product by barcode
+async searchProductByBarcode() {
+    const barcodeInput = document.getElementById('searchProductBarcode');
+    const statusElement = document.getElementById('searchStatus');
+    
+    if (!barcodeInput || !statusElement) return;
+    
+    const barcodeValue = barcodeInput.value.trim();
+    
+    if (!barcodeValue) {
+        this.showSearchStatus('Please enter a barcode', 'error');
+        return;
+    }
+    
+    try {
+        this.showSearchStatus('Searching for product...', 'loading');
+        
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showSearchStatus('Please login first', 'error');
+            return;
+        }
+        
+        // Get inventory data
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        // Find product by barcode
+        const product = products.find(p => p.barcode === barcodeValue);
+        
+        if (product) {
+            // Store product reference
+            this.currentProduct = product;
+            
+            // Display product information
+            this.displayProductForPurchase(product);
+            this.showSearchStatus(`✅ Product found: "${product.name}"`, 'success');
+            
+            // Show purchase form
+            document.getElementById('purchaseFormSection').style.display = 'block';
+            
+            // Update wallet balance display
+           // this.updateWalletBalanceDisplay();
+            
+            // Set unit cost to current cost price by default
+            const unitCostInput = document.getElementById('unitCost');
+            if (unitCostInput && product.purchasePrice) {
+                unitCostInput.value = product.purchasePrice;
+                this.calculatePurchaseTotal();
+            }
+            
+            // Focus on quantity input
+            document.getElementById('purchaseQuantity').focus();
+            
+        } else {
+            this.showSearchStatus(`❌ Product with barcode "${barcodeValue}" not found in inventory`, 'error');
+            this.hideProductDisplay();
+        }
+        
+    } catch (error) {
+        console.error('Error searching product:', error);
+        this.showSearchStatus('Error searching product. Please try again.', 'error');
+    }
+}
+
+// Display product information
+displayProductForPurchase(product) {
+    const displaySection = document.getElementById('productDisplaySection');
+    if (!displaySection) return;
+    
+    // Update display elements
+    document.getElementById('productNameDisplay').textContent = product.name || 'N/A';
+    document.getElementById('productBarcodeDisplay').textContent = product.barcode || 'N/A';
+    document.getElementById('productCategoryDisplay').textContent = product.category || 'Uncategorized';
+    document.getElementById('currentStockDisplay').textContent = `${product.quantity || 0} ${product.unit || 'units'}`;
+    document.getElementById('costPriceDisplay').textContent = `₦${(product.purchasePrice || 0).toFixed(2)}`;
+    document.getElementById('sellingPriceDisplay').textContent = `₦${(product.sellingPrice || 0).toFixed(2)}`;
+    
+    // Set hidden fields
+    document.getElementById('productId').value = product.id;
+    document.getElementById('productBarcode').value = product.barcode;
+    
+    // Show the display section
+    displaySection.style.display = 'block';
+}
+
+// Hide product display
+hideProductDisplay() {
+    const displaySection = document.getElementById('productDisplaySection');
+    const purchaseForm = document.getElementById('purchaseFormSection');
+    
+    if (displaySection) displaySection.style.display = 'none';
+    if (purchaseForm) purchaseForm.style.display = 'none';
+    
+    this.currentProduct = null;
+}
+
+// Show search status
+showSearchStatus(message, type = 'info') {
+    const statusElement = document.getElementById('searchStatus');
+    if (!statusElement) return;
+    
+    statusElement.textContent = message;
+    statusElement.style.display = 'block';
+    
+    // Set color based on type
+    switch(type) {
+        case 'success':
+            statusElement.style.backgroundColor = '#d4edda';
+            statusElement.style.color = '#155724';
+            statusElement.style.border = '1px solid #c3e6cb';
+            break;
+        case 'error':
+            statusElement.style.backgroundColor = '#f8d7da';
+            statusElement.style.color = '#721c24';
+            statusElement.style.border = '1px solid #f5c6cb';
+            break;
+        case 'loading':
+            statusElement.style.backgroundColor = '#d1ecf1';
+            statusElement.style.color = '#0c5460';
+            statusElement.style.border = '1px solid #bee5eb';
+            statusElement.innerHTML = `<span class="spinner"></span> ${message}`;
+            break;
+        default:
+            statusElement.style.backgroundColor = '#e2e3e5';
+            statusElement.style.color = '#383d41';
+            statusElement.style.border = '1px solid #d6d8db';
+    }
+}
+
+// Calculate purchase total
+calculatePurchaseTotal() {
+    const quantity = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
+    const unitCost = parseFloat(document.getElementById('unitCost').value) || 0;
+    
+    const totalCost = quantity * unitCost;
+    
+    const totalCostField = document.getElementById('totalCost');
+    if (totalCostField) {
+        totalCostField.value = totalCost.toFixed(2);
+    }
+    
+    // NO WALLET BALANCE CHECK
+}
+
+// Check wallet balance
+/*
+checkWalletBalance(totalCost) {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return;
+    
+    const balanceWarning = document.getElementById('balanceWarning');
+    const processBtn = document.getElementById('processPurchaseBtn');
+    
+    // Always enable process button since wallet balance doesn't matter
+    if (processBtn) {
+        processBtn.disabled = false;
+    }
+    
+    // Show warning but don't prevent purchase
+    if (totalCost > currentUser.wallet) {
+        if (balanceWarning) {
+            balanceWarning.style.display = 'block';
+            balanceWarning.innerHTML = `
+                ⚠️ Note: Total cost (₦${totalCost.toFixed(2)}) exceeds wallet balance (₦${currentUser.wallet.toFixed(2)}). 
+                Purchase will be recorded without affecting wallet balance.
+            `;
+        }
+    } else {
+        if (balanceWarning) {
+            balanceWarning.style.display = 'none';
+        }
+    }
+}
+*/
+
+// Update wallet balance display
+/*
+updateWalletBalanceDisplay() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return;
+    
+    const balanceElement = document.getElementById('currentWalletBalance');
+    if (balanceElement) {
+        balanceElement.textContent = `₦${currentUser.wallet.toFixed(2)}`;
+    }
+} 
+*/
+
+// Clear purchase form
+clearPurchaseForm() {
+    // Clear input fields
+    document.getElementById('searchProductBarcode').value = '';
+    document.getElementById('purchaseQuantity').value = '';
+    document.getElementById('unitCost').value = '';
+    document.getElementById('totalCost').value = '';
+    document.getElementById('supplier').value = '';
+    document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('purchaseNotes').value = '';
+    
+    // Hide sections
+    this.hideProductDisplay();
+    
+    // Clear status and messages
+    const statusElement = document.getElementById('searchStatus');
+    const messageElement = document.getElementById('purchaseMessage');
+    
+    if (statusElement) statusElement.style.display = 'none';
+    if (messageElement) {
+        messageElement.style.display = 'none';
+        messageElement.innerHTML = '';
+    }
+    
+    // Reset product reference
+    this.currentProduct = null;
+    
+    // Focus on search input
+    document.getElementById('searchProductBarcode').focus();
+}
+
+// Process purchase
+async processPurchase() {
+    // Get form values
+    const productId = document.getElementById('productId').value;
+    const productBarcode = document.getElementById('productBarcode').value;
+    const quantity = parseInt(document.getElementById('purchaseQuantity').value);
+    const unitCost = parseFloat(document.getElementById('unitCost').value);
+    const totalCost = parseFloat(document.getElementById('totalCost').value);
+    const supplier = document.getElementById('supplier').value.trim();
+    const purchaseDate = document.getElementById('purchaseDate').value;
+    const notes = document.getElementById('purchaseNotes').value.trim();
+    
+    // Validate
+    if (!productId) {
+        this.showPurchaseMessage('Please search for a product first', 'error');
+        return;
+    }
+    
+    if (!quantity || quantity < 1) {
+        this.showPurchaseMessage('Please enter a valid quantity (minimum 1)', 'error');
+        document.getElementById('purchaseQuantity').focus();
+        return;
+    }
+    
+    if (!unitCost || unitCost <= 0) {
+        this.showPurchaseMessage('Please enter a valid unit cost', 'error');
+        document.getElementById('unitCost').focus();
+        return;
+    }
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showPurchaseMessage('Please login first', 'error');
+            return;
+        }
+        
+        // Disable process button
+        const processBtn = document.getElementById('processPurchaseBtn');
+        if (processBtn) {
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span class="spinner"></span> Processing...';
+        }
+        
+        // Get current product info before update
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        const product = products.find(p => p.id === productId);
+        
+        if (!product) {
+            throw new Error('Product not found in inventory');
+        }
+        
+        const oldQuantity = product.quantity || 0;
+        const newQuantity = oldQuantity + quantity;
+        
+        // 1. Update product quantity in inventory
+        await api.updateProductQuantity(currentUser.userID, productId, quantity);
+        
+        // 2. Record purchase transaction (NO WALLET CHECK OR DEDUCTION)
+        await api.addPurchaseTransaction(currentUser.userID, {
+            productId: productId,
+            productName: product.name,
+            barcode: productBarcode,
+            quantity: quantity,
+            unitPrice: unitCost,
+            amount: totalCost,
+            supplier: supplier || product.supplier || 'Unknown',
+            purchaseDate: purchaseDate || new Date().toISOString().split('T')[0],
+            notes: notes,
+            type: 'restock',
+            previousStock: oldQuantity,
+            newStock: newQuantity,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Show success message
+        this.showPurchaseMessage(`
+            <div class="success-card">
+                <div class="success-icon">✅</div>
+                <div class="success-details">
+                    <h3>Purchase Recorded Successfully!</h3>
+                    <div class="success-grid">
+                        <div class="success-item">
+                            <span class="success-label">Product:</span>
+                            <span class="success-value">${product.name}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Barcode:</span>
+                            <span class="success-value">${productBarcode}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Quantity Added:</span>
+                            <span class="success-value">${quantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Previous Stock:</span>
+                            <span class="success-value">${oldQuantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">New Stock:</span>
+                            <span class="success-value">${newQuantity} ${product.unit || 'units'}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Unit Cost:</span>
+                            <span class="success-value">₦${unitCost.toFixed(2)}</span>
+                        </div>
+                        <div class="success-item">
+                            <span class="success-label">Total Cost:</span>
+                            <span class="success-value">₦${totalCost.toFixed(2)}</span>
+                        </div>
+                        ${supplier ? `
+                        <div class="success-item">
+                            <span class="success-label">Supplier:</span>
+                            <span class="success-value">${supplier}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="success-actions">
+                    <button class="btn-primary" onclick="app.clearPurchaseForm()">
+                        Add Another Product
+                    </button>
+                    <button class="btn-secondary" onclick="app.handleMenuAction('products')">
+                        Back to Products
+                    </button>
+                </div>
+            </div>
+        `, 'success');
+        
+        // Clear form for next entry
+        document.getElementById('purchaseQuantity').value = '';
+        document.getElementById('unitCost').value = '';
+        document.getElementById('totalCost').value = '';
+        document.getElementById('supplier').value = '';
+        document.getElementById('purchaseNotes').value = '';
+        
+        // Update displayed current stock
+        document.getElementById('currentStockDisplay').textContent = 
+            `${newQuantity} ${product.unit || 'units'}`;
+        
+        // Update current product reference
+        if (this.currentProduct) {
+            this.currentProduct.quantity = newQuantity;
+        }
+        
+    } catch (error) {
+        console.error('Error processing purchase:', error);
+        this.showPurchaseMessage(`❌ Error: ${error.message}`, 'error');
+    } finally {
+        // Re-enable process button
+        const processBtn = document.getElementById('processPurchaseBtn');
+        if (processBtn) {
+            processBtn.disabled = false;
+            processBtn.innerHTML = '<span class="menu-icon">💾</span> Process Purchase';
+        }
+    }
+}
+
+// Show purchase message
+showPurchaseMessage(message, type = 'info') {
+    const messageElement = document.getElementById('purchaseMessage');
+    if (!messageElement) return;
+    
+    messageElement.innerHTML = message;
+    messageElement.style.display = 'block';
+    
+    // Set styling based on type
+    if (type === 'error') {
+        messageElement.style.backgroundColor = '#f8d7da';
+        messageElement.style.color = '#721c24';
+        messageElement.style.border = '1px solid #f5c6cb';
+        messageElement.style.padding = '15px';
+        messageElement.style.borderRadius = '8px';
+    } else if (type === 'success') {
+        messageElement.style.backgroundColor = 'transparent';
+        messageElement.style.border = 'none';
+        messageElement.style.padding = '0';
+    }
+    
+    // Scroll to message
+    messageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 }
 
 // Global functions for modals (existing functionality)
@@ -3194,3 +3947,16 @@ document.getElementById('productBarcode').addEventListener('keydown', (e) => {
 document.getElementById('productBarcode').addEventListener('keyup', (e) => {
     console.log('KEYUP EVENT:', e.key, 'value:', e.target.value);
 });
+
+// Add global functions for onclick events
+window.clearPurchaseForm = function() {
+    if (app) {
+        app.clearPurchaseForm();
+    }
+};
+
+window.calculatePurchaseTotal = function() {
+    if (app) {
+        app.calculatePurchaseTotal();
+    }
+};
