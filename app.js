@@ -1,5 +1,6 @@
 // Main Application Module
 class WebStarNgApp {
+    
     constructor() {
        this.currentProduct = null; // Add this line
   
@@ -260,10 +261,21 @@ class WebStarNgApp {
                   break;  
                 
             case 'purchase-day':
-                title = 'Purchase Report';
-                subtitle = 'Today\'s purchases summary';
-                contentHTML = this.getPurchaseReport();
-                break;
+                 title = 'Purchase Report';
+                  subtitle = "Today's purchases summary";
+                  // Don't use await - handle it differently
+                  this.getPurchaseReport().then(html => {
+                      contentHTML = html;
+                      // Update the UI here
+                      contentTitle.textContent = title;
+                      contentSubtitle.textContent = subtitle;
+                      dynamicContent.innerHTML = contentHTML;
+                      this.attachContentEventListeners();
+                  }).catch(error => {
+                      console.error('Error loading purchase report:', error);
+                      contentHTML = '<div class="error-message">Error loading purchase report</div>';
+                  });
+                  break;
                 
           
           case 'inventory-report':
@@ -2682,6 +2694,108 @@ async exportInventoryToExcel() {
     }
 } 
  
+ 
+ 
+ // Add this method to WebStarNgApp class near the export methods
+async exportPurchasesToCSV() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export purchase report');
+            return;
+        }
+
+        // Get today's date
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get purchases data
+        const purchasesData = await api.getUserPurchases(currentUser.userID);
+        const transactions = purchasesData.transactions || [];
+
+        // Filter today's purchases
+        const todayPurchases = transactions.filter(transaction => {
+            if (!transaction.timestamp && !transaction.purchaseDate) return false;
+            const transactionDate = transaction.purchaseDate || transaction.timestamp;
+            const dateStr = new Date(transactionDate).toISOString().split('T')[0];
+            return dateStr === today;
+        });
+
+        if (todayPurchases.length === 0) {
+            alert('No purchase data to export for today');
+            return;
+        }
+
+        // Sort transactions
+        todayPurchases.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.purchaseDate);
+            const timeB = new Date(b.timestamp || b.purchaseDate);
+            return timeA - timeB;
+        });
+
+        // Calculate totals
+        const totalPurchases = todayPurchases.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        const totalItems = todayPurchases.reduce((sum, p) => sum + (parseInt(p.quantity) || 1), 0);
+
+        // Create CSV content
+        let csvContent = "S/No.,Time,Date,Transaction ID,Product Name,Barcode,Quantity,Unit Price (₦),Amount (₦),Supplier,Type,Previous Stock,New Stock,Notes\\n";
+
+        // Add each transaction
+        todayPurchases.forEach((purchase, index) => {
+            const timestamp = purchase.timestamp || purchase.purchaseDate;
+            const date = new Date(timestamp);
+            
+            const row = [
+                index + 1,
+                date.toLocaleTimeString(),
+                date.toISOString().split('T')[0],
+                `"${purchase.id || ''}"`,
+                `"${purchase.productName || ''}"`,
+                `"${purchase.barcode || ''}"`,
+                purchase.quantity || 1,
+                purchase.unitPrice || 0,
+                purchase.amount || 0,
+                `"${purchase.supplier || ''}"`,
+                purchase.type || 'purchase',
+                purchase.previousStock || '',
+                purchase.newStock || '',
+                `"${purchase.notes || ''}"`
+            ];
+            
+            csvContent += row.join(',') + '\\n';
+        });
+
+        // Add summary rows
+        csvContent += '\\n';
+        csvContent += 'PURCHASE SUMMARY\\n';
+        csvContent += `Total Transactions,${todayPurchases.length}\\n`;
+        csvContent += `Total Items Purchased,${totalItems}\\n`;
+        csvContent += `Total Purchase Amount (₦),${totalPurchases.toFixed(2)}\\n`;
+        csvContent += `Average Transaction (₦),${(totalPurchases / todayPurchases.length).toFixed(2)}\\n`;
+        csvContent += `\\nReport Information\\n`;
+        csvContent += `Generated On,${new Date().toLocaleString()}\\n`;
+        csvContent += `User,${currentUser.userID}\\n`;
+        csvContent += `Business,${currentUser.businessName || 'WebStarNg'}\\n`;
+
+        // Create and download CSV file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        const dateStr = new Date().toISOString().split('T')[0];
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `purchases_report_${dateStr}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        alert(`✅ Purchase CSV report downloaded!\\n\\n📊 Transactions: ${todayPurchases.length}\\n💰 Total: ₦${totalPurchases.toFixed(2)}`);
+
+    } catch (error) {
+        console.error('Error exporting purchases CSV:', error);
+        alert('Error exporting purchases CSV: ' + error.message);
+    }
+}
     
  // Export methods for sales report
 async exportSalesToCSV() {
@@ -2926,6 +3040,173 @@ async exportSalesToExcel() {
 } 
 
 
+
+// Export Purchases to Excel
+async exportPurchasesToExcel() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export purchase report');
+            return;
+        }
+        
+        // Get today's date
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get purchases data
+        const purchasesData = await api.getUserPurchases(currentUser.userID);
+        const transactions = purchasesData.transactions || [];
+        
+        // Filter today's purchases
+        const todayPurchases = transactions.filter(transaction => {
+            if (!transaction.timestamp && !transaction.purchaseDate) return false;
+            const transactionDate = transaction.purchaseDate || transaction.timestamp;
+            const dateStr = new Date(transactionDate).toISOString().split('T')[0];
+            return dateStr === today;
+        });
+        
+        if (todayPurchases.length === 0) {
+            alert('No purchase data to export for today');
+            return;
+        }
+        
+        // Calculate totals
+        const totalPurchases = todayPurchases.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        const totalItems = todayPurchases.reduce((sum, p) => sum + (parseInt(p.quantity) || 1), 0);
+        
+        // Sort by time
+        todayPurchases.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.purchaseDate);
+            const timeB = new Date(b.timestamp || b.purchaseDate);
+            return timeA - timeB;
+        });
+        
+        // Create Excel content
+        let excelContent = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="UTF-8">
+                <!--[if gte mso 9]>
+                <xml>
+                    <x:ExcelWorkbook>
+                        <x:ExcelWorksheets>
+                            <x:ExcelWorksheet>
+                                <x:Name>Purchase Report ${today}</x:Name>
+                                <x:WorksheetOptions>
+                                    <x:DisplayGridlines/>
+                                </x:WorksheetOptions>
+                            </x:ExcelWorksheet>
+                        </x:ExcelWorksheets>
+                    </x:ExcelWorkbook>
+                </xml>
+                <![endif]-->
+                <style>
+                    table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+                    th { background: #2c3e50; color: white; padding: 10px; text-align: left; font-weight: bold; border: 1px solid #1a252f; }
+                    td { padding: 8px; border: 1px solid #ddd; }
+                    .total-row { background: #f8f9fa; font-weight: bold; }
+                    .header { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+                    .subheader { font-size: 14px; color: #666; margin-bottom: 20px; }
+                    .summary { margin-top: 30px; padding: 15px; background: #f8f9fa; border: 1px solid #ddd; }
+                    .summary-title { font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+                </style>
+            </head>
+            <body>
+                <div class="header">Purchase Report - ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="subheader">Generated on: ${new Date().toLocaleString()} | User: ${currentUser.userID}</div>
+               
+                <table>
+                    <thead>
+                        <tr>
+                            <th>S/No.</th>
+                            <th>Time</th>
+                            <th>Date</th>
+                            <th>Transaction ID</th>
+                            <th>Product Name</th>
+                            <th>Barcode</th>
+                            <th>Quantity</th>
+                            <th>Unit Price (₦)</th>
+                            <th>Amount (₦)</th>
+                            <th>Supplier</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Add purchases
+        todayPurchases.forEach((purchase, index) => {
+            const timestamp = purchase.timestamp || purchase.purchaseDate;
+            const date = new Date(timestamp);
+            
+            excelContent += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${date.toLocaleTimeString()}</td>
+                    <td>${date.toISOString().split('T')[0]}</td>
+                    <td>${purchase.id || ''}</td>
+                    <td>${purchase.productName || ''}</td>
+                    <td>${purchase.barcode || ''}</td>
+                    <td>${purchase.quantity || 1}</td>
+                    <td>${(purchase.unitPrice || 0).toFixed(2)}</td>
+                    <td>${(purchase.amount || 0).toFixed(2)}</td>
+                    <td>${purchase.supplier || ''}</td>
+                    <td>${purchase.type || 'purchase'}</td>
+                </tr>
+            `;
+        });
+        
+        // Add summary
+        excelContent += `
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="6" style="text-align: right;"><strong>TOTAL:</strong></td>
+                            <td><strong>${totalItems}</strong></td>
+                            <td></td>
+                            <td><strong>₦${totalPurchases.toFixed(2)}</strong></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+               
+                <div class="summary">
+                    <div class="summary-title">Purchase Summary</div>
+                    <p><strong>Report Date:</strong> ${today}</p>
+                    <p><strong>Total Transactions:</strong> ${todayPurchases.length}</p>
+                    <p><strong>Total Items Purchased:</strong> ${totalItems}</p>
+                    <p><strong>Total Purchase Amount:</strong> ₦${totalPurchases.toFixed(2)}</p>
+                    <p><strong>Average Transaction Value:</strong> ₦${(totalPurchases / todayPurchases.length).toFixed(2)}</p>
+                    <p><strong>Generated By:</strong> ${currentUser.userID}</p>
+                    <p><strong>Business:</strong> ${currentUser.businessName || 'WebStarNg'}</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        // Create and download Excel file
+        const blob = new Blob([excelContent], {
+            type: 'application/vnd.ms-excel'
+        });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.setAttribute('href', url);
+        link.setAttribute('download', `purchases_report_${dateStr}.xls`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Purchase Excel report downloaded!\n\n📊 Transactions: ${todayPurchases.length}\n💰 Total: ₦${totalPurchases.toFixed(2)}`);
+        
+    } catch (error) {
+        console.error('Error exporting purchases Excel:', error);
+        alert('Error exporting purchases Excel: ' + error.message);
+    }
+}
 async getInventoryReport() {
     try {
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
@@ -3643,6 +3924,10 @@ clearPurchaseForm() {
     document.getElementById('searchProductBarcode').focus();
 }
 
+
+
+
+
 // Process purchase
 async processPurchase() {
     // Get form values
@@ -3827,6 +4112,239 @@ showPurchaseMessage(message, type = 'info') {
     messageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+
+
+// Add this method to the WebStarNgApp class in app.js
+async getPurchaseReport() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            return `<div class="error-message">Please login to view purchase report</div>`;
+        }
+
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get purchases data using the user's purchasesBinId
+        const purchasesData = await api.getUserPurchases(currentUser.userID);
+        const transactions = purchasesData.transactions || [];
+        
+        // Filter today's purchase transactions
+        const todayPurchases = transactions.filter(transaction => {
+            if (!transaction.timestamp && !transaction.purchaseDate) return false;
+            
+            // Use purchaseDate if available, otherwise use timestamp
+            const transactionDate = transaction.purchaseDate || transaction.timestamp;
+            const dateStr = new Date(transactionDate).toISOString().split('T')[0];
+            return dateStr === today;
+        });
+
+        // Calculate totals for today
+        const totalPurchases = todayPurchases.reduce((sum, purchase) => {
+            return sum + (parseFloat(purchase.amount) || 0);
+        }, 0);
+
+        const totalItems = todayPurchases.reduce((sum, purchase) => {
+            return sum + (parseInt(purchase.quantity) || 1);
+        }, 0);
+
+        // Calculate by supplier
+        const supplierSummary = {};
+        todayPurchases.forEach(purchase => {
+            const supplier = purchase.supplier || 'Unknown';
+            supplierSummary[supplier] = (supplierSummary[supplier] || 0) + (parseFloat(purchase.amount) || 0);
+        });
+
+        // Sort suppliers by total amount
+        const sortedSuppliers = Object.entries(supplierSummary)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5); // Top 5 suppliers
+
+        // Sort transactions by time (newest first)
+        todayPurchases.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.purchaseDate);
+            const timeB = new Date(b.timestamp || b.purchaseDate);
+            return timeB - timeA;
+        });
+
+        if (todayPurchases.length === 0) {
+            return `
+                <div class="content-page">
+                    <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
+                    <div class="no-sales-message">
+                        <div class="no-sales-icon">📦</div>
+                        <h3>No Purchases Today</h3>
+                        <p>There are no purchase transactions recorded for today (${today}).</p>
+                        <button class="btn-primary" onclick="app.handleMenuAction('buy-products')">
+                            Make a Purchase
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="content-page">
+                <div class="report-header">
+                    <div>
+                        <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
+                        <p class="report-date">Date: ${today}</p>
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn excel-btn" onclick="app.exportPurchasesToExcel()">
+                            📊 Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Purchase Summary -->
+                <div class="purchase-summary" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+                    <div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: space-around;">
+                        <div class="summary-item">
+                            <span class="summary-label">Total Purchases:</span>
+                            <span class="summary-value">${todayPurchases.length}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Amount:</span>
+                            <span class="summary-value">₦${totalPurchases.toFixed(2)}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Items:</span>
+                            <span class="summary-value">${totalItems}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Avg. per Purchase:</span>
+                            <span class="summary-value">₦${(totalPurchases / todayPurchases.length).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Suppliers -->
+                ${sortedSuppliers.length > 0 ? `
+                    <div class="supplier-summary" style="margin: 30px 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h3 style="color: #2c3e50; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                            <span class="menu-icon">🏢</span> Top Suppliers Today
+                        </h3>
+                        <div class="suppliers-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            ${sortedSuppliers.map(([supplier, amount]) => `
+                                <div class="supplier-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-weight: 600; color: #2c3e50;">${supplier}</span>
+                                    </div>
+                                    <span style="font-weight: 700; color: #27ae60;">₦${amount.toFixed(2)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Purchase Transactions -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">Today's Purchase Transactions</h3>
+                <div class="purchase-list">
+                    ${todayPurchases.map((purchase, index) => {
+                        const timestamp = purchase.timestamp || purchase.purchaseDate;
+                        const time = new Date(timestamp);
+                        const supplier = purchase.supplier || 'Unknown';
+                        const productName = purchase.productName || 'Unknown Product';
+                        const quantity = purchase.quantity || 1;
+                        const unitPrice = purchase.unitPrice || 0;
+                        const amount = purchase.amount || 0;
+                        const notes = purchase.notes || '';
+                        const previousStock = purchase.previousStock || 'N/A';
+                        const newStock = purchase.newStock || 'N/A';
+
+                        return `
+                            <div class="purchase-item" style="background: white; border: 1px solid #e1e5e9; border-radius: 8px; padding: 15px; margin-bottom: 15px; transition: all 0.3s ease;">
+                                <div class="purchase-header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1;">
+                                    <span class="purchase-number" style="font-weight: 700; color: #2c3e50; min-width: 30px;">${index + 1}.</span>
+                                    <span class="purchase-time" style="color: #3498db; font-weight: 600; font-size: 0.95em;">
+                                        ${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    <span class="purchase-id" style="color: #7f8c8d; font-size: 0.85em; font-family: 'Courier New', monospace; margin-left: auto;">
+                                        ID: ${purchase.id || 'N/A'}
+                                    </span>
+                                </div>
+                                
+                                <div class="purchase-details" style="margin-bottom: 10px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+                                        <div style="flex: 1; min-width: 300px;">
+                                            <strong style="color: #2c3e50; font-size: 1.1em; display: block; margin-bottom: 5px;">${productName}</strong>
+                                            ${purchase.description ? `<div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">${purchase.description}</div>` : ''}
+                                            ${notes ? `<div style="color: #f39c12; font-size: 0.9em; margin-top: 5px; padding: 5px; background: #fff9e6; border-radius: 4px;">📝 ${notes}</div>` : ''}
+                                        </div>
+                                        <div style="min-width: 250px;">
+                                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                                                <div>
+                                                    <div style="font-size: 0.9em; color: #7f8c8d;">Quantity</div>
+                                                    <div style="font-weight: 600; color: #2c3e50;">${quantity}</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 0.9em; color: #7f8c8d;">Unit Price</div>
+                                                    <div style="font-weight: 600; color: #3498db;">₦${unitPrice.toFixed(2)}</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 0.9em; color: #7f8c8d;">Total</div>
+                                                    <div style="font-weight: 700; color: #2ecc71; font-size: 1.1em;">₦${amount.toFixed(2)}</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 0.9em; color: #7f8c8d;">Type</div>
+                                                    <div style="font-weight: 600; color: #9b59b6;">${purchase.type || 'Purchase'}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="purchase-footer" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 10px; border-top: 1px solid #f1f1f1; font-size: 0.9em; color: #7f8c8d;">
+                                    <div style="display: flex; align-items: center; gap: 5px;">
+                                        <span>🏢</span>
+                                        <span>Supplier: <strong>${supplier}</strong></span>
+                                    </div>
+                                    ${purchase.barcode ? `
+                                        <div style="display: flex; align-items: center; gap: 5px;">
+                                            <span>📊</span>
+                                            <span>Barcode: <code style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">${purchase.barcode}</code></span>
+                                        </div>
+                                    ` : ''}
+                                    <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
+                                        <span>📦</span>
+                                        <span>Stock: ${previousStock} → ${newStock}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <!-- Total Summary -->
+                <div class="purchase-total" style="display: flex; justify-content: space-between; align-items: center; padding: 20px; background: #2c3e50; border-radius: 8px; margin: 30px 0; color: white;">
+                    <div class="total-label" style="font-size: 1.2em; font-weight: 600;">TOTAL PURCHASES FOR TODAY:</div>
+                    <div class="total-amount" style="font-size: 1.8em; font-weight: 700; color: #2ecc71;">₦${totalPurchases.toFixed(2)}</div>
+                </div>
+
+                <!-- Report Footer -->
+                <div class="report-footer" style="text-align: center; color: #7f8c8d; font-size: 0.9em; padding-top: 20px; border-top: 1px solid #e1e5e9; margin-top: 30px;">
+                    <p>Report generated on ${new Date().toLocaleString()}</p>
+                    <p>User: ${currentUser.userID} | Report ID: ${Date.now()}</p>
+                </div>
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Error generating purchase report:', error);
+        return `
+            <div class="content-page">
+                <div class="error-message" style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 12px; margin: 20px 0;">
+                    <h3 style="color: #e74c3c; margin-bottom: 15px;">Error Loading Purchase Report</h3>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">Unable to load purchase data. Please try again.</p>
+                    <button class="btn-primary" onclick="app.handleMenuAction('purchase-day')">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
 
 }
 
