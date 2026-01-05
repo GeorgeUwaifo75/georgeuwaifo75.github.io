@@ -13,6 +13,95 @@ class JSONBinAPI {
    
  }
 
+
+// Add this method to JSONBinAPI class in api.js
+async addPurchaseToUserBin(userID, purchaseData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.purchasesBinId) {
+            throw new Error('User purchases bin not found');
+        }
+
+        // Get current purchases data
+        const purchases = await this.getUserPurchases(userID);
+        
+        // Create new transaction
+        const newTransaction = {
+            ...purchaseData,
+            id: `purch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString()
+        };
+
+        // Add to transactions array
+        purchases.transactions = purchases.transactions || [];
+        purchases.transactions.push(newTransaction);
+        
+        // Update total purchases (optional, can be calculated)
+        purchases.totalPurchases = (purchases.totalPurchases || 0) + (purchaseData.amount || 0);
+        purchases.lastUpdated = new Date().toISOString();
+
+        // Update the purchases bin directly
+        const response = await fetch(`${this.baseURL}/${user.purchasesBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(purchases)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error adding purchase transaction:', error);
+        throw error;
+    }
+}
+
+
+// Add this method to JSONBinAPI class in api.js
+async updateProductQuantity(userID, productId, newQuantity) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.inventoryBinId) {
+            throw new Error('User inventory bin not found');
+        }
+
+        const inventory = await this.getUserInventory(userID);
+        const products = inventory.products || [];
+        
+        // Find the product
+        const productIndex = products.findIndex(p => p.id === productId);
+        if (productIndex === -1) {
+            throw new Error('Product not found in inventory');
+        }
+        
+        // Update quantity
+        const currentQuantity = parseInt(products[productIndex].quantity) || 0;
+        products[productIndex].quantity = currentQuantity + newQuantity;
+        products[productIndex].updatedAt = new Date().toISOString();
+        
+        // Save updated inventory
+        inventory.products = products;
+        inventory.lastUpdated = new Date().toISOString();
+        
+        const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(inventory)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error updating product quantity:', error);
+        throw error;
+    }
+}
+
+
+
     // Initialize default data structure
    // Update the defaultData structure in initializeData() method
 async initializeData() {
