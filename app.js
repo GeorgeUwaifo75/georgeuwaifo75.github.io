@@ -84,52 +84,114 @@ class WebStarNgApp {
         }
     }
 
-    setupMenuNavigation() {
-        // Home menu click
-        const homeLink = document.querySelector('.home-link');
-        if (homeLink) {
-            homeLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.goToHomeDashboard();
-            });
-        }
-        
-        // Main menu toggle
-        const menuLinks = document.querySelectorAll('.menu-link:not(.home-link)');
-        menuLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const menuItem = link.closest('.menu-item');
-                const isActive = menuItem.classList.contains('active');
-                
-                // Close all other menus
-                document.querySelectorAll('.menu-item.active').forEach(item => {
-                    if (item !== menuItem) {
-                        item.classList.remove('active');
-                    }
-                });
-                
-                // Toggle current menu
-                menuItem.classList.toggle('active', !isActive);
-                
-                // Don't load content if just toggling submenu
-                if (!link.hasAttribute('data-action')) {
-                    const menuType = link.getAttribute('data-menu');
-                    this.loadMenuContent(menuType);
-                }
-            });
-        });
-        
-        // Submenu item clicks
-        const submenuLinks = document.querySelectorAll('.submenu a');
-        submenuLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const action = link.getAttribute('data-action');
-                this.handleMenuAction(action);
-            });
+   // Update setupMenuNavigation method:
+setupMenuNavigation() {
+    // Home menu click
+    const homeLink = document.querySelector('.home-link');
+    if (homeLink) {
+        homeLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.goToHomeDashboard();
         });
     }
+
+    // Main menu toggle - NO PERMISSION CHECKS HERE
+    const menuLinks = document.querySelectorAll('.menu-link:not(.home-link)');
+    menuLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            const menuItem = link.closest('.menu-item');
+            const isActive = menuItem.classList.contains('active');
+            
+            // Close all other menus
+            document.querySelectorAll('.menu-item.active').forEach(item => {
+                if (item !== menuItem) {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // Toggle current menu
+            menuItem.classList.toggle('active', !isActive);
+            
+            // Don't load content if just toggling submenu
+            if (!link.hasAttribute('data-action')) {
+                const menuType = link.getAttribute('data-menu');
+                this.loadMenuContent(menuType);
+            }
+        });
+    });
+
+    // Submenu item clicks - ONLY check specific restricted features
+    const submenuLinks = document.querySelectorAll('.submenu a');
+    submenuLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            const action = link.getAttribute('data-action');
+            
+            // ONLY check for "sales-day" restriction for basic users
+            if (action === 'sales-day') {
+                const perms = this.checkUserPermissions();
+                if (!perms.canAccessSalesReport) {
+                    this.showAccessDenied('"Sales of the Day" Report');
+                    return;
+                }
+            }
+            
+            // ONLY check for "new-user" restriction for non-admins
+            if (action === 'new-user') {
+                const perms = this.checkUserPermissions();
+                if (!perms.canCreateUsers) {
+                    this.showAccessDenied('Create New Users');
+                    return;
+                }
+            }
+            
+            // Allow all other actions
+            this.handleMenuAction(action);
+        });
+    });
+    
+    // Update menu visibility (hide specific items)
+    const perms = this.checkUserPermissions();
+    this.updateMenuVisibility(perms.userGroup);
+}
+
+// Add method to update menu visibility
+// Replace updateMenuVisibility with this corrected version:
+updateMenuVisibility(userGroup) {
+    userGroup = parseInt(userGroup) || 0;
+    
+    // ONLY hide "Sales of the day" for basic users (userGroup 0)
+    const salesReportLink = document.querySelector('[data-action="sales-day"]');
+    if (salesReportLink) {
+        const shouldShow = userGroup >= 1;  // Show for groups 1,2,3
+        const listItem = salesReportLink.closest('li');
+        if (listItem) {
+            listItem.style.display = shouldShow ? 'block' : 'none';
+        }
+    }
+    
+    // ONLY hide "New User" for non-admin users (userGroup < 3)
+    const newUserLink = document.querySelector('[data-action="new-user"]');
+    if (newUserLink) {
+        const shouldShow = userGroup === 3;  // Show only for admin
+        const listItem = newUserLink.closest('li');
+        if (listItem) {
+            listItem.style.display = shouldShow ? 'block' : 'none';
+        }
+    }
+    
+    // DO NOT hide the entire Setup menu - everyone can access it
+    
+    // Update user group display
+    const userGroupElement = document.getElementById('sidebarUserGroup');
+    if (userGroupElement) {
+        userGroupElement.textContent = this.getUserGroupLabel(userGroup);
+        userGroupElement.className = `user-group-badge group-${userGroup}`;
+    }
+}
 
     // Home functionality
     goToHomeDashboard() {
@@ -212,116 +274,125 @@ class WebStarNgApp {
         document.querySelector(`[data-menu="${menuType}"]`).classList.add('active');
     }
 
-    handleMenuAction(action) {
-        const contentTitle = document.getElementById('contentTitle');
-        const contentSubtitle = document.getElementById('contentSubtitle');
-        const dynamicContent = document.getElementById('dynamicContent');
-        const defaultContent = document.getElementById('defaultContent');
-        
-        defaultContent.style.display = 'none';
-        dynamicContent.style.display = 'block';
-        
-        let contentHTML = '';
-        let title = '';
-        let subtitle = '';
-        
-        switch(action) {
-            case 'new-product':
-                title = 'New Product';
-                subtitle = 'Add a new product to your inventory';
-                contentHTML = this.getNewProductForm();
-                break;
-            case 'buy-products':
-                title = 'Buy Products';
-                subtitle = 'Purchase products for your business';
-                contentHTML = this.getBuyProductsForm();
-                break;
-            case 'wallet-topup':
-                title = 'Wallet TopUp';
-                subtitle = 'Add funds to your wallet';
-                contentHTML = this.getWalletTopUpForm();
-                break;
-           
-          
-             case 'sales-day':
-                  title = 'Sales Report';
-                  subtitle = "Today's sales summary";
-                  // Don't use await - handle it differently
-                  this.getSalesReport().then(html => {
-                      contentHTML = html;
-                      // Update the UI here
-                      contentTitle.textContent = title;
-                      contentSubtitle.textContent = subtitle;
-                      dynamicContent.innerHTML = contentHTML;
-                      this.attachContentEventListeners();
-                  }).catch(error => {
-                      console.error('Error loading sales report:', error);
-                      contentHTML = '<div class="error-message">Error loading sales report</div>';
-                  });
-                  break;  
-                
-            case 'purchase-day':
-                 title = 'Purchase Report';
-                  subtitle = "Today's purchases summary";
-                  // Don't use await - handle it differently
-                  this.getPurchaseReport().then(html => {
-                      contentHTML = html;
-                      // Update the UI here
-                      contentTitle.textContent = title;
-                      contentSubtitle.textContent = subtitle;
-                      dynamicContent.innerHTML = contentHTML;
-                      this.attachContentEventListeners();
-                  }).catch(error => {
-                      console.error('Error loading purchase report:', error);
-                      contentHTML = '<div class="error-message">Error loading purchase report</div>';
-                  });
-                  break;
-                
-          
-          case 'inventory-report':
-                  title = 'Inventory Report';
-                  subtitle = "Current inventory status";
-                  // Don't use await - handle it differently
-                  this.getInventoryReport().then(html => {
-                      contentHTML = html;
-                      // Update the UI here
-                      contentTitle.textContent = title;
-                      contentSubtitle.textContent = subtitle;
-                      dynamicContent.innerHTML = contentHTML;
-                      this.attachContentEventListeners();
-                  }).catch(error => {
-                      console.error('Error loading inventory report:', error);
-                      contentHTML = '<div class="error-message">Error loading sales report</div>';
-                  });
-                  break;  
-             
-                
-            case 'new-user':
-                title = 'New User';
-                subtitle = 'Create a new system user';
-                contentHTML = this.getNewUserForm();
-                break;
-            case 'business-details':
-                title = 'Business Details';
-                subtitle = 'Update your business information';
-                contentHTML = this.getBusinessDetailsForm();
-                break;
-            case 'sell-now':
-                title = 'Sell Products';
-                subtitle = 'Scan or enter barcodes to sell products';
-                contentHTML = this.getSellProductsInterface();
-                break;    
-            default:
-                return;
+    // Update handleMenuAction method:
+// Replace handleMenuAction with this corrected version:
+handleMenuAction(action) {
+    const contentTitle = document.getElementById('contentTitle');
+    const contentSubtitle = document.getElementById('contentSubtitle');
+    const dynamicContent = document.getElementById('dynamicContent');
+    const defaultContent = document.getElementById('defaultContent');
+    
+    defaultContent.style.display = 'none';
+    dynamicContent.style.display = 'block';
+    
+    let contentHTML = '';
+    let title = '';
+    let subtitle = '';
+    
+    // ONLY check permissions for specific restricted actions
+    if (action === 'sales-day') {
+        const perms = this.checkUserPermissions();
+        if (!perms.canAccessSalesReport) {
+            this.showAccessDenied('"Sales of the Day" Report');
+            return;
         }
-        
+    }
+    
+    if (action === 'new-user') {
+        const perms = this.checkUserPermissions();
+        if (!perms.canCreateUsers) {
+            this.showAccessDenied('Create New Users');
+            return;
+        }
+    }
+    
+    switch(action) {
+        case 'new-product':
+            title = 'New Product';
+            subtitle = 'Add a new product to your inventory';
+            contentHTML = this.getNewProductForm();
+            break;
+            
+        case 'buy-products':
+            title = 'Buy Products';
+            subtitle = 'Purchase products for your business';
+            contentHTML = this.getBuyProductsForm();
+            break;
+            
+        case 'wallet-topup':
+            title = 'Wallet TopUp';
+            subtitle = 'Add funds to your wallet';
+            contentHTML = this.getWalletTopUpForm();
+            break;
+            
+        case 'sales-day':
+            title = 'Sales Report';
+            subtitle = "Today's sales summary";
+            // Don't use await - handle it differently
+            this.getSalesReport().then(html => {
+                contentHTML = html;
+                contentTitle.textContent = title;
+                contentSubtitle.textContent = subtitle;
+                dynamicContent.innerHTML = contentHTML;
+                this.attachContentEventListeners();
+            }).catch(error => {
+                console.error('Error loading sales report:', error);
+                contentHTML = '<div class="error-message">Error loading sales report</div>';
+            });
+            break;
+            
+        case 'purchase-day':
+            title = 'Purchase Report';
+            subtitle = "Today's purchases summary";
+            contentHTML = this.getPurchaseReport();
+            break;
+            
+        case 'inventory-report':
+            title = 'Inventory Report';
+            subtitle = "Current inventory status";
+            // Don't use await - handle it differently
+            this.getInventoryReport().then(html => {
+                contentHTML = html;
+                contentTitle.textContent = title;
+                contentSubtitle.textContent = subtitle;
+                dynamicContent.innerHTML = contentHTML;
+                this.attachContentEventListeners();
+            }).catch(error => {
+                console.error('Error loading inventory report:', error);
+                contentHTML = '<div class="error-message">Error loading sales report</div>';
+            });
+            break;
+            
+        case 'new-user':
+            title = 'New User';
+            subtitle = 'Create a new system user';
+            contentHTML = this.getNewUserForm();
+            break;
+            
+        case 'business-details':
+            title = 'Business Details';
+            subtitle = 'Update your business information';
+            contentHTML = this.getBusinessDetailsForm();
+            break;
+            
+        case 'sell-now':
+            title = 'Sell Products';
+            subtitle = 'Scan or enter barcodes to sell products';
+            contentHTML = this.getSellProductsInterface();
+            break;
+            
+        default:
+            return;
+    }
+    
+    // Only update if not handled asynchronously
+    if (action !== 'sales-day' && action !== 'inventory-report') {
         contentTitle.textContent = title;
         contentSubtitle.textContent = subtitle;
         dynamicContent.innerHTML = contentHTML;
-        
-        // Re-attach event listeners for dynamic content
         this.attachContentEventListeners();
     }
+}
 
 
 
@@ -1642,6 +1713,8 @@ getBuyProductsForm() {
         });
     }    
         
+
+
         
         // Business Details Form
           const businessDetailsForm = document.getElementById('businessDetailsForm');
@@ -2269,6 +2342,8 @@ async processSale() {
     }
     
    async getSalesReport() {
+   // Check permissions first
+    
     try {
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
         if (!currentUser) {
@@ -2397,6 +2472,10 @@ async processSale() {
             </div>
         `;
     }
+    
+  
+  
+    
 }
  
 // Export methods for inventory report
@@ -4344,6 +4423,158 @@ async getPurchaseReport() {
             </div>
         `;
     }
+}
+
+
+// Add these methods to WebStarNgApp class in app.js:
+
+// Check user permissions based on userGroup
+checkUserPermissions() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return { userGroup: 0, hasAccess: false };
+    
+    const userGroup = currentUser.userGroup || 0;
+    
+    // CORRECTED PERMISSION DEFINITIONS:
+    // 0 = Basic User - Can access most features EXCEPT "Sales of the day" report
+    // 1 = Standard User - Can access everything except admin features
+    // 2 = Manager - Can access everything except creating new users
+    // 3 = Super Admin - Full access to all menus
+    
+    return {
+        userGroup: userGroup,
+        // Basic users can access everything EXCEPT sales report
+        canAccessSalesReport: userGroup >= 1,  // Only group 1,2,3
+        canAccessSetup: userGroup >= 0,        // Everyone can access setup (corrected)
+        canAccessAllMenus: userGroup >= 0,     // Everyone can access menus (corrected)
+        canCreateUsers: userGroup === 3,       // Only admin can create users
+        isAdmin: userGroup === 3
+    };
+}
+
+// Show access denied message
+showAccessDenied(featureName = 'this feature') {
+    const perms = this.checkUserPermissions();
+    const userGroupLabel = this.getUserGroupLabel(perms.userGroup);
+    
+    alert(`🔒 Access Denied\n\nFeature: ${featureName}\nYour Account Type: ${userGroupLabel}\n\nRequired: Higher access level\nPlease contact your administrator for access.`);
+}
+
+// Get user group label
+getUserGroupLabel(userGroup) {
+    switch(parseInt(userGroup)) {
+        case 0: return 'Basic User';
+        case 1: return 'Standard User';
+        case 2: return 'Manager';
+        case 3: return 'Super Admin';
+        default: return 'Basic User';
+    }
+}
+
+// Update user display with group info
+updateUserDisplay(user) {
+    const userGroup = user.userGroup || 0;
+    const userGroupLabel = this.getUserGroupLabel(userGroup);
+    
+    const elements = {
+        'currentUser': user.userID,
+        'sidebarUser': user.userID,
+        'userFullName': user.fullName || 'Demo User',
+        'userIdDisplay': user.userID,
+        'walletBalance': user.wallet ? user.wallet.toFixed(2) : '0.00',
+        'sidebarBalance': user.wallet ? user.wallet.toFixed(2) : '0.00',
+        // Add user group display elements if they exist
+        'userGroupDisplay': userGroupLabel,
+        'sidebarUserGroup': userGroupLabel
+    };
+
+    for (const [id, value] of Object.entries(elements)) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+            
+            // Add badge styling for user group
+            if (id.includes('UserGroup') || id.includes('userGroup')) {
+                element.className = `user-group-badge group-${userGroup}`;
+            }
+        }
+    }
+    
+    // Update menu visibility based on permissions
+    this.updateMenuVisibility(userGroup);
+}
+
+
+// Add this method if it doesn't exist, or fix the existing one:
+getNewUserForm() {
+    return `
+        <div class="content-page">
+            <h2>👤 Create New User</h2>
+            <p>Create a new system user account. This feature is only available to Administrators.</p>
+            
+            <div class="user-group-info">
+                <strong>⚠️ Administrator Access Required</strong>
+                <p>Only users with Administrator privileges (userGroup 3) can create new users.</p>
+            </div>
+            
+            <form id="newSystemUserForm" class="content-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newSystemUserID" class="required-field">User ID *</label>
+                        <input type="text" id="newSystemUserID" name="newSystemUserID" required
+                               placeholder="Enter unique user ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="newSystemFullName" class="required-field">Full Name *</label>
+                        <input type="text" id="newSystemFullName" name="newSystemFullName" required
+                               placeholder="Enter full name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newSystemPassword" class="required-field">Password *</label>
+                        <input type="password" id="newSystemPassword" name="newSystemPassword" required
+                               placeholder="Enter password">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmSystemPassword" class="required-field">Confirm Password *</label>
+                        <input type="password" id="confirmSystemPassword" name="confirmSystemPassword" required
+                               placeholder="Confirm password">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newUserGroup" class="required-field">User Group *</label>
+                        <select id="newUserGroup" name="newUserGroup" required>
+                            <option value="0">Basic User (Limited Access)</option>
+                            <option value="1">Standard User</option>
+                            <option value="2">Manager</option>
+                            <option value="3">Administrator</option>
+                        </select>
+                        <div class="form-hint">
+                            Basic users cannot access "Sales of the Day" report
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserEmail">Email Address</label>
+                        <input type="email" id="newUserEmail" name="newUserEmail"
+                               placeholder="Enter email address">
+                    </div>
+                </div>
+                
+                <div class="form-actions-content">
+                    <button type="submit" class="btn-primary">
+                        <span class="menu-icon">👤</span> Create User
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">
+                        <span class="menu-icon">↩️</span> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
 }
 
 }
