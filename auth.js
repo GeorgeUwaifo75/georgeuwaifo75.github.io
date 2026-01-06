@@ -141,7 +141,7 @@ class AuthManager {
         const createdUser = await api.createUser(newUser);
      
         // Show success message with bin information
-        successElement.innerHTML = `
+         successElement.innerHTML = `
             <div class="registration-success">
                 <h3>🎉 Account Created Successfully!</h3>
                 <p>Your account has been created with unique storage bins.</p>
@@ -149,14 +149,14 @@ class AuthManager {
                     <p><strong>User ID:</strong> ${createdUser.userID}</p>
                     <p><strong>Full Name:</strong> ${createdUser.fullName}</p>
                     <p><strong>Initial Wallet Balance:</strong> ₦${createdUser.wallet.toFixed(2)}</p>
-                    <p><strong>Inventory Bin:</strong> ${createdUser.inventoryBinId}</p>
-                    <p><strong>Sales Bin:</strong> ${createdUser.salesBinId}</p>
-                    <p><strong>Purchases Bin:</strong> ${createdUser.purchasesBinId}</p>
-                    <p><strong>Account Created:</strong> ${new Date(createdUser.createdAt).toLocaleString()}</p>
+                    <div style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px;">
+                        <p><strong>⚠️ Next Step:</strong> Complete your business information after login.</p>
+                        <p>You'll be redirected to update your business details.</p>
+                    </div>
                 </div>
-                <p style="margin-top: 15px;">You can now login with your new credentials.</p>
             </div>
         `;
+
         successElement.style.display = 'block';
  
         // Clear form
