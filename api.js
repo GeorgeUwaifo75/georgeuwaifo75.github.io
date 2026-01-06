@@ -119,7 +119,7 @@ async initializeData() {
                 salesBinId: 'sales_tmp101',
                 purchasesBinId: 'purchases_tmp101',
                 // NEW FIELDS:
-                userGroup: 0, // 0 = basic user
+                userGroup: 1, // 0 = basic 1 for user..testing sales report
                 businessName: 'Company name',
                 addressLine1: 'Address line 1',
                 addressLine2: 'Address line 2',
