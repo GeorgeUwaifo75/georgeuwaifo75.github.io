@@ -3631,3 +3631,87 @@ textarea {
     color: rgba(255, 255, 255, 0.8);
 }
 
+/* Add these user group badge styles */
+
+.user-group-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.user-group-badge.group-0 {
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #bbdefb;
+}
+
+.user-group-badge.group-1 {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+
+.user-group-badge.group-2 {
+    background: #fff3e0;
+    color: #ef6c00;
+    border: 1px solid #ffe0b2;
+}
+
+.user-group-badge.group-3 {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border: 1px solid #e1bee7;
+}
+
+/* Access restricted styling */
+.menu-item.restricted {
+    opacity: 0.6;
+    position: relative;
+}
+
+.menu-item.restricted::after {
+    content: '🔒';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.9em;
+}
+
+.submenu li[style*="display: none"] {
+    display: none !important;
+}
+
+/* Permission warning */
+.permission-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin: 10px 0;
+    color: #856404;
+    font-size: 0.9em;
+}
+
+.permission-warning strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* User group info in forms */
+.user-group-info {
+    margin: 15px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #3498db;
+}
+
+.user-group-info small {
+    color: #7f8c8d;
+    font-size: 0.85em;
+}
