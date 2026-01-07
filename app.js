@@ -2,13 +2,10 @@
 
 // Paystack Configuration - ADD THIS AT THE VERY TOP
 const PAYSTACK_CONFIG = {
-    publicKey: 'pk_test_YOUR_PUBLIC_KEY_HERE', // Replace with your Paystack public key
+    publicKey: 'pk_live_2018244c913523ab0751249b240bc3e3448c3c19', // Replace with your Paystack public key
     currency: 'NGN',
     channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money'],
-    //callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
-    callbackUrl: 'https://georgeuwaifo75.github.io/dashboard.html', // Return URL after payment
-
-    
+    callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
     metadata: {
         custom_fields: []
     }
@@ -334,12 +331,12 @@ handleMenuAction(action) {
             subtitle = 'Purchase products for your business';
             contentHTML = this.getBuyProductsForm();
             break;
-            
+        /*    
         case 'wallet-topup':
             title = 'Wallet TopUp';
             subtitle = 'Add funds to your wallet';
             contentHTML = this.getWalletTopUpForm();
-            break;
+            break; */
             
         case 'sales-day':
             title = 'Sales Report';
@@ -4806,105 +4803,54 @@ getNewUserForm() {
     }
 
     // Process Paystack payment
-    async processPaystackPayment() {
-        // Validate inputs
-        if (!this.validateAmount()) return;
-        
-        const amountInput = document.getElementById('customAmount');
-        const emailInput = document.getElementById('customerEmail');
-        
-        if (!amountInput || !emailInput) return;
-        
-        const amount = parseFloat(amountInput.value) || 1000;
-        const email = emailInput.value.trim();
-        
-        // Validate email
-        if (!email || !this.isValidEmail(email)) {
-            alert('Please enter a valid email address for your payment receipt');
-            emailInput.focus();
-            return;
-        }
-        
-        // Calculate total amount with fees
-        const fee = Math.min(Math.ceil(amount * 0.015) + 100, 2000);
-        const totalAmount = amount + fee;
-        
-        // Get current user
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        if (!currentUser) {
-            alert('Please login to make a payment');
-            return;
-        }
-        
-        // Disable payment button and show loading
-        const payButton = document.getElementById('paystackPayButton');
-        if (payButton) {
-            payButton.disabled = true;
-            payButton.innerHTML = '<span>⏳</span> Processing...';
-        }
-        
-        // Show payment processing
-        this.showPaymentStatus('Processing payment...', 'info');
-        
-        try {
-            // Initialize Paystack payment
-            const handler = PaystackPop.setup({
-                key: PAYSTACK_CONFIG.publicKey,
-                email: email,
-                amount: totalAmount * 100, // Convert to kobo
-                currency: 'NGN',
-                ref: `WSG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                metadata: {
-                    custom_fields: [
-                        {
-                            display_name: "User ID",
-                            variable_name: "user_id",
-                            value: currentUser.userID
-                        },
-                        {
-                            display_name: "Wallet Top-up",
-                            variable_name: "transaction_type",
-                            value: "wallet_topup"
-                        },
-                        {
-                            display_name: "Amount Added",
-                            variable_name: "amount_added",
-                            value: amount
-                        }
-                    ]
-                },
-                callback: async (response) => {
-                    // Payment successful
-                    console.log('Paystack payment successful:', response);
-                    
-                    // Re-enable payment button
-                    if (payButton) {
-                        payButton.disabled = false;
-                        payButton.innerHTML = '<span>💳</span> Proceed to Pay';
-                    }
-                    
-                    // Process successful payment
-                    await this.handleSuccessfulPayment(response, amount, totalAmount, fee, currentUser);
-                },
-                onClose: () => {
-                    // Payment modal closed
-                    console.log('Payment modal closed');
-                    
-                    // Re-enable payment button
-                    if (payButton) {
-                        payButton.disabled = false;
-                        payButton.innerHTML = '<span>💳</span> Proceed to Pay';
-                    }
-                    
-                    this.showPaymentStatus('Payment cancelled. You can try again.', 'warning');
-                }
-            });
-            
-            // Open Paystack payment modal
-            handler.openIframe();
-            
-        } catch (error) {
-            console.error('Paystack payment error:', error);
+    // Update the processPaystackPayment method in app.js:
+  async processPaystackPayment() {
+    // Validate inputs
+    if (!this.validateAmount()) return;
+    
+    const amountInput = document.getElementById('customAmount');
+    const emailInput = document.getElementById('customerEmail');
+    
+    if (!amountInput || !emailInput) return;
+    
+    const amount = parseFloat(amountInput.value) || 1000;
+    const email = emailInput.value.trim();
+    
+    // Validate email
+    if (!email || !this.isValidEmail(email)) {
+        alert('Please enter a valid email address for your payment receipt');
+        emailInput.focus();
+        return;
+    }
+    
+    // Calculate total amount with fees
+    const fee = Math.min(Math.ceil(amount * 0.015) + 100, 2000);
+    const totalAmount = amount + fee;
+    
+    // Get current user
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) {
+        alert('Please login to make a payment');
+        return;
+    }
+    
+    // Store current instance reference
+    const self = this;
+    
+    // Disable payment button and show loading
+    const payButton = document.getElementById('paystackPayButton');
+    if (payButton) {
+        payButton.disabled = true;
+        payButton.innerHTML = '<span>⏳</span> Processing...';
+    }
+    
+    // Show payment processing
+    this.showPaymentStatus('Processing payment...', 'info');
+    
+    try {
+        // Create callback function with proper binding
+        const paymentCallback = function(response) {
+            console.log('Paystack payment successful:', response);
             
             // Re-enable payment button
             if (payButton) {
@@ -4912,9 +4858,68 @@ getNewUserForm() {
                 payButton.innerHTML = '<span>💳</span> Proceed to Pay';
             }
             
-            this.showPaymentStatus(`Payment error: ${error.message}`, 'error');
+            // Process successful payment
+            self.handleSuccessfulPayment(response, amount, totalAmount, fee, currentUser);
+        };
+        
+        // Create onClose function
+        const paymentOnClose = function() {
+            console.log('Payment modal closed');
+            
+            // Re-enable payment button
+            if (payButton) {
+                payButton.disabled = false;
+                payButton.innerHTML = '<span>💳</span> Proceed to Pay';
+            }
+            
+            self.showPaymentStatus('Payment cancelled. You can try again.', 'warning');
+        };
+        
+        // Initialize Paystack payment with properly defined functions
+        const handler = PaystackPop.setup({
+            key: PAYSTACK_CONFIG.publicKey,
+            email: email,
+            amount: totalAmount * 100, // Convert to kobo
+            currency: 'NGN',
+            ref: `WSG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            metadata: {
+                custom_fields: [
+                    {
+                        display_name: "User ID",
+                        variable_name: "user_id",
+                        value: currentUser.userID
+                    },
+                    {
+                        display_name: "Wallet Top-up",
+                        variable_name: "transaction_type",
+                        value: "wallet_topup"
+                    },
+                    {
+                        display_name: "Amount Added",
+                        variable_name: "amount_added",
+                        value: amount
+                    }
+                ]
+            },
+            callback: paymentCallback, // Pass the defined function
+            onClose: paymentOnClose    // Pass the defined function
+        });
+        
+        // Open Paystack payment modal
+        handler.openIframe();
+        
+    } catch (error) {
+        console.error('Paystack payment error:', error);
+        
+        // Re-enable payment button
+        if (payButton) {
+            payButton.disabled = false;
+            payButton.innerHTML = '<span>💳</span> Proceed to Pay';
         }
+        
+        this.showPaymentStatus(`Payment error: ${error.message}`, 'error');
     }
+}
 
     // Handle successful payment
     async handleSuccessfulPayment(paymentResponse, amount, totalPaid, fee, currentUser) {
@@ -5089,6 +5094,13 @@ getNewUserForm() {
         statusElement.style.display = 'block';
     }
 
+
+
+// Alternative simpler method in WebStarNgApp class:
+showPaystackPaymentModal() {
+    // Simply redirect to the wallet topup page
+    this.handleMenuAction('wallet-topup');
+}
 
 }
 
