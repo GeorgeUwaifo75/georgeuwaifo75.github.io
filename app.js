@@ -1,4 +1,16 @@
 // Main Application Module
+
+// Paystack Configuration - ADD THIS AT THE VERY TOP
+const PAYSTACK_CONFIG = {
+    publicKey: 'pk_test_YOUR_PUBLIC_KEY_HERE', // Replace with your Paystack public key
+    currency: 'NGN',
+    channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money'],
+    callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
+    metadata: {
+        custom_fields: []
+    }
+};
+
 class WebStarNgApp {
     
     constructor() {
@@ -51,6 +63,7 @@ class WebStarNgApp {
             console.error('Error loading user data:', error);
         }
     }
+
 
     updateUserDisplay(user) {
         const elements = {
@@ -380,7 +393,11 @@ handleMenuAction(action) {
             subtitle = 'Scan or enter barcodes to sell products';
             contentHTML = this.getSellProductsInterface();
             break;
-            
+        case 'wallet-topup':
+            title = 'Wallet TopUp';
+            subtitle = 'Add funds to your wallet';
+            contentHTML = this.getWalletTopUpForm();
+            break;    
         default:
             return;
     }
@@ -1608,6 +1625,12 @@ getBuyProductsForm() {
     // ... [Other content template methods remain the same] ...
 
     attachContentEventListeners() {
+        
+         // Initialize payment form if it exists
+        if (document.getElementById('customAmount')) {
+            this.initializePaymentForm();
+        }
+        
         // New Product Form - Save Product Button
         const saveProductBtn = document.getElementById('saveProductBtn');
         if (saveProductBtn) {
@@ -4576,6 +4599,493 @@ getNewUserForm() {
         </div>
     `;
 }
+
+
+
+// ========== PAYSTACK PAYMENT METHODS ==========
+
+    // Get wallet top-up form with Paystack integration
+    getWalletTopUpForm() {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        const currentBalance = currentUser ? currentUser.wallet : 0;
+        
+        return `
+            <div class="content-page">
+                <div class="payment-form-container">
+                    <div class="payment-header">
+                        <h2>💰 Wallet Top-Up</h2>
+                        <p>Add funds to your wallet using Paystack payment gateway</p>
+                    </div>
+                    
+                    <!-- Current Balance Display -->
+                    <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: #2c3e50;">Current Balance:</span>
+                            <span style="font-size: 1.2em; font-weight: 700; color: #2ecc71;">₦${currentBalance.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Amount Section -->
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #2c3e50; margin-bottom: 15px;">Payment Amount</h3>
+                        
+                        <!-- Quick Amount Selection -->
+                        <div class="amount-quick-select">
+                            <div class="amount-option" data-amount="1000">₦1,000</div>
+                            <div class="amount-option" data-amount="2000">₦2,000</div>
+                            <div class="amount-option" data-amount="5000">₦5,000</div>
+                            <div class="amount-option" data-amount="10000">₦10,000</div>
+                            <div class="amount-option" data-amount="20000">₦20,000</div>
+                            <div class="amount-option" data-amount="50000">₦50,000</div>
+                        </div>
+                        
+                        <!-- Custom Amount Input -->
+                        <div style="margin-top: 20px;">
+                            <label for="customAmount" style="display: block; margin-bottom: 8px; color: #2c3e50; font-weight: 500;">Or Enter Custom Amount (₦)</label>
+                            <input type="number" 
+                                   id="customAmount" 
+                                   name="customAmount" 
+                                   min="100" 
+                                   max="1000000" 
+                                   step="100"
+                                   placeholder="Enter amount (minimum ₦100)"
+                                   value="1000"
+                                   style="width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px;">
+                            <div style="font-size: 0.85em; color: #7f8c8d; margin-top: 5px;">Minimum: ₦100 | Maximum: ₦1,000,000</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Amount Display -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 25px;">
+                        <div style="font-size: 0.9em; opacity: 0.9;">You are paying:</div>
+                        <div style="font-size: 2.5em; font-weight: 700; margin: 10px 0;">₦<span id="displayAmount">1,000.00</span></div>
+                        <div style="font-size: 0.9em; opacity: 0.9;" id="paymentFeeInfo">+ ₦0.00 transaction fee</div>
+                    </div>
+                    
+                    <!-- Email Input -->
+                    <div style="margin-bottom: 25px;">
+                        <label for="customerEmail" style="display: block; margin-bottom: 8px; color: #2c3e50; font-weight: 500;">Email Address *</label>
+                        <input type="email" 
+                               id="customerEmail" 
+                               name="customerEmail" 
+                               required
+                               placeholder="Enter your email for receipt"
+                               value="${currentUser?.email || ''}"
+                               style="width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px;">
+                    </div>
+                    
+                    <!-- Paystack Payment Button -->
+                    <button id="paystackPayButton" style="width: 100%; padding: 16px; background: linear-gradient(135deg, #00a859 0%, #008751 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <span>💳</span> Proceed to Pay ₦<span id="payButtonAmount">1,000.00</span>
+                    </button>
+                    
+                    <!-- Payment Status Display -->
+                    <div id="paymentStatus" style="display: none; margin-top: 20px;"></div>
+                    
+                    <!-- Security Note -->
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 8px; color: #7f8c8d; font-size: 0.9em;">
+                        <span style="color: #2ecc71;">🔒</span>
+                        <span>Secure payment by Paystack. Your card details are never stored.</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Initialize payment form
+    initializePaymentForm() {
+        // Amount quick select
+        const amountOptions = document.querySelectorAll('.amount-option');
+        amountOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                amountOptions.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+                const amount = option.getAttribute('data-amount');
+                document.getElementById('customAmount').value = amount;
+                this.updatePaymentAmount();
+            });
+        });
+        
+        // Custom amount input
+        const customAmountInput = document.getElementById('customAmount');
+        if (customAmountInput) {
+            customAmountInput.addEventListener('input', () => {
+                amountOptions.forEach(opt => opt.classList.remove('selected'));
+                this.updatePaymentAmount();
+            });
+        }
+        
+        // Paystack payment button
+        const payButton = document.getElementById('paystackPayButton');
+        if (payButton) {
+            payButton.addEventListener('click', () => {
+                this.processPaystackPayment();
+            });
+        }
+        
+        // Initial amount update
+        this.updatePaymentAmount();
+    }
+
+    // Update payment amount display
+    updatePaymentAmount() {
+        const amountInput = document.getElementById('customAmount');
+        if (!amountInput) return;
+        
+        let amount = parseFloat(amountInput.value) || 1000;
+        
+        // Validate minimum and maximum
+        if (amount < 100) amount = 100;
+        if (amount > 1000000) amount = 1000000;
+        
+        // Update input value
+        amountInput.value = amount;
+        
+        // Calculate transaction fee (1.5% + ₦100, maximum ₦2000)
+        const fee = Math.min(Math.ceil(amount * 0.015) + 100, 2000);
+        const totalAmount = amount + fee;
+        
+        // Update displays
+        const displayAmount = document.getElementById('displayAmount');
+        const payButtonAmount = document.getElementById('payButtonAmount');
+        const feeInfo = document.getElementById('paymentFeeInfo');
+        
+        if (displayAmount) {
+            displayAmount.textContent = totalAmount.toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        if (payButtonAmount) {
+            payButtonAmount.textContent = totalAmount.toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        if (feeInfo) {
+            feeInfo.textContent = `+ ₦${fee.toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })} transaction fee`;
+        }
+    }
+
+    // Validate amount
+    validateAmount() {
+        const amountInput = document.getElementById('customAmount');
+        if (!amountInput) return true;
+        
+        const amount = parseFloat(amountInput.value) || 0;
+        
+        if (amount < 100) {
+            alert('Minimum payment amount is ₦100');
+            amountInput.value = 100;
+            this.updatePaymentAmount();
+            return false;
+        }
+        
+        if (amount > 1000000) {
+            alert('Maximum payment amount is ₦1,000,000');
+            amountInput.value = 1000000;
+            this.updatePaymentAmount();
+            return false;
+        }
+        
+        return true;
+    }
+
+    // Validate email
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    // Process Paystack payment
+    async processPaystackPayment() {
+        // Validate inputs
+        if (!this.validateAmount()) return;
+        
+        const amountInput = document.getElementById('customAmount');
+        const emailInput = document.getElementById('customerEmail');
+        
+        if (!amountInput || !emailInput) return;
+        
+        const amount = parseFloat(amountInput.value) || 1000;
+        const email = emailInput.value.trim();
+        
+        // Validate email
+        if (!email || !this.isValidEmail(email)) {
+            alert('Please enter a valid email address for your payment receipt');
+            emailInput.focus();
+            return;
+        }
+        
+        // Calculate total amount with fees
+        const fee = Math.min(Math.ceil(amount * 0.015) + 100, 2000);
+        const totalAmount = amount + fee;
+        
+        // Get current user
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to make a payment');
+            return;
+        }
+        
+        // Disable payment button and show loading
+        const payButton = document.getElementById('paystackPayButton');
+        if (payButton) {
+            payButton.disabled = true;
+            payButton.innerHTML = '<span>⏳</span> Processing...';
+        }
+        
+        // Show payment processing
+        this.showPaymentStatus('Processing payment...', 'info');
+        
+        try {
+            // Initialize Paystack payment
+            const handler = PaystackPop.setup({
+                key: PAYSTACK_CONFIG.publicKey,
+                email: email,
+                amount: totalAmount * 100, // Convert to kobo
+                currency: 'NGN',
+                ref: `WSG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                metadata: {
+                    custom_fields: [
+                        {
+                            display_name: "User ID",
+                            variable_name: "user_id",
+                            value: currentUser.userID
+                        },
+                        {
+                            display_name: "Wallet Top-up",
+                            variable_name: "transaction_type",
+                            value: "wallet_topup"
+                        },
+                        {
+                            display_name: "Amount Added",
+                            variable_name: "amount_added",
+                            value: amount
+                        }
+                    ]
+                },
+                callback: async (response) => {
+                    // Payment successful
+                    console.log('Paystack payment successful:', response);
+                    
+                    // Re-enable payment button
+                    if (payButton) {
+                        payButton.disabled = false;
+                        payButton.innerHTML = '<span>💳</span> Proceed to Pay';
+                    }
+                    
+                    // Process successful payment
+                    await this.handleSuccessfulPayment(response, amount, totalAmount, fee, currentUser);
+                },
+                onClose: () => {
+                    // Payment modal closed
+                    console.log('Payment modal closed');
+                    
+                    // Re-enable payment button
+                    if (payButton) {
+                        payButton.disabled = false;
+                        payButton.innerHTML = '<span>💳</span> Proceed to Pay';
+                    }
+                    
+                    this.showPaymentStatus('Payment cancelled. You can try again.', 'warning');
+                }
+            });
+            
+            // Open Paystack payment modal
+            handler.openIframe();
+            
+        } catch (error) {
+            console.error('Paystack payment error:', error);
+            
+            // Re-enable payment button
+            if (payButton) {
+                payButton.disabled = false;
+                payButton.innerHTML = '<span>💳</span> Proceed to Pay';
+            }
+            
+            this.showPaymentStatus(`Payment error: ${error.message}`, 'error');
+        }
+    }
+
+    // Handle successful payment
+    async handleSuccessfulPayment(paymentResponse, amount, totalPaid, fee, currentUser) {
+        try {
+            this.showPaymentStatus('Payment successful! Updating your wallet...', 'success');
+            
+            // Add funds to user's wallet
+            const newBalance = await api.addFunds(currentUser.userID, amount);
+            
+            // Update local session
+            currentUser.wallet = newBalance;
+            localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
+            
+            // Record payment transaction
+            await this.recordPaymentTransaction({
+                userId: currentUser.userID,
+                paymentId: paymentResponse.reference,
+                amount: amount,
+                totalPaid: totalPaid,
+                fee: fee,
+                paymentMethod: 'paystack',
+                status: 'success',
+                paymentData: paymentResponse,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Show success details
+            setTimeout(() => {
+                this.showPaymentSuccessDetails({
+                    reference: paymentResponse.reference,
+                    amount: amount,
+                    totalPaid: totalPaid,
+                    fee: fee,
+                    newBalance: newBalance,
+                    transactionDate: new Date().toLocaleString()
+                });
+                
+                // Update UI with new balance
+                this.updateUserDisplay(currentUser);
+                
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            this.showPaymentStatus(`Error updating wallet: ${error.message}`, 'error');
+        }
+    }
+
+    // Record payment transaction
+    async recordPaymentTransaction(transactionData) {
+        try {
+            // Store in localStorage
+            const paymentHistory = JSON.parse(localStorage.getItem('payment_history') || '[]');
+            
+            const transaction = {
+                id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                userId: transactionData.userId,
+                paymentId: transactionData.paymentId,
+                amount: transactionData.amount,
+                totalPaid: transactionData.totalPaid,
+                fee: transactionData.fee,
+                paymentMethod: transactionData.paymentMethod,
+                status: transactionData.status,
+                timestamp: transactionData.timestamp,
+                createdAt: new Date().toISOString()
+            };
+            
+            paymentHistory.push(transaction);
+            localStorage.setItem('payment_history', JSON.stringify(paymentHistory));
+            
+            return transaction;
+            
+        } catch (error) {
+            console.error('Error recording payment transaction:', error);
+        }
+    }
+
+    // Show payment status
+    showPaymentStatus(message, type = 'info') {
+        const statusElement = document.getElementById('paymentStatus');
+        if (!statusElement) return;
+        
+        let icon = '⏳';
+        let bgColor = '#f8f9fa';
+        let textColor = '#7f8c8d';
+        let borderColor = '#e1e5e9';
+        
+        switch(type) {
+            case 'success':
+                icon = '✅';
+                bgColor = '#e8f6f3';
+                textColor = '#27ae60';
+                borderColor = '#2ecc71';
+                break;
+            case 'error':
+                icon = '❌';
+                bgColor = '#ffebee';
+                textColor = '#c62828';
+                borderColor = '#e74c3c';
+                break;
+            case 'warning':
+                icon = '⚠️';
+                bgColor = '#fff3cd';
+                textColor = '#856404';
+                borderColor = '#ffeaa7';
+                break;
+        }
+        
+        statusElement.innerHTML = `
+            <div style="padding: 15px; background: ${bgColor}; color: ${textColor}; border: 2px solid ${borderColor}; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.2em; margin-bottom: 10px;">${icon}</div>
+                <div>${message}</div>
+            </div>
+        `;
+        
+        statusElement.style.display = 'block';
+    }
+
+    // Show payment success details
+    showPaymentSuccessDetails(details) {
+        const statusElement = document.getElementById('paymentStatus');
+        if (!statusElement) return;
+        
+        statusElement.innerHTML = `
+            <div style="background: #e8f6f3; border: 2px solid #2ecc71; color: #27ae60; text-align: center; padding: 30px; border-radius: 12px; margin: 20px 0;">
+                <div style="font-size: 3em; margin-bottom: 15px;">🎉</div>
+                <h3 style="margin-bottom: 10px; font-size: 1.3em;">Payment Successful!</h3>
+                <p>Your wallet has been topped up successfully.</p>
+                
+                <div style="background: rgba(255,255,255,0.5); padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left;">
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>Reference:</strong>
+                        <span>${details.reference}</span>
+                    </p>
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>Amount Added:</strong>
+                        <span>₦${details.amount.toLocaleString('en-NG', {minimumFractionDigits: 2})}</span>
+                    </p>
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>Transaction Fee:</strong>
+                        <span>₦${details.fee.toLocaleString('en-NG', {minimumFractionDigits: 2})}</span>
+                    </p>
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>Total Paid:</strong>
+                        <span>₦${details.totalPaid.toLocaleString('en-NG', {minimumFractionDigits: 2})}</span>
+                    </p>
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>New Balance:</strong>
+                        <span style="color: #2ecc71; font-weight: 700;">₦${details.newBalance.toLocaleString('en-NG', {minimumFractionDigits: 2})}</span>
+                    </p>
+                    <p style="margin: 8px 0; display: flex; justify-content: space-between;">
+                        <strong>Date & Time:</strong>
+                        <span>${details.transactionDate}</span>
+                    </p>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button onclick="app.handleMenuAction('wallet-topup')" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 10px;">
+                        Make Another Payment
+                    </button>
+                    <button onclick="app.goToHomeDashboard()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        Return to Dashboard
+                    </button>
+                </div>
+                
+                <div style="margin-top: 15px; font-size: 0.9em; color: #7f8c8d;">
+                    A receipt has been sent to your email.
+                </div>
+            </div>
+        `;
+        
+        statusElement.style.display = 'block';
+    }
+
 
 }
 
