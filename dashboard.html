@@ -133,7 +133,9 @@
         <p class="balance-label">Available Balance</p>
     </div>
     <div class="wallet-actions">
-        <button class="action-btn" onclick="showAddFunds()">Add Funds</button>
+       <!--  <button class="action-btn" onclick="showAddFunds()">Add Funds</button> -->
+       <button class="action-btn" onclick="app.handleMenuAction('wallet-topup')">Add Funds</button>
+       
         <button class="action-btn secondary" onclick="showWithdraw()">Withdraw</button>
         <button class="action-btn" onclick="app.handleMenuAction('sell-now')" style="background: #e67e22;">💰 Sell Now</button>
     </div>
