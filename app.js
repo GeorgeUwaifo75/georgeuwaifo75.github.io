@@ -5,7 +5,10 @@ const PAYSTACK_CONFIG = {
     publicKey: 'pk_test_YOUR_PUBLIC_KEY_HERE', // Replace with your Paystack public key
     currency: 'NGN',
     channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money'],
-    callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
+    //callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
+    callbackUrl: 'https://georgeuwaifo75.github.io/dashboard.html', // Return URL after payment
+
+    
     metadata: {
         custom_fields: []
     }
