@@ -123,23 +123,28 @@
                     </div>
                     
                     <!-- In dashboard.html, add this to the wallet-card section after the existing buttons -->
-<div class="card wallet-card">
-    <h2>💰 Wallet Balance</h2>
-    <div class="balance-container">
-        <div class="balance-amount">
-            <span class="currency">₦</span>
-            <span id="walletBalance" class="amount">0.00</span>
-        </div>
-        <p class="balance-label">Available Balance</p>
-    </div>
-    <div class="wallet-actions">
-       <!--  <button class="action-btn" onclick="showAddFunds()">Add Funds</button> -->
-       <button class="action-btn" onclick="app.handleMenuAction('wallet-topup')">Add Funds</button>
-       
-        <button class="action-btn secondary" onclick="showWithdraw()">Withdraw</button>
-        <button class="action-btn" onclick="app.handleMenuAction('sell-now')" style="background: #e67e22;">💰 Sell Now</button>
-    </div>
-</div>
+                  <div class="card wallet-card">
+                      <h2>💰 Wallet Balance</h2>
+                      <div class="balance-container">
+                          <div class="balance-amount">
+                              <span class="currency">₦</span>
+                              <span id="walletBalance" class="amount">0.00</span>
+                          </div>
+                          <p class="balance-label">Available Balance</p>
+                          
+                          
+                      </div>
+                      <div class="wallet-actions">
+                         <!--  <button class="action-btn" onclick="showAddFunds()">Add Funds</button> -->
+                         <button class="action-btn" onclick="app.handleMenuAction('wallet-topup')">Add Funds</button>
+                         
+                          <button class="action-btn secondary" onclick="showWithdraw()">Withdraw</button>
+                          <button class="action-btn" onclick="app.handleMenuAction('sell-now')" style="background: #e67e22;">💰 Sell Now</button>
+                      </div>
+                      <br>
+                          <p><strong>Next Receipt #:</strong> <span id="receiptCounter">1000</span></p>
+                     
+                  </div>
                     <div class="card recent-card">
                         <h2>📋 Recent Activity</h2>
                         <div class="activity-list">
