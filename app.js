@@ -29,6 +29,11 @@ class WebStarNgApp {
           
           // Validate demo user on load
           await this.validateDemoUserOnLoad();
+          
+          // Initialize receipt counter if not exists
+          if (!localStorage.getItem('receipt_counter')) {
+              localStorage.setItem('receipt_counter', '1000');
+          }
     }
 
     checkAuth() {
@@ -1924,11 +1929,19 @@ async processSale() {
         }
         
         // Clear cart
-        this.cart = [];
-        this.saveCart();
+       /* this.cart = [];
+        this.saveCart();*/
         
         // Show success message
         alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💳 Transaction Fee: ₦25.00\n💰 New Balance: ₦${newBalance.toFixed(2)}\n\nNote: Transaction fee of ₦25 deducted from wallet.`);
+  
+          // Add after the alert, before clearing cart:
+        // Print receipt after successful sale
+        this.printSimpleReceipt(this.cart, total);
+        // Clear cart
+        this.cart = [];
+        this.saveCart();
+          
         
         // Update UI with new balance
         this.updateUserDisplay(currentUser);
@@ -4523,6 +4536,14 @@ updateUserDisplay(user) {
         }
     }
     
+    
+    
+    const receiptCounter = document.getElementById('receiptCounter');
+      if (receiptCounter) {
+          const nextReceipt = parseInt(localStorage.getItem('receipt_counter') || '1000');
+          receiptCounter.textContent = nextReceipt;
+      }
+    
     // Update menu visibility based on permissions
     this.updateMenuVisibility(userGroup);
 }
@@ -5100,6 +5121,185 @@ getNewUserForm() {
 showPaystackPaymentModal() {
     // Simply redirect to the wallet topup page
     this.handleMenuAction('wallet-topup');
+}
+
+// Add this simple print receipt method
+printSimpleReceipt(cartItems, totalAmount) {
+    try {
+        // Get current user and business info
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        const businessName = currentUser.businessName || 'WebStarNg Store';
+        const businessAddress = currentUser.addressLine1 || '';
+        const businessTel = currentUser.telephone || '';
+        const now = new Date();
+        const dateTime = now.toLocaleString();
+        
+        // Generate receipt number
+        let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
+        localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
+        
+        // Create receipt content
+        let receiptContent = `
+            <html>
+            <head>
+                <title>Sales Receipt</title>
+                <style>
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        width: 80mm;
+                        margin: 0 auto;
+                        padding: 10px;
+                    }
+                    .business-name {
+                        font-weight: bold;
+                        text-align: center;
+                        font-size: 14px;
+                        margin-bottom: 5px;
+                    }
+                    .business-info {
+                        text-align: center;
+                        font-size: 11px;
+                        margin-bottom: 10px;
+                    }
+                    .receipt-header {
+                        text-align: center;
+                        border-bottom: 1px dashed #000;
+                        padding-bottom: 5px;
+                        margin-bottom: 10px;
+                    }
+                    .receipt-number {
+                        font-weight: bold;
+                        margin: 5px 0;
+                    }
+                    .date-time {
+                        margin: 5px 0;
+                    }
+                    .items-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 10px 0;
+                    }
+                    .items-table th {
+                        border-bottom: 1px solid #000;
+                        padding: 3px 0;
+                        text-align: left;
+                    }
+                    .items-table td {
+                        padding: 2px 0;
+                        border-bottom: 1px dashed #ccc;
+                    }
+                    .total-section {
+                        border-top: 2px solid #000;
+                        margin-top: 10px;
+                        padding-top: 10px;
+                        font-weight: bold;
+                        text-align: right;
+                    }
+                    .thank-you {
+                        text-align: center;
+                        margin-top: 15px;
+                        font-style: italic;
+                    }
+                    .divider {
+                        border-top: 1px dashed #000;
+                        margin: 10px 0;
+                    }
+                    @media print {
+                        body { margin: 0; padding: 0; }
+                        .no-print { display: none !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="business-name">${businessName}</div>
+                <div class="business-info">
+                    ${businessAddress ? `<div>${businessAddress}</div>` : ''}
+                    ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
+                </div>
+                
+                <div class="receipt-header">
+                    <div class="receipt-number">RECEIPT #: ${receiptNumber}</div>
+                    <div class="date-time">${dateTime}</div>
+                </div>
+                
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Add items
+        cartItems.forEach(item => {
+            receiptContent += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>₦${item.sellingPrice.toFixed(2)}</td>
+                    <td>₦${item.subtotal.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+        
+        // Add totals and footer
+        receiptContent += `
+                    </tbody>
+                </table>
+                
+                <div class="divider"></div>
+                
+                <div class="total-section">
+                    <div>SUBTOTAL: ₦${totalAmount.toFixed(2)}</div>
+                    <div>TRANSACTION FEE: ₦25.00</div>
+                    <div style="font-size: 14px;">GRAND TOTAL: ₦${(totalAmount).toFixed(2)}</div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="thank-you">
+                    <div>Thank you for your purchase!</div>
+                    <div>Please come again!</div>
+                </div>
+                
+                <!-- Print button for screen display -->
+                <div class="no-print" style="text-align: center; margin-top: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        🖨️ Print Receipt
+                    </button>
+                    <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+                        Close
+                    </button>
+                </div>
+                
+                <script>
+                    // Auto-print if printer is available
+                    setTimeout(() => {
+                        if (window.print) {
+                            window.print();
+                        }
+                    }, 500);
+                </script>
+            </body>
+            </html>
+        `;
+        
+        // Open in new window for printing
+        const printWindow = window.open('', '_blank', 'width=400,height=600');
+        printWindow.document.write(receiptContent);
+        printWindow.document.close();
+        
+    } catch (error) {
+        console.error('Error printing receipt:', error);
+        // Don't fail the sale if printing fails
+    }
 }
 
 }
