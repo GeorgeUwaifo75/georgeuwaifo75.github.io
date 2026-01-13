@@ -5,9 +5,9 @@ class JSONBinAPI {
    constructor() {
         
       // Replace with your actual JSONBin.io credentials
-      this.apiKey = '$2a$10$GY26W.StiN7bdlaoYuva3.GCGhyglj8ne8v0aaIJ895NLv9o61bqy'; 
+      this.apiKey = JSONBIN_API_KEY; 
       // Your JSONBin.io API key
-      this.mainBinId = '693b1ac443b1c97be9e786b2';
+      this.mainBinId = JSONBIN_MAIN_BIN_ID;
        // Your JSONBin.io main bin ID for users
        this.baseURL = 'https://api.jsonbin.io/v3/b';
    
