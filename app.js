@@ -4318,8 +4318,12 @@ async getPurchaseReport() {
             <div class="content-page">
                 <div class="report-header">
                     <div>
+                    
+                    
                         <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
                         <p class="report-date">Date: ${today}</p>
+                        
+                        
                     </div>
                     <div class="export-actions">
                         <button class="export-btn excel-btn" onclick="app.exportPurchasesToExcel()">
@@ -4329,7 +4333,7 @@ async getPurchaseReport() {
                 </div>
 
                 <!-- Purchase Summary -->
-                <div class="purchase-summary" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+                <div class="purchase-summary" style="margin: 20px 0; padding: 20px;  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px;">
                     <div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: space-around;">
                         <div class="summary-item">
                             <span class="summary-label">Total Purchases:</span>
