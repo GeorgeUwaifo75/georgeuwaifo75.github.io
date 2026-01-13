@@ -1,17 +1,5 @@
 // Main Application Module
 
-let CONFIG = {};
-
-// Load config safely
-try {
-  CONFIG = await fetch('/config.json').then(r => r.json());
-} catch {
-  // Fallback to empty config
-  CONFIG = {};
-  console.warn('Config file not found');
-}
-
-
 // Paystack Configuration - ADD THIS AT THE VERY TOP
 const PAYSTACK_CONFIG = {
     publicKey: 'pk_live_2018244c913523ab0751249b240bc3e3448c3c19', // Replace with your Paystack public key
