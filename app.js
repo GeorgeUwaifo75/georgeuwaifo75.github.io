@@ -362,7 +362,17 @@ handleMenuAction(action) {
         case 'purchase-day':
             title = 'Purchase Report';
             subtitle = "Today's purchases summary";
-            contentHTML = this.getPurchaseReport();
+            // Handle asynchronously like sales report
+            this.getPurchaseReport().then(html => {
+                contentHTML = html;
+                contentTitle.textContent = title;
+                contentSubtitle.textContent = subtitle;
+                dynamicContent.innerHTML = contentHTML;
+                this.attachContentEventListeners();
+            }).catch(error => {
+                console.error('Error loading purchase report:', error);
+                contentHTML = '<div class="error-message">Error loading purchase report</div>';
+            });
             break;
             
         case 'inventory-report':
