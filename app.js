@@ -4,7 +4,7 @@ let CONFIG = {};
 
 // Load config safely
 try {
-  CONFIG = await fetch('/config.js').then(r => r.json());
+  CONFIG = await fetch('/config.json').then(r => r.json());
 } catch {
   // Fallback to empty config
   CONFIG = {};
