@@ -677,20 +677,7 @@ async createUser(userData) {
         return newBalance;
     }
 
-    // Withdraw funds from wallet
-    async withdrawFunds(userID, amount) {
-        const user = await this.getUser(userID);
-        if (!user) throw new Error('User not found');
-        
-        if (amount > user.wallet) {
-            throw new Error('Insufficient funds');
-        }
-        
-        const newBalance = user.wallet - amount;
-        await this.updateUser(userID, { wallet: newBalance });
-        
-        return newBalance;
-    }
+   
 }
 
 // Create global API instance
