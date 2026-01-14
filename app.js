@@ -5482,20 +5482,7 @@ function showAddFunds() {
     modal.style.display = 'flex';
 }
 
-function showWithdraw() {
-    const modal = document.getElementById('modalOverlay');
-    const title = document.getElementById('modalTitle');
-    const content = document.getElementById('modalContent');
-    
-    title.textContent = 'Withdraw Funds';
-    content.innerHTML = `
-        <p>Withdraw funds from your wallet:</p>
-        <input type="number" id="withdrawAmount" placeholder="Enter amount" min="1" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-        <button onclick="withdrawFunds()" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Withdraw</button>
-    `;
-    
-    modal.style.display = 'flex';
-}
+
 
 async function addFunds() {
     const amount = parseFloat(document.getElementById('fundAmount').value);
@@ -5524,38 +5511,7 @@ async function addFunds() {
     }
 }
 
-async function withdrawFunds() {
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    if (!amount || amount <= 0) {
-        alert('Please enter a valid amount');
-        return;
-    }
 
-    try {
-        const userStr = localStorage.getItem('webstarng_user');
-        if (!userStr) return;
-
-        const user = JSON.parse(userStr);
-        
-        if (amount > user.wallet) {
-            alert('Insufficient funds');
-            return;
-        }
-
-        const newBalance = await api.withdrawFunds(user.userID, amount);
-        
-        // Update local session
-        user.wallet = newBalance;
-        localStorage.setItem('webstarng_user', JSON.stringify(user));
-        
-        // Update UI
-        app.updateUserDisplay(user);
-        alert(`Successfully withdrew ₦${amount.toFixed(2)} from your wallet!`);
-        closeModal();
-    } catch (error) {
-        alert('Error withdrawing funds: ' + error.message);
-    }
-}
 
 function closeModal() {
     document.getElementById('modalOverlay').style.display = 'none';
