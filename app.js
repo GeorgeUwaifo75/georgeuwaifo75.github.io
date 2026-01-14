@@ -545,7 +545,7 @@ getSellProductsInterface() {
                 <div class="warning-icon">⚠️</div>
                 <div class="warning-content">
                     <strong>Demo Account Limitations</strong>
-                    <p>This demo account is limited to 3 transactions per day.</p>
+                    <p>This demo account is limited to 3 s per day.</p>
                     <p>Create a regular account for unlimited transactions.</p>
                 </div>
             </div>
@@ -1941,8 +1941,7 @@ async processSale() {
        
         
         // Show success message
-        alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💳 Transaction Fee: ₦25.00\n💰 New Balance: ₦${newBalance.toFixed(2)}\n\nNote: Transaction fee of ₦25 deducted from wallet.`);
-  
+        alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
           // Add after the alert, before clearing cart:
         
         // Print receipt after successful sale
@@ -5404,9 +5403,7 @@ printSimpleReceipt(cartItems, totalAmount) {
                 <div class="divider"></div>
                 
                 <div class="total-section">
-                    <div>SUBTOTAL: ₦${totalAmount.toFixed(2)}</div>
-                    <div>TRANSACTION FEE: ₦25.00</div>
-                    <div style="font-size: 12pt;">GRAND TOTAL: ₦${(totalAmount).toFixed(2)}</div>
+                    <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
                 </div>
                 
                 <div class="divider"></div>
