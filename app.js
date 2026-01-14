@@ -2,7 +2,7 @@
 
 // Paystack Configuration - ADD THIS AT THE VERY TOP
 const PAYSTACK_CONFIG = {
-    publicKey: window.APP_CONFIG.PAYSTACK_PUBLIC_KEY;
+    publicKey: window.APP_CONFIG.PAYSTACK_PUBLIC_KEY,
     currency: 'NGN',
     channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money'],
     callbackUrl: window.location.origin + '/dashboard.html', // Return URL after payment
