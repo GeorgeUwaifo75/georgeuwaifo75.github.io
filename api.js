@@ -7,8 +7,12 @@ constructor() {
         this.mainBinId = window.APP_CONFIG.JSONBIN_MAIN_BIN_ID;
         this.baseURL = 'https://api.jsonbin.io/v3/b';
     }
-
-   
+      /*
+      this.apiKey = '$2a$10$GY26W.StiN7bdlaoYuva3.GCGhyglj8ne8v0aaIJ895NLv9o61bqy'; 
+      this.mainBinId = '693b1ac443b1c97be9e786b2';
+       this.baseURL = 'https://api.jsonbin.io/v3/b';
+       */
+     
    
 
 
