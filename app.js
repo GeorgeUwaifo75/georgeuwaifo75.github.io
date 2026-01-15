@@ -5143,115 +5143,155 @@ showPaystackPaymentModal() {
 }
 
 // Add this simple print receipt method
-// Simple automatic receipt printing
+// Direct automatic printing without popups
 printSimpleReceipt(cartItems, totalAmount) {
-    try {
-        // Get current user and business info
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        if (!currentUser) return;
-
-        const businessName = currentUser.businessName || 'WebStarNg Store';
-        const businessAddress = currentUser.addressLine1 || '';
-        const businessTel = currentUser.telephone || '';
-
-        const now = new Date();
-        const dateTime = now.toLocaleString();
-
-        // Generate receipt number
-        let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
-        localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
-
-        // Create a simple text receipt for better compatibility
-        let receiptText = `
-${'='.repeat(40)}
-        ${businessName}
-${'='.repeat(40)}
-${businessAddress ? businessAddress + '\n' : ''}${businessTel ? 'Tel: ' + businessTel + '\n' : ''}
-Date: ${dateTime}
-Receipt #: ${receiptNumber}
-${'-'.repeat(40)}
-Item                Qty   Price    Total
-${'-'.repeat(40)}
-`;
-
-        // Add items
-        cartItems.forEach(item => {
-            const itemName = item.name.length > 18 ? item.name.substring(0, 15) + '...' : item.name;
-            receiptText += `${itemName.padEnd(20)} ${item.quantity.toString().padStart(3)} ₦${item.sellingPrice.toFixed(2).padStart(7)} ₦${item.subtotal.toFixed(2).padStart(8)}\n`;
-        });
-
-        // Add total
-        receiptText += `
-${'-'.repeat(40)}
-TOTAL: ₦${totalAmount.toFixed(2).padStart(33)}
-${'-'.repeat(40)}
-
-Thank you for your purchase!
-Please come again!
-
-*** CUSTOMER COPY ***
-`;
-
-        // Create a hidden printable element
-        const printContainer = document.createElement('div');
-        printContainer.style.cssText = `
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 80mm;
-            font-family: 'Courier New', monospace;
-            font-size: 10pt;
-            white-space: pre;
-            background: white;
-            z-index: 9999;
-            visibility: hidden;
-        `;
-        printContainer.textContent = receiptText;
-        document.body.appendChild(printContainer);
-
-        // Print automatically
-        setTimeout(() => {
-            const printWindow = window.open('', '_blank', 'width=400,height=600');
-            if (printWindow) {
-                printWindow.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Receipt #${receiptNumber}</title>
-                        <style>
-                            @media print {
-                                @page { size: 80mm auto; margin: 0; }
-                                body { margin: 0; padding: 5mm; font-family: 'Courier New', monospace; font-size: 10pt; white-space: pre; }
-                            }
-                            body { font-family: 'Courier New', monospace; font-size: 10pt; white-space: pre; padding: 10px; }
-                        </style>
-                    </head>
-                    <body>${receiptText.replace(/\n/g, '<br>')}</body>
-                    </html>
-                `);
-                printWindow.document.close();
-                
-                // Auto-print and close
-                setTimeout(() => {
-                    printWindow.print();
-                    setTimeout(() => {
-                        printWindow.close();
-                        document.body.removeChild(printContainer);
-                    }, 500);
-                }, 300);
-            } else {
-                // If popup blocked, try direct print
-                window.print();
-                document.body.removeChild(printContainer);
+    return new Promise((resolve) => {
+        try {
+            // Get current user and business info
+            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+            if (!currentUser) {
+                resolve(false);
+                return;
             }
-        }, 100);
 
-    } catch (error) {
-        console.error('Auto-print error:', error);
-        // Silent fail - don't interrupt user flow
-    }
+            const businessName = currentUser.businessName || 'WebStarNg Store';
+            const businessAddress = currentUser.addressLine1 || '';
+            const businessTel = currentUser.telephone || '';
+            const now = new Date();
+            const dateTime = now.toLocaleString();
+
+            // Generate receipt number
+            let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
+            localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
+
+            // Build receipt HTML
+            let receiptHTML = `
+            <div style="font-family: 'Courier New', monospace; font-size: 10pt; width: 80mm; padding: 5mm; line-height: 1.2;">
+                <div style="text-align: center; font-weight: bold; font-size: 12pt; margin-bottom: 3mm; text-transform: uppercase;">
+                    ${businessName}
+                </div>
+                <div style="text-align: center; font-size: 9pt; margin-bottom: 4mm; border-bottom: 1px dashed #000; padding-bottom: 3mm;">
+                    ${businessAddress ? `<div>${businessAddress}</div>` : ''}
+                    ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
+                </div>
+                
+                <div style="text-align: center; margin-bottom: 4mm;">
+                    <div style="font-weight: bold; margin: 2mm 0; font-size: 11pt;">
+                        RECEIPT #: ${receiptNumber}
+                    </div>
+                    <div style="margin: 2mm 0; font-size: 9pt;">
+                        ${dateTime}
+                    </div>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 4mm 0; font-size: 9pt;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; width: 40%; border-bottom: 1px solid #000; padding: 2mm 0;">Item</th>
+                            <th style="text-align: center; width: 15%; border-bottom: 1px solid #000; padding: 2mm 0;">Qty</th>
+                            <th style="text-align: right; width: 20%; border-bottom: 1px solid #000; padding: 2mm 0;">Price</th>
+                            <th style="text-align: right; width: 25%; border-bottom: 1px solid #000; padding: 2mm 0;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            // Add items
+            cartItems.forEach(item => {
+                const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+                receiptHTML += `
+                        <tr>
+                            <td style="padding: 2mm 0; border-bottom: 1px dashed #ccc;">${itemName}</td>
+                            <td style="padding: 2mm 0; text-align: center; border-bottom: 1px dashed #ccc;">${item.quantity}</td>
+                            <td style="padding: 2mm 0; text-align: right; border-bottom: 1px dashed #ccc;">₦${item.sellingPrice.toFixed(2)}</td>
+                            <td style="padding: 2mm 0; text-align: right; border-bottom: 1px dashed #ccc;">₦${item.subtotal.toFixed(2)}</td>
+                        </tr>
+                `;
+            });
+
+            // Add total
+            receiptHTML += `
+                    </tbody>
+                </table>
+                
+                <div style="border-top: 2px solid #000; margin-top: 4mm; padding-top: 3mm; font-weight: bold; text-align: right; font-size: 11pt;">
+                    <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 5mm; font-style: italic; border-top: 1px dashed #000; padding-top: 3mm; font-size: 9pt;">
+                    <div>Thank you for your purchase!</div>
+                    <div>Please come again!</div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 4mm; font-size: 8pt; border-top: 1px dashed #ccc; padding-top: 2mm;">
+                    *** CUSTOMER COPY ***
+                </div>
+            </div>
+            `;
+
+            // Create print container
+            const printContainer = document.createElement('div');
+            printContainer.id = 'receipt-print-container';
+            printContainer.style.cssText = `
+                position: fixed;
+                left: -9999px;
+                top: 0;
+                width: 80mm;
+                background: white;
+            `;
+            printContainer.innerHTML = receiptHTML;
+            document.body.appendChild(printContainer);
+
+            // Create print styles
+            const printStyles = `
+                @media print {
+                    @page {
+                        size: 80mm auto;
+                        margin: 0;
+                    }
+                    body * {
+                        visibility: hidden;
+                    }
+                    #receipt-print-container, #receipt-print-container * {
+                        visibility: visible;
+                    }
+                    #receipt-print-container {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 80mm;
+                    }
+                }
+            `;
+
+            // Add print styles
+            const styleSheet = document.createElement('style');
+            styleSheet.type = 'text/css';
+            styleSheet.innerText = printStyles;
+            document.head.appendChild(styleSheet);
+
+            // Trigger print
+            setTimeout(() => {
+                window.print();
+                
+                // Clean up
+                setTimeout(() => {
+                    if (document.body.contains(printContainer)) {
+                        document.body.removeChild(printContainer);
+                    }
+                    if (document.head.contains(styleSheet)) {
+                        document.head.removeChild(styleSheet);
+                    }
+                    resolve(true);
+                }, 1000);
+            }, 100);
+
+        } catch (error) {
+            console.error('Auto-print error:', error);
+            resolve(false);
+        }
+    });
 }
-
 }
 
 // Global functions for modals (existing functionality)
