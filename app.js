@@ -1941,21 +1941,22 @@ async processSale() {
        
         
         // Show success message
-        alert(`✅ Sale completed successfully**$%!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
+        alert(`✅ Sale completed successfully***!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
           // Add after the alert, before clearing cart:
         
-        // Print receipt after successful sale
-          try {
-              this.printSimpleReceipt(this.cart, total);
-          } catch (printError) {
-              console.error('Receipt printing failed:', printError);
-              // Continue even if printing fails
-          }
-                  
-        
-        // Clear cart
-        this.cart = [];
-        this.saveCart();
+        // Print receipt automatically (non-blocking)
+            setTimeout(() => {
+                this.printSimpleReceipt(this.cart, total).then(success => {
+                    if (!success) {
+                        console.log('Receipt printing skipped or failed silently');
+                    }
+                });
+            }, 300);
+            
+            // Clear cart
+            this.cart = [];
+            this.saveCart();
+            this.renderCart();
           
         
         // Update UI with new balance
