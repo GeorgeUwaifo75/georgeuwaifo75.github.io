@@ -1941,7 +1941,7 @@ async processSale() {
        
         
         // Show success message
-        alert(`✅ Sale completed successfully*!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
+        alert(`✅ Sale completed successfully***!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
           // Add after the alert, before clearing cart:
         
         // Print receipt after successful sale
