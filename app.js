@@ -1941,7 +1941,7 @@ async processSale() {
        
         
         // Show success message
-        alert(`✅ Sale completed successfully***!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
+        alert(`✅ Sale completed successfully**2!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
           // Add after the alert, before clearing cart:
         
         // Print receipt after successful sale
@@ -5143,159 +5143,295 @@ showPaystackPaymentModal() {
 }
 
 // Add this simple print receipt method
-// Enhanced print receipt method with better USB printer support
 // Automatic receipt printing method
-// Simple automatic receipt printing
-// Direct automatic printing without popups
 printSimpleReceipt(cartItems, totalAmount) {
-    return new Promise((resolve) => {
-        try {
-            // Get current user and business info
-            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-            if (!currentUser) {
-                resolve(false);
-                return;
-            }
+    try {
+        // Get current user and business info
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
 
-            const businessName = currentUser.businessName || 'WebStarNg Store';
-            const businessAddress = currentUser.addressLine1 || '';
-            const businessTel = currentUser.telephone || '';
-            const now = new Date();
-            const dateTime = now.toLocaleString();
+        const businessName = currentUser.businessName || 'WebStarNg Store';
+        const businessAddress = currentUser.addressLine1 || '';
+        const businessTel = currentUser.telephone || '';
 
-            // Generate receipt number
-            let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
-            localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
+        const now = new Date();
+        const dateTime = now.toLocaleString();
 
-            // Build receipt HTML
-            let receiptHTML = `
-            <div style="font-family: 'Courier New', monospace; font-size: 10pt; width: 80mm; padding: 5mm; line-height: 1.2;">
-                <div style="text-align: center; font-weight: bold; font-size: 12pt; margin-bottom: 3mm; text-transform: uppercase;">
-                    ${businessName}
-                </div>
-                <div style="text-align: center; font-size: 9pt; margin-bottom: 4mm; border-bottom: 1px dashed #000; padding-bottom: 3mm;">
-                    ${businessAddress ? `<div>${businessAddress}</div>` : ''}
-                    ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
-                </div>
-                
-                <div style="text-align: center; margin-bottom: 4mm;">
-                    <div style="font-weight: bold; margin: 2mm 0; font-size: 11pt;">
-                        RECEIPT #: ${receiptNumber}
-                    </div>
-                    <div style="margin: 2mm 0; font-size: 9pt;">
-                        ${dateTime}
-                    </div>
-                </div>
-                
-                <table style="width: 100%; border-collapse: collapse; margin: 4mm 0; font-size: 9pt;">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left; width: 40%; border-bottom: 1px solid #000; padding: 2mm 0;">Item</th>
-                            <th style="text-align: center; width: 15%; border-bottom: 1px solid #000; padding: 2mm 0;">Qty</th>
-                            <th style="text-align: right; width: 20%; border-bottom: 1px solid #000; padding: 2mm 0;">Price</th>
-                            <th style="text-align: right; width: 25%; border-bottom: 1px solid #000; padding: 2mm 0;">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
+        // Generate receipt number
+        let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
+        localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
 
-            // Add items
-            cartItems.forEach(item => {
-                const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
-                receiptHTML += `
-                        <tr>
-                            <td style="padding: 2mm 0; border-bottom: 1px dashed #ccc;">${itemName}</td>
-                            <td style="padding: 2mm 0; text-align: center; border-bottom: 1px dashed #ccc;">${item.quantity}</td>
-                            <td style="padding: 2mm 0; text-align: right; border-bottom: 1px dashed #ccc;">₦${item.sellingPrice.toFixed(2)}</td>
-                            <td style="padding: 2mm 0; text-align: right; border-bottom: 1px dashed #ccc;">₦${item.subtotal.toFixed(2)}</td>
-                        </tr>
-                `;
-            });
-
-            // Add total
-            receiptHTML += `
-                    </tbody>
-                </table>
-                
-                <div style="border-top: 2px solid #000; margin-top: 4mm; padding-top: 3mm; font-weight: bold; text-align: right; font-size: 11pt;">
-                    <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
-                </div>
-                
-                <div style="text-align: center; margin-top: 5mm; font-style: italic; border-top: 1px dashed #000; padding-top: 3mm; font-size: 9pt;">
-                    <div>Thank you for your purchase!</div>
-                    <div>Please come again!</div>
-                </div>
-                
-                <div style="text-align: center; margin-top: 4mm; font-size: 8pt; border-top: 1px dashed #ccc; padding-top: 2mm;">
-                    *** CUSTOMER COPY ***
-                </div>
-            </div>
-            `;
-
-            // Create print container
-            const printContainer = document.createElement('div');
-            printContainer.id = 'receipt-print-container';
-            printContainer.style.cssText = `
-                position: fixed;
-                left: -9999px;
-                top: 0;
-                width: 80mm;
-                background: white;
-            `;
-            printContainer.innerHTML = receiptHTML;
-            document.body.appendChild(printContainer);
-
-            // Create print styles
-            const printStyles = `
+        // Create receipt content optimized for thermal/USB printers
+        // Using direct CSS styling for better print compatibility
+        const receiptHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sales Receipt #${receiptNumber}</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
                 @media print {
                     @page {
                         size: 80mm auto;
                         margin: 0;
                     }
-                    body * {
-                        visibility: hidden;
-                    }
-                    #receipt-print-container, #receipt-print-container * {
-                        visibility: visible;
-                    }
-                    #receipt-print-container {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
+                    body {
+                        margin: 0;
+                        padding: 0;
                         width: 80mm;
                     }
+                    .no-print {
+                        display: none !important;
+                    }
                 }
-            `;
-
-            // Add print styles
-            const styleSheet = document.createElement('style');
-            styleSheet.type = 'text/css';
-            styleSheet.innerText = printStyles;
-            document.head.appendChild(styleSheet);
-
-            // Trigger print
-            setTimeout(() => {
-                window.print();
                 
-                // Clean up
-                setTimeout(() => {
-                    if (document.body.contains(printContainer)) {
-                        document.body.removeChild(printContainer);
-                    }
-                    if (document.head.contains(styleSheet)) {
-                        document.head.removeChild(styleSheet);
-                    }
-                    resolve(true);
-                }, 1000);
-            }, 100);
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                    font-family: 'Courier New', monospace;
+                }
+                
+                body {
+                    width: 80mm;
+                    padding: 5mm;
+                    font-size: 10pt;
+                    line-height: 1.2;
+                }
+                
+                .business-name {
+                    font-weight: bold;
+                    text-align: center;
+                    font-size: 12pt;
+                    margin-bottom: 3mm;
+                    text-transform: uppercase;
+                }
+                
+                .business-info {
+                    text-align: center;
+                    font-size: 9pt;
+                    margin-bottom: 4mm;
+                    border-bottom: 1px dashed #000;
+                    padding-bottom: 3mm;
+                }
+                
+                .receipt-header {
+                    text-align: center;
+                    margin-bottom: 4mm;
+                }
+                
+                .receipt-number {
+                    font-weight: bold;
+                    margin: 2mm 0;
+                    font-size: 11pt;
+                }
+                
+                .date-time {
+                    margin: 2mm 0;
+                    font-size: 9pt;
+                }
+                
+                .items-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 4mm 0;
+                    font-size: 9pt;
+                }
+                
+                .items-table th {
+                    border-bottom: 1px solid #000;
+                    padding: 2mm 0;
+                    text-align: left;
+                    font-weight: bold;
+                }
+                
+                .items-table td {
+                    padding: 2mm 0;
+                    border-bottom: 1px dashed #ccc;
+                    vertical-align: top;
+                }
+                
+                .total-section {
+                    border-top: 2px solid #000;
+                    margin-top: 4mm;
+                    padding-top: 3mm;
+                    font-weight: bold;
+                    text-align: right;
+                    font-size: 11pt;
+                }
+                
+                .thank-you {
+                    text-align: center;
+                    margin-top: 5mm;
+                    font-style: italic;
+                    border-top: 1px dashed #000;
+                    padding-top: 3mm;
+                    font-size: 9pt;
+                }
+                
+                .col-item { 
+                    width: 40%; 
+                    text-align: left;
+                }
+                
+                .col-qty { 
+                    width: 15%; 
+                    text-align: center; 
+                }
+                
+                .col-price { 
+                    width: 20%; 
+                    text-align: right; 
+                }
+                
+                .col-total { 
+                    width: 25%; 
+                    text-align: right; 
+                }
+                
+                .customer-copy {
+                    text-align: center;
+                    margin-top: 4mm;
+                    font-size: 8pt;
+                    border-top: 1px dashed #ccc;
+                    padding-top: 2mm;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="business-name">${businessName}</div>
+            <div class="business-info">
+                ${businessAddress ? `<div>${businessAddress}</div>` : ''}
+                ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
+            </div>
+            
+            <div class="receipt-header">
+                <div class="receipt-number">RECEIPT #: ${receiptNumber}</div>
+                <div class="date-time">${dateTime}</div>
+            </div>
+            
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th class="col-item">Item</th>
+                        <th class="col-qty">Qty</th>
+                        <th class="col-price">Price</th>
+                        <th class="col-total">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cartItems.map(item => {
+                        const itemName = item.name.length > 20 ? 
+                            item.name.substring(0, 17) + '...' : 
+                            item.name;
+                        return `
+                        <tr>
+                            <td class="col-item">${itemName}</td>
+                            <td class="col-qty">${item.quantity}</td>
+                            <td class="col-price">₦${item.sellingPrice.toFixed(2)}</td>
+                            <td class="col-total">₦${item.subtotal.toFixed(2)}</td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+            
+            <div class="total-section">
+                <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
+            </div>
+            
+            <div class="thank-you">
+                <div>Thank you for your purchase!</div>
+                <div>Please come again!</div>
+            </div>
+            
+            <div class="customer-copy">
+                *** CUSTOMER COPY ***
+            </div>
+        </body>
+        </html>
+        `;
 
-        } catch (error) {
-            console.error('Auto-print error:', error);
-            resolve(false);
-        }
-    });
-}
-}
+        // Create a hidden iframe for printing
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        iframe.name = 'receipt-print-frame';
+        
+        document.body.appendChild(iframe);
+        
+        // Write receipt content to iframe
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(receiptHTML);
+        iframeDoc.close();
+        
+        // Wait for content to load, then print automatically
+        iframe.onload = function() {
+            setTimeout(() => {
+                try {
+                    // Focus on iframe and print
+                    iframe.contentWindow.focus();
+                    
+                    // Try multiple print methods for compatibility
+                    if (iframe.contentWindow.print) {
+                        iframe.contentWindow.print();
+                    } else if (iframe.contentWindow.document.execCommand) {
+                        iframe.contentWindow.document.execCommand('print', false, null);
+                    } else {
+                        console.warn('Print command not available in iframe');
+                    }
+                    
+                    // Remove iframe after printing
+                    setTimeout(() => {
+                        if (document.body.contains(iframe)) {
+                            document.body.removeChild(iframe);
+                        }
+                    }, 1000);
+                    
+                } catch (printError) {
+                    console.error('Auto-print error:', printError);
+                    
+                    // Fallback: Open print dialog
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                        printWindow.document.write(receiptHTML);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        setTimeout(() => {
+                            printWindow.print();
+                            setTimeout(() => printWindow.close(), 500);
+                        }, 500);
+                    }
+                }
+            }, 500); // Small delay to ensure content is fully loaded
+        };
+        
+        // If iframe doesn't trigger onload (e.g., for cached content), print anyway
+        setTimeout(() => {
+            if (document.body.contains(iframe)) {
+                try {
+                    iframe.contentWindow.print();
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 1000);
+                } catch (e) {
+                    // Iframe already printed or removed
+                }
+            }
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error in automatic receipt printing:', error);
+        // Don't show error to user - silent fail for better UX
+    }
+}}
 
 // Global functions for modals (existing functionality)
 function showAddFunds() {
