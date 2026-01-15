@@ -254,11 +254,28 @@ updateMenuVisibility(userGroup) {
     	let subtitle = '';
    	 
     	switch(menuType) {
-        	case 'products':
+        	/*
+			case 'products':
             	title = 'Products Management';
             	subtitle = 'Manage your products and inventory';
             	contentHTML = this.getProductsContent();
             	break;
+				*/
+			 case 'products':
+		        	title = 'Inventory Report';
+		        	subtitle = "Current inventory status";
+		        	// Don't use await - handle it differently
+		        	this.getInventoryReport().then(html => {
+		            	contentHTML = html;
+		            	contentTitle.textContent = title;
+		            	contentSubtitle.textContent = subtitle;
+		            	dynamicContent.innerHTML = contentHTML;
+		            	this.attachContentEventListeners();
+		        	}).catch(error => {
+		            	console.error('Error loading inventory report:', error);
+		            	contentHTML = '<div class="error-message">Error loading sales report</div>';
+		        	});
+		        	break;	
         	case 'reports':
             	title = 'Reports Dashboard';
             	subtitle = 'View business reports and analytics';
