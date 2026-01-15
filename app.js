@@ -5145,6 +5145,7 @@ showPaystackPaymentModal() {
 // Add this simple print receipt method
 // Enhanced print receipt method with better USB printer support
 // Automatic receipt printing method
+// Simple automatic receipt printing
 printSimpleReceipt(cartItems, totalAmount) {
     try {
         // Get current user and business info
@@ -5162,275 +5163,94 @@ printSimpleReceipt(cartItems, totalAmount) {
         let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
         localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
 
-        // Create receipt content optimized for thermal/USB printers
-        // Using direct CSS styling for better print compatibility
-        const receiptHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Sales Receipt #${receiptNumber}</title>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                @media print {
-                    @page {
-                        size: 80mm auto;
-                        margin: 0;
-                    }
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        width: 80mm;
-                    }
-                    .no-print {
-                        display: none !important;
-                    }
-                }
-                
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                    font-family: 'Courier New', monospace;
-                }
-                
-                body {
-                    width: 80mm;
-                    padding: 5mm;
-                    font-size: 10pt;
-                    line-height: 1.2;
-                }
-                
-                .business-name {
-                    font-weight: bold;
-                    text-align: center;
-                    font-size: 12pt;
-                    margin-bottom: 3mm;
-                    text-transform: uppercase;
-                }
-                
-                .business-info {
-                    text-align: center;
-                    font-size: 9pt;
-                    margin-bottom: 4mm;
-                    border-bottom: 1px dashed #000;
-                    padding-bottom: 3mm;
-                }
-                
-                .receipt-header {
-                    text-align: center;
-                    margin-bottom: 4mm;
-                }
-                
-                .receipt-number {
-                    font-weight: bold;
-                    margin: 2mm 0;
-                    font-size: 11pt;
-                }
-                
-                .date-time {
-                    margin: 2mm 0;
-                    font-size: 9pt;
-                }
-                
-                .items-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 4mm 0;
-                    font-size: 9pt;
-                }
-                
-                .items-table th {
-                    border-bottom: 1px solid #000;
-                    padding: 2mm 0;
-                    text-align: left;
-                    font-weight: bold;
-                }
-                
-                .items-table td {
-                    padding: 2mm 0;
-                    border-bottom: 1px dashed #ccc;
-                    vertical-align: top;
-                }
-                
-                .total-section {
-                    border-top: 2px solid #000;
-                    margin-top: 4mm;
-                    padding-top: 3mm;
-                    font-weight: bold;
-                    text-align: right;
-                    font-size: 11pt;
-                }
-                
-                .thank-you {
-                    text-align: center;
-                    margin-top: 5mm;
-                    font-style: italic;
-                    border-top: 1px dashed #000;
-                    padding-top: 3mm;
-                    font-size: 9pt;
-                }
-                
-                .col-item { 
-                    width: 40%; 
-                    text-align: left;
-                }
-                
-                .col-qty { 
-                    width: 15%; 
-                    text-align: center; 
-                }
-                
-                .col-price { 
-                    width: 20%; 
-                    text-align: right; 
-                }
-                
-                .col-total { 
-                    width: 25%; 
-                    text-align: right; 
-                }
-                
-                .customer-copy {
-                    text-align: center;
-                    margin-top: 4mm;
-                    font-size: 8pt;
-                    border-top: 1px dashed #ccc;
-                    padding-top: 2mm;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="business-name">${businessName}</div>
-            <div class="business-info">
-                ${businessAddress ? `<div>${businessAddress}</div>` : ''}
-                ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
-            </div>
-            
-            <div class="receipt-header">
-                <div class="receipt-number">RECEIPT #: ${receiptNumber}</div>
-                <div class="date-time">${dateTime}</div>
-            </div>
-            
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th class="col-item">Item</th>
-                        <th class="col-qty">Qty</th>
-                        <th class="col-price">Price</th>
-                        <th class="col-total">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${cartItems.map(item => {
-                        const itemName = item.name.length > 20 ? 
-                            item.name.substring(0, 17) + '...' : 
-                            item.name;
-                        return `
-                        <tr>
-                            <td class="col-item">${itemName}</td>
-                            <td class="col-qty">${item.quantity}</td>
-                            <td class="col-price">₦${item.sellingPrice.toFixed(2)}</td>
-                            <td class="col-total">₦${item.subtotal.toFixed(2)}</td>
-                        </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-            
-            <div class="total-section">
-                <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
-            </div>
-            
-            <div class="thank-you">
-                <div>Thank you for your purchase!</div>
-                <div>Please come again!</div>
-            </div>
-            
-            <div class="customer-copy">
-                *** CUSTOMER COPY ***
-            </div>
-        </body>
-        </html>
-        `;
+        // Create a simple text receipt for better compatibility
+        let receiptText = `
+${'='.repeat(40)}
+        ${businessName}
+${'='.repeat(40)}
+${businessAddress ? businessAddress + '\n' : ''}${businessTel ? 'Tel: ' + businessTel + '\n' : ''}
+Date: ${dateTime}
+Receipt #: ${receiptNumber}
+${'-'.repeat(40)}
+Item                Qty   Price    Total
+${'-'.repeat(40)}
+`;
 
-        // Create a hidden iframe for printing
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        iframe.style.visibility = 'hidden';
-        iframe.name = 'receipt-print-frame';
-        
-        document.body.appendChild(iframe);
-        
-        // Write receipt content to iframe
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(receiptHTML);
-        iframeDoc.close();
-        
-        // Wait for content to load, then print automatically
-        iframe.onload = function() {
-            setTimeout(() => {
-                try {
-                    // Focus on iframe and print
-                    iframe.contentWindow.focus();
-                    
-                    // Try multiple print methods for compatibility
-                    if (iframe.contentWindow.print) {
-                        iframe.contentWindow.print();
-                    } else if (iframe.contentWindow.document.execCommand) {
-                        iframe.contentWindow.document.execCommand('print', false, null);
-                    } else {
-                        console.warn('Print command not available in iframe');
-                    }
-                    
-                    // Remove iframe after printing
-                    setTimeout(() => {
-                        if (document.body.contains(iframe)) {
-                            document.body.removeChild(iframe);
-                        }
-                    }, 1000);
-                    
-                } catch (printError) {
-                    console.error('Auto-print error:', printError);
-                    
-                    // Fallback: Open print dialog
-                    const printWindow = window.open('', '_blank');
-                    if (printWindow) {
-                        printWindow.document.write(receiptHTML);
-                        printWindow.document.close();
-                        printWindow.focus();
-                        setTimeout(() => {
-                            printWindow.print();
-                            setTimeout(() => printWindow.close(), 500);
-                        }, 500);
-                    }
-                }
-            }, 500); // Small delay to ensure content is fully loaded
-        };
-        
-        // If iframe doesn't trigger onload (e.g., for cached content), print anyway
+        // Add items
+        cartItems.forEach(item => {
+            const itemName = item.name.length > 18 ? item.name.substring(0, 15) + '...' : item.name;
+            receiptText += `${itemName.padEnd(20)} ${item.quantity.toString().padStart(3)} ₦${item.sellingPrice.toFixed(2).padStart(7)} ₦${item.subtotal.toFixed(2).padStart(8)}\n`;
+        });
+
+        // Add total
+        receiptText += `
+${'-'.repeat(40)}
+TOTAL: ₦${totalAmount.toFixed(2).padStart(33)}
+${'-'.repeat(40)}
+
+Thank you for your purchase!
+Please come again!
+
+*** CUSTOMER COPY ***
+`;
+
+        // Create a hidden printable element
+        const printContainer = document.createElement('div');
+        printContainer.style.cssText = `
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 80mm;
+            font-family: 'Courier New', monospace;
+            font-size: 10pt;
+            white-space: pre;
+            background: white;
+            z-index: 9999;
+            visibility: hidden;
+        `;
+        printContainer.textContent = receiptText;
+        document.body.appendChild(printContainer);
+
+        // Print automatically
         setTimeout(() => {
-            if (document.body.contains(iframe)) {
-                try {
-                    iframe.contentWindow.print();
+            const printWindow = window.open('', '_blank', 'width=400,height=600');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Receipt #${receiptNumber}</title>
+                        <style>
+                            @media print {
+                                @page { size: 80mm auto; margin: 0; }
+                                body { margin: 0; padding: 5mm; font-family: 'Courier New', monospace; font-size: 10pt; white-space: pre; }
+                            }
+                            body { font-family: 'Courier New', monospace; font-size: 10pt; white-space: pre; padding: 10px; }
+                        </style>
+                    </head>
+                    <body>${receiptText.replace(/\n/g, '<br>')}</body>
+                    </html>
+                `);
+                printWindow.document.close();
+                
+                // Auto-print and close
+                setTimeout(() => {
+                    printWindow.print();
                     setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 1000);
-                } catch (e) {
-                    // Iframe already printed or removed
-                }
+                        printWindow.close();
+                        document.body.removeChild(printContainer);
+                    }, 500);
+                }, 300);
+            } else {
+                // If popup blocked, try direct print
+                window.print();
+                document.body.removeChild(printContainer);
             }
-        }, 2000);
-        
+        }, 100);
+
     } catch (error) {
-        console.error('Error in automatic receipt printing:', error);
-        // Don't show error to user - silent fail for better UX
+        console.error('Auto-print error:', error);
+        // Silent fail - don't interrupt user flow
     }
 }
 }
