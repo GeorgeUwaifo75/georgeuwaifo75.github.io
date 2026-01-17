@@ -954,7 +954,6 @@ setupBarcodeField() {
             const now = Date.now();
             if (hasScanned && (now - lastScanTime) < 2000) {
                 console.log('Too soon after last scan, ignoring');
-                newInput.value = '';
                 return;
             }
             
@@ -967,13 +966,12 @@ setupBarcodeField() {
             if (productExists) {
                 // Product exists - load it for editing
                 await this.loadExistingProduct(productExists);
+                // DO NOT clear barcode field in edit mode
             } else {
                 // New product - just validate barcode
                 await this.validateBarcode(value);
+                // Keep barcode visible in create mode
             }
-            
-            // Clear input immediately
-            newInput.value = '';
             
             // Reset flag after 2 seconds
             setTimeout(() => {
@@ -1022,6 +1020,12 @@ async validateBarcode(barcodeValue) {
                 'warning'
             );
             
+            // Keep barcode visible in the field
+            const barcodeInput = document.getElementById('productBarcode');
+            if (barcodeInput) {
+                barcodeInput.value = barcodeValue;
+            }
+            
             // Show option to load existing product
             setTimeout(() => {
                 if (confirm(`Product "${existingProduct.name}" already exists with this barcode.\\n\\nDo you want to edit this product instead?`)) {
@@ -1040,6 +1044,12 @@ async validateBarcode(barcodeValue) {
 
         // Show preview
         this.showBarcodePreview(barcodeValue);
+
+        // Keep barcode visible in the field
+        const barcodeInput = document.getElementById('productBarcode');
+        if (barcodeInput) {
+            barcodeInput.value = barcodeValue;
+        }
 
         // Auto-focus next field
         setTimeout(() => {
@@ -1471,9 +1481,10 @@ getBuyProductsForm() {
                 	<h3 style="color: #2c3e50; margin-bottom: 15px;">
                     	<span class="menu-icon">📊</span> Product Barcode
                 	</h3>
-                	<p class="form-hint" style="margin-bottom: 15px;">
-                    	Scan barcode with scanner or enter manually. This unique identifier is required for sales.
-                	</p>
+                	<div class="form-hint">
+                      💡 Press Enter after manual entry or scan automatically. 
+                      Barcode will remain visible. For existing products, barcode becomes read-only.
+                  </div>
                	 
                 	<div class="form-group">
                     	<label for="productBarcode" class="required-field">Barcode *</label>
@@ -2257,6 +2268,14 @@ clearProductForm() {
         modeIndicator.style.display = 'none';
     }
     
+    // Enable barcode field
+    const barcodeInput = document.getElementById('productBarcode');
+    if (barcodeInput) {
+        barcodeInput.readOnly = false;
+        barcodeInput.style.backgroundColor = '';
+        barcodeInput.style.cursor = '';
+    }
+    
     // Reset save button
     const saveBtn = document.getElementById('saveProductBtn');
     if (saveBtn) {
@@ -2292,7 +2311,13 @@ clearProductForm() {
     const preview = document.getElementById('barcodePreview');
     const status = document.getElementById('barcodeStatus');
     if (preview) preview.style.display = 'none';
-    if (status) status.style.display = 'none';
+    if (status) {
+        status.style.display = 'block';
+        status.textContent = '📊 Enter barcode to check for existing products or create new.';
+        status.style.backgroundColor = '#f8f9fa';
+        status.style.color = '#6c757d';
+        status.style.border = '1px solid #e9ecef';
+    }
     
     // Focus on barcode field
     document.getElementById('productBarcode')?.focus();
@@ -5594,7 +5619,7 @@ async checkProductByBarcode(barcodeValue) {
 }
 
 
-// Add this method to WebStarNgApp class:
+// Update loadExistingProduct() method:
 async loadExistingProduct(product) {
     try {
         // Show mode indicator
@@ -5606,6 +5631,15 @@ async loadExistingProduct(product) {
         // Update form mode
         document.getElementById('productMode').value = 'edit';
         document.getElementById('existingProductId').value = product.id;
+        
+        // Set barcode field value (read-only in edit mode)
+        const barcodeInput = document.getElementById('productBarcode');
+        if (barcodeInput) {
+            barcodeInput.value = product.barcode;
+            barcodeInput.readOnly = true;
+            barcodeInput.style.backgroundColor = '#f8f9fa';
+            barcodeInput.style.cursor = 'not-allowed';
+        }
         
         // Update save button text
         const saveBtn = document.getElementById('saveProductBtn');
@@ -5667,7 +5701,7 @@ async loadExistingProduct(product) {
 }
 
 
-// Add this method to WebStarNgApp class:
+// Update resetToNewProductMode() method:
 resetToNewProductMode() {
     // Reset form mode
     document.getElementById('productMode').value = 'create';
@@ -5677,6 +5711,16 @@ resetToNewProductMode() {
     const modeIndicator = document.getElementById('modeIndicator');
     if (modeIndicator) {
         modeIndicator.style.display = 'none';
+    }
+    
+    // Enable barcode field for new product
+    const barcodeInput = document.getElementById('productBarcode');
+    if (barcodeInput) {
+        barcodeInput.readOnly = false;
+        barcodeInput.style.backgroundColor = '';
+        barcodeInput.style.cursor = '';
+        barcodeInput.value = ''; // Clear for new entry
+        barcodeInput.focus();
     }
     
     // Reset save button
@@ -5691,16 +5735,44 @@ resetToNewProductMode() {
         newProductBtn.style.display = 'none';
     }
     
-    // Clear form
-    this.clearProductForm();
+    // Clear form (except barcode which was already cleared above)
+    const form = document.getElementById('newProductForm');
+    if (form) {
+        form.reset();
+        // Restore barcode field to editable state
+        if (barcodeInput) {
+            barcodeInput.readOnly = false;
+            barcodeInput.style.backgroundColor = '';
+        }
+    }
     
-    // Show info message
-    this.showBarcodeStatus('🆕 Creating new product. Enter barcode to check for existing products.', 'info');
+    // Reset specific fields to defaults
+    const reorderLevel = document.getElementById('reorderLevel');
+    if (reorderLevel) {
+        reorderLevel.value = '5';
+    }
     
-    // Focus on barcode field
-    document.getElementById('productBarcode')?.focus();
+    const unit = document.getElementById('unit');
+    if (unit) {
+        unit.value = 'piece';
+    }
+    
+    // Clear calculated fields
+    this.calculateProfit();
+    this.calculateTotalValue();
+    
+    // Hide barcode preview and status
+    const preview = document.getElementById('barcodePreview');
+    const status = document.getElementById('barcodeStatus');
+    if (preview) preview.style.display = 'none';
+    if (status) {
+        status.style.display = 'block';
+        status.textContent = '🆕 Creating new product. Enter barcode to check for existing products.';
+        status.style.backgroundColor = '#e3f2fd';
+        status.style.color = '#1565c0';
+        status.style.border = '1px solid #bbdefb';
+    }
 }
-
 
 }
 
