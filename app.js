@@ -2213,8 +2213,48 @@ async saveNewProduct() {
         } else {
             // CREATE NEW PRODUCT
             result = await api.addProductToInventory(currentUser.userID, productData);
-        }
-
+        
+          if (result && result.record) {
+                // ======================================================
+                // NEW: CREATE PURCHASE TRANSACTION FOR THE NEW PRODUCT
+                // ======================================================
+                try {
+                    // Calculate total purchase cost
+                    const purchaseTotal = quantity * purchasePrice;
+                    
+                    // Create purchase transaction data
+                    const purchaseTransaction = {
+                        productId: result.record.id || productData.id,
+                        productName: productName,
+                        barcode: barcode,
+                        quantity: quantity,
+                        unitPrice: purchasePrice,
+                        amount: purchaseTotal,
+                        supplier: supplier || 'Unknown',
+                        purchaseDate: new Date().toISOString().split('T')[0],
+                        notes: `Initial stock for new product: ${productName}`,
+                        type: 'initial_stock',
+                        previousStock: 0,
+                        newStock: quantity,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    // Add purchase transaction to user's purchase bin
+                    await api.addPurchaseTransaction(currentUser.userID, purchaseTransaction);
+                    
+                    console.log('✅ Purchase transaction created for new product');
+                } catch (purchaseError) {
+                    console.error('Error creating purchase transaction:', purchaseError);
+                    // Don't fail the product creation if purchase transaction fails
+                    // Continue with success message
+                }
+                // ======================================================
+                
+               }  //Questionable
+         
+         
+          } 
+               
         if (result) {
             // Show success message
             const action = mode === 'edit' ? 'updated' : 'saved';
