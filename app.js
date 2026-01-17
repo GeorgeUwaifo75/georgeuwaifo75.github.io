@@ -254,28 +254,30 @@ updateMenuVisibility(userGroup) {
     	let subtitle = '';
    	 
     	switch(menuType) {
-        	/*
-			case 'products':
+        /*	case 'products':
             	title = 'Products Management';
             	subtitle = 'Manage your products and inventory';
             	contentHTML = this.getProductsContent();
             	break;
-				*/
-			 case 'products':
-		        	title = 'Inventory Report';
-		        	subtitle = "Current inventory status";
-		        	// Don't use await - handle it differently
-		        	this.getInventoryReport().then(html => {
-		            	contentHTML = html;
-		            	contentTitle.textContent = title;
-		            	contentSubtitle.textContent = subtitle;
-		            	dynamicContent.innerHTML = contentHTML;
-		            	this.attachContentEventListeners();
-		        	}).catch(error => {
-		            	console.error('Error loading inventory report:', error);
-		            	contentHTML = '<div class="error-message">Error loading sales report</div>';
-		        	});
-		        	break;	
+            	*/
+            	
+        case 'products':
+        	title = 'Inventory Report';
+        	subtitle = "Current inventory status";
+        	// Don't use await - handle it differently
+        	this.getInventoryReport().then(html => {
+            	contentHTML = html;
+            	contentTitle.textContent = title;
+            	contentSubtitle.textContent = subtitle;
+            	dynamicContent.innerHTML = contentHTML;
+            	this.attachContentEventListeners();
+        	}).catch(error => {
+            	console.error('Error loading inventory report:', error);
+            	contentHTML = '<div class="error-message">Error loading sales report</div>';
+        	});
+        	break;
+              	
+            	
         	case 'reports':
             	title = 'Reports Dashboard';
             	subtitle = 'View business reports and analytics';
@@ -926,113 +928,130 @@ setupBarcodeInput() {
 //New addition Dec 15th
 
 // Barcode management methods
+// Update setupBarcodeField() method:
 setupBarcodeField() {
-	const barcodeInput = document.getElementById('productBarcode');
-	if (!barcodeInput) return;
-    
-	// Clone to remove previous listeners
-	const newInput = barcodeInput.cloneNode(true);
-	barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
-    
-	// SIMPLE FLAG to prevent duplicates
-	let hasScanned = false;
-	let lastScanTime = 0;
-    
-	// ONLY handle keydown (Enter key)
-	newInput.addEventListener('keydown', async (e) => {
-    	if (e.key === 'Enter') {
-        	e.preventDefault();
-       	 
-        	const value = newInput.value.trim();
-       	 
-        	// Basic validation
-        	if (!value || value.length < 3) return;
-       	 
-        	// Prevent rapid duplicate scans
-        	const now = Date.now();
-        	if (hasScanned && (now - lastScanTime) < 2000) {
-            	console.log('Too soon after last scan, ignoring');
-            	newInput.value = '';
-            	return;
-        	}
-       	 
-        	hasScanned = true;
-        	lastScanTime = now;
-       	 
-        	// Process the barcode
-        	await this.validateBarcode(value);
-       	 
-        	// Clear input immediately
-        	newInput.value = '';
-       	 
-        	// Reset flag after 2 seconds
-        	setTimeout(() => {
-            	hasScanned = false;
-        	}, 2000);
-    	}
-	});
-    
-	// IGNORE input events completely for scanners
-	// This prevents the duplicate from input + enter
-	newInput.addEventListener('input', (e) => {
-    	// Do nothing - let the Enter key handler handle everything
-    	// This prevents the timer-based duplicate
-	});
-    
-	// Focus on barcode field
-	newInput.focus();
+    const barcodeInput = document.getElementById('productBarcode');
+    if (!barcodeInput) return;
+
+    // Clone to remove previous listeners
+    const newInput = barcodeInput.cloneNode(true);
+    barcodeInput.parentNode.replaceChild(newInput, barcodeInput);
+
+    // SIMPLE FLAG to prevent duplicates
+    let hasScanned = false;
+    let lastScanTime = 0;
+
+    // ONLY handle keydown (Enter key)
+    newInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const value = newInput.value.trim();
+            
+            // Basic validation
+            if (!value || value.length < 3) return;
+            
+            // Prevent rapid duplicate scans
+            const now = Date.now();
+            if (hasScanned && (now - lastScanTime) < 2000) {
+                console.log('Too soon after last scan, ignoring');
+                newInput.value = '';
+                return;
+            }
+            
+            hasScanned = true;
+            lastScanTime = now;
+            
+            // Check if product exists with this barcode
+            const productExists = await this.checkProductByBarcode(value);
+            
+            if (productExists) {
+                // Product exists - load it for editing
+                await this.loadExistingProduct(productExists);
+            } else {
+                // New product - just validate barcode
+                await this.validateBarcode(value);
+            }
+            
+            // Clear input immediately
+            newInput.value = '';
+            
+            // Reset flag after 2 seconds
+            setTimeout(() => {
+                hasScanned = false;
+            }, 2000);
+        }
+    });
+
+    // IGNORE input events completely for scanners
+    newInput.addEventListener('input', (e) => {
+        // Do nothing - let the Enter key handler handle everything
+    });
+
+    // Focus on barcode field
+    newInput.focus();
 }
+
+
+// Update validateBarcode() method:
 async validateBarcode(barcodeValue) {
-	// Prevent empty barcodes
-	if (!barcodeValue || barcodeValue.trim() === '') {
-    	this.showBarcodeStatus('Please enter or scan a barcode', 'error');
-    	return false;
-	}
-    
-	// Show loading status
-	this.showBarcodeStatus('Checking barcode availability...', 'loading');
-    
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	this.showBarcodeStatus('Please login first', 'error');
-        	return false;
-    	}
-   	 
-    	// Get inventory and check for duplicate barcode
-    	const inventoryData = await api.getUserInventory(currentUser.userID);
-    	const products = inventoryData.products || [];
-    	const existingProduct = products.find(p => p.barcode === barcodeValue);
-   	 
-    	if (existingProduct) {
-        	this.showBarcodeStatus(
-            	`⚠️ Barcode already exists for: "${existingProduct.name}"`,
-            	'warning'
-        	);
-        	return false;
-    	}
-   	 
-    	// Barcode is available
-    	this.showBarcodeStatus(
-        	`✅ Barcode "${barcodeValue}" is available`,
-        	'success'
-    	);
-   	 
-    	// Show preview
-    	this.showBarcodePreview(barcodeValue);
-   	 
-    	// Auto-focus next field
-    	setTimeout(() => {
-        	document.getElementById('productName')?.focus();
-    	}, 300);
-   	 
-    	return true;
-   	 
-	} catch (error) {
-    	console.error('Error validating barcode:', error);
-    	this.showBarcodeStatus('Error checking barcode', 'error');
-    	return false;
-	}
+    // Prevent empty barcodes
+    if (!barcodeValue || barcodeValue.trim() === '') {
+        this.showBarcodeStatus('Please enter or scan a barcode', 'error');
+        return false;
+    }
+
+    // Show loading status
+    this.showBarcodeStatus('Checking barcode...', 'loading');
+
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showBarcodeStatus('Please login first', 'error');
+            return false;
+        }
+
+        // Get inventory and check for duplicate barcode
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        const existingProduct = products.find(p => p.barcode === barcodeValue);
+
+        if (existingProduct) {
+            // Product exists - suggest editing
+            this.showBarcodeStatus(
+                `⚠️ Product exists: "${existingProduct.name}"`,
+                'warning'
+            );
+            
+            // Show option to load existing product
+            setTimeout(() => {
+                if (confirm(`Product "${existingProduct.name}" already exists with this barcode.\\n\\nDo you want to edit this product instead?`)) {
+                    this.loadExistingProduct(existingProduct);
+                }
+            }, 500);
+            
+            return false;
+        }
+
+        // Barcode is available
+        this.showBarcodeStatus(
+            `✅ Barcode "${barcodeValue}" is available for new product`,
+            'success'
+        );
+
+        // Show preview
+        this.showBarcodePreview(barcodeValue);
+
+        // Auto-focus next field
+        setTimeout(() => {
+            document.getElementById('productName')?.focus();
+        }, 300);
+
+        return true;
+    } catch (error) {
+        console.error('Error validating barcode:', error);
+        this.showBarcodeStatus('Error checking barcode', 'error');
+        return false;
+    }
 }
 
 showBarcodeStatus(message, type = 'info') {
@@ -1441,6 +1460,12 @@ getBuyProductsForm() {
         	<h2>New Product</h2>
        	 
         	<form id="newProductForm" class="content-form">
+        	     <!-- Hidden fields for mode and product ID -->
+                <input type="hidden" id="productMode" value="create">
+                <input type="hidden" id="existingProductId" value="">
+              
+        	
+        	
             	<!-- Barcode Section (Most Important) -->
             	<div class="barcode-input-section" style="margin-bottom: 30px;">
                 	<h3 style="color: #2c3e50; margin-bottom: 15px;">
@@ -1472,6 +1497,22 @@ getBuyProductsForm() {
                     	</div>
                 	</div>
             	</div>
+           	 
+           	 
+           	 <!-- Mode Indicator -->
+                <div id="modeIndicator" style="display: none; margin-bottom: 20px; padding: 15px; border-radius: 8px; background: #e3f2fd; border: 1px solid #2196f3;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="color: #2196f3; font-size: 1.2em;">🔄</span>
+                        <div>
+                            <strong style="color: #1976d2;">Edit Existing Product</strong>
+                            <div style="color: #1565c0; font-size: 0.9em;">
+                                Product found! You are now editing existing product. Changes will update the product.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+           	 
            	 
             	<!-- Basic Product Information -->
             	<h3 style="color: #2c3e50; margin: 30px 0 20px 0;">
@@ -1633,14 +1674,17 @@ getBuyProductsForm() {
             	<!-- Form Actions -->
             	<div class="form-actions-content">
                 	<button type="submit" class="btn-primary" id="saveProductBtn">
-                    	<span class="menu-icon">💾</span> Save Product
-                	</button>
-                	<button type="button" class="btn-secondary" id="cancelProductBtn">
-                    	<span class="menu-icon">↩️</span> Cancel
-                	</button>
-                	<button type="button" class="btn-small" onclick="app.clearProductForm()">
-                    	<span class="menu-icon">🗑️</span> Clear Form
-                	</button>
+                        <span class="menu-icon">💾</span> Save Product
+                    </button>
+                    <button type="button" class="btn-secondary" id="cancelProductBtn">
+                        <span class="menu-icon">↩️</span> Cancel
+                    </button>
+                    <button type="button" class="btn-small" onclick="app.clearProductForm()">
+                        <span class="menu-icon">🗑️</span> Clear Form
+                    </button>
+                    <button type="button" class="btn-small" id="newProductBtn" style="display: none;" onclick="app.resetToNewProductMode()">
+                        <span class="menu-icon">🆕</span> Create New Instead
+                    </button>
             	</div>
            	 
             	<!-- Barcode Preview -->
@@ -1990,222 +2034,269 @@ async processSale() {
 
 
 
-	async saveNewProduct() {
-    	// Get form values
-   	 
-    	const barcode = document.getElementById('productBarcode').value.trim();
-   	 
-    	const productName = document.getElementById('productName').value.trim();
-    	const productCategory = document.getElementById('productCategory').value;
-    	const productCode = document.getElementById('productCode').value.trim();
-    	const brand = document.getElementById('brand').value.trim();
-    	const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
-    	const sellingPrice = parseFloat(document.getElementById('sellingPrice').value);
-    	const quantity = parseInt(document.getElementById('quantity').value);
-    	const reorderLevel = parseInt(document.getElementById('reorderLevel').value);
-    	const description = document.getElementById('productDescription').value.trim();
-    	const supplier = document.getElementById('supplier').value.trim();
+	// Update saveNewProduct() method:
+async saveNewProduct() {
+    // Get form values
+    const barcode = document.getElementById('productBarcode').value.trim();
+    const productName = document.getElementById('productName').value.trim();
+    const productCategory = document.getElementById('productCategory').value;
+    const productCode = document.getElementById('productCode').value.trim();
+    const brand = document.getElementById('brand').value.trim();
+    const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
+    const sellingPrice = parseFloat(document.getElementById('sellingPrice').value);
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const reorderLevel = parseInt(document.getElementById('reorderLevel').value);
+    const description = document.getElementById('productDescription').value.trim();
+    const supplier = document.getElementById('supplier').value.trim();
+    const supplierCode = document.getElementById('supplierCode')?.value.trim() || '';
+    const location = document.getElementById('location')?.value.trim() || '';
+    const expiryDate = document.getElementById('expiryDate')?.value || null;
+    const unit = document.getElementById('unit')?.value || 'piece';
+    
+    // Get mode and existing product ID
+    const mode = document.getElementById('productMode').value;
+    const existingProductId = document.getElementById('existingProductId').value;
 
-    	// Validate required fields
-    	if (!productName) {
-        	alert('Product Name is required');
-        	document.getElementById('productName').focus();
-        	return;
-    	}
+    // Validate required fields
+    if (!productName) {
+        alert('Product Name is required');
+        document.getElementById('productName').focus();
+        return;
+    }
 
-    	if (!productCategory) {
-        	alert('Category is required');
-        	document.getElementById('productCategory').focus();
-        	return;
-    	}
+    if (!productCategory) {
+        alert('Category is required');
+        document.getElementById('productCategory').focus();
+        return;
+    }
 
-    	if (isNaN(purchasePrice) || purchasePrice < 0) {
-        	alert('Please enter a valid Purchase Price');
-        	document.getElementById('purchasePrice').focus();
-        	return;
-    	}
+    if (isNaN(purchasePrice) || purchasePrice < 0) {
+        alert('Please enter a valid Purchase Price');
+        document.getElementById('purchasePrice').focus();
+        return;
+    }
 
-    	if (isNaN(sellingPrice) || sellingPrice < 0) {
-        	alert('Please enter a valid Selling Price');
-        	document.getElementById('sellingPrice').focus();
-        	return;
-    	}
+    if (isNaN(sellingPrice) || sellingPrice < 0) {
+        alert('Please enter a valid Selling Price');
+        document.getElementById('sellingPrice').focus();
+        return;
+    }
 
-    	if (isNaN(quantity) || quantity < 0) {
-        	alert('Please enter a valid Quantity');
-        	document.getElementById('quantity').focus();
-        	return;
-    	}
+    if (isNaN(quantity) || quantity < 0) {
+        alert('Please enter a valid Quantity');
+        document.getElementById('quantity').focus();
+        return;
+    }
 
-    	if (isNaN(reorderLevel) || reorderLevel < 0) {
-        	alert('Please enter a valid Reorder Level');
-        	document.getElementById('reorderLevel').focus();
-        	return;
-    	}
+    if (isNaN(reorderLevel) || reorderLevel < 0) {
+        alert('Please enter a valid Reorder Level');
+        document.getElementById('reorderLevel').focus();
+        return;
+    }
 
-    	// Get current user
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	alert('Please login first');
-        	window.location.href = 'index.html';
-        	return;
-    	}
+    // Validate barcode first
+    if (!barcode) {
+        alert('Barcode is required. Please scan or enter a barcode.');
+        document.getElementById('productBarcode').focus();
+        return;
+    }
 
-//New addition Dec 15th
+    // Validate barcode length
+    if (barcode.length < 3) {
+        alert('Barcode must be at least 3 characters long.');
+        document.getElementById('productBarcode').focus();
+        return;
+    }
 
-    	// Validate barcode first
-        	if (!barcode) {
-            	alert('Barcode is required. Please scan or enter a barcode.');
-            	document.getElementById('productBarcode').focus();
-            	return;
-        	}
-       	 
-        	// Validate barcode length
-        	if (barcode.length < 3) {
-            	alert('Barcode must be at least 3 characters long.');
-            	document.getElementById('productBarcode').focus();
-            	return;
-        	}
-       	 
-        	// Check if barcode already exists
-        	try {
-            	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-            	if (!currentUser) {
-                	alert('Please login first');
-                	window.location.href = 'index.html';
-                	return;
-            	}
-           	 
-            	const inventoryData = await api.getUserInventory(currentUser.userID);
-            	const existingProduct = inventoryData.products?.find(p => p.barcode === barcode);
-           	 
-            	if (existingProduct) {
-                	alert(`Barcode "${barcode}" already exists for product: "${existingProduct.name}". Please use a different barcode.`);
-                	document.getElementById('productBarcode').focus();
-                	return;
-            	}
-        	} catch (error) {
-            	console.error('Error checking barcode:', error);
-            	// Continue anyway, API will validate
-        	}
+    // Get current user
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) {
+        alert('Please login first');
+        window.location.href = 'index.html';
+        return;
+    }
 
+    // Check if barcode already exists (for new products only)
+    if (mode === 'create') {
+        try {
+            const inventoryData = await api.getUserInventory(currentUser.userID);
+            const existingProduct = inventoryData.products?.find(p => p.barcode === barcode);
+            
+            if (existingProduct) {
+                alert(`Barcode "${barcode}" already exists for product: "${existingProduct.name}". Please use a different barcode.`);
+                document.getElementById('productBarcode').focus();
+                return;
+            }
+        } catch (error) {
+            console.error('Error checking barcode:', error);
+            // Continue anyway, API will validate
+        }
+    }
 
-     	 
-         	 
-         	 
-         	 
-//End Addition Dec 15th
-//New addition Dec 15th
-    	// Create product data object
-       	const productData = {
-              	barcode: barcode, // This is now the primary identifier
-              	name: productName,
-              	category: productCategory,
-              	code: productCode || `SKU-${Date.now().toString().slice(-6)}`,
-              	brand: brand || 'Generic',
-              	purchasePrice: purchasePrice,
-              	sellingPrice: sellingPrice,
-              	quantity: quantity,
-              	reorderLevel: reorderLevel,
-              	description: description,
-              	supplier: supplier || 'Unknown',
-              	supplierCode: supplierCode,
-              	location: location,
-              	expiryDate: expiryDate || null,
-              	unit: unit,
-              	profitMargin: sellingPrice - purchasePrice,
-              	profitPercentage: purchasePrice > 0 ? ((sellingPrice - purchasePrice) / purchasePrice * 100) : 0,
-              	totalValue: quantity * sellingPrice,
-              	status: quantity > 0 ? (quantity <= reorderLevel ? 'Low Stock' : 'In Stock') : 'Out of Stock',
-              	createdAt: new Date().toISOString(),
-              	updatedAt: new Date().toISOString()
-          	};
-     	 
-          	try {
-              	// Disable save button to prevent multiple submissions
-              	const saveBtn = document.getElementById('saveProductBtn');
-              	if (saveBtn) {
-                  	saveBtn.disabled = true;
-                  	saveBtn.innerHTML = '<span class="spinner"></span> Saving Product...';
-              	}
-     	 
-              	// Save product to user's inventory bin
-              	const result = await api.addProductToInventory(currentUser.userID, productData);
-             	 
-              	if (result && result.record) {
-                  	// Show success message with barcode
-                  	alert(`✅ Product "${productName}" has been successfully saved!\n\n📊 Barcode: ${barcode}\n💰 Price: ₦${sellingPrice.toFixed(2)}\n📦 Quantity: ${quantity} ${unit}`);
-                 	 
-                  	// Clear the form
-                  	this.clearProductForm();
-                 	 
-                  	// Return to products page
-                  	this.loadMenuContent('products');
-              	} else {
-                  	throw new Error('Failed to save product');
-              	}
-          	} catch (error) {
-              	console.error('Error saving product:', error);
-             	 
-              	// Re-enable save button
-              	const saveBtn = document.getElementById('saveProductBtn');
-              	if (saveBtn) {
-                  	saveBtn.disabled = false;
-                  	saveBtn.innerHTML = '<span class="menu-icon">💾</span> Save Product';
-              	}
-             	 
-              	if (error.message.includes('barcode')) {
-                  	alert(`❌ Error: ${error.message}\n\nPlease use a different barcode.`);
-                  	document.getElementById('productBarcode').focus();
-              	} else {
-                  	alert(`❌ Error saving product: ${error.message}\n\nPlease try again.`);
-              	}
-          	}
-      	}
+    // Create product data object
+    const productData = {
+        barcode: barcode,
+        name: productName,
+        category: productCategory,
+        code: productCode || `SKU-${Date.now().toString().slice(-6)}`,
+        brand: brand || 'Generic',
+        purchasePrice: purchasePrice,
+        sellingPrice: sellingPrice,
+        quantity: quantity,
+        reorderLevel: reorderLevel,
+        description: description,
+        supplier: supplier || 'Unknown',
+        supplierCode: supplierCode,
+        location: location,
+        expiryDate: expiryDate || null,
+        unit: unit,
+        profitMargin: sellingPrice - purchasePrice,
+        profitPercentage: purchasePrice > 0 ? ((sellingPrice - purchasePrice) / purchasePrice * 100) : 0,
+        totalValue: quantity * sellingPrice,
+        status: quantity > 0 ? (quantity <= reorderLevel ? 'Low Stock' : 'In Stock') : 'Out of Stock',
+        updatedAt: new Date().toISOString()
+    };
+
+    // Add createdAt only for new products
+    if (mode === 'create') {
+        productData.createdAt = new Date().toISOString();
+    }
+
+    try {
+        // Disable save button to prevent multiple submissions
+        const saveBtn = document.getElementById('saveProductBtn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = mode === 'edit' 
+                ? '<span class="spinner"></span> Updating Product...' 
+                : '<span class="spinner"></span> Saving Product...';
+        }
+
+        let result;
+        
+        if (mode === 'edit' && existingProductId) {
+            // UPDATE EXISTING PRODUCT
+            // Get current inventory
+            const inventoryData = await api.getUserInventory(currentUser.userID);
+            const products = inventoryData.products || [];
+            
+            // Find the product to update
+            const productIndex = products.findIndex(p => p.id === existingProductId);
+            if (productIndex === -1) {
+                throw new Error('Product not found for updating');
+            }
+            
+            // Keep the original ID and creation date
+            productData.id = existingProductId;
+            productData.createdAt = products[productIndex].createdAt;
+            
+            // Update the product in the array
+            products[productIndex] = productData;
+            
+            // Save updated inventory
+            inventoryData.products = products;
+            inventoryData.lastUpdated = new Date().toISOString();
+            
+            result = await api.updateUserInventory(currentUser.userID, inventoryData);
+            
+        } else {
+            // CREATE NEW PRODUCT
+            result = await api.addProductToInventory(currentUser.userID, productData);
+        }
+
+        if (result) {
+            // Show success message
+            const action = mode === 'edit' ? 'updated' : 'saved';
+            alert(`✅ Product "${productName}" has been successfully ${action}!\\n\\n📊 Barcode: ${barcode}\\n💰 Price: ₦${sellingPrice.toFixed(2)}\\n📦 Quantity: ${quantity} ${unit}`);
+            
+            // Clear the form
+            this.clearProductForm();
+            
+            // Return to products page
+            this.loadMenuContent('products');
+        } else {
+            throw new Error(`Failed to ${mode === 'edit' ? 'update' : 'save'} product`);
+        }
+    } catch (error) {
+        console.error(`Error ${mode === 'edit' ? 'updating' : 'saving'} product:`, error);
+        // Re-enable save button
+        const saveBtn = document.getElementById('saveProductBtn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = mode === 'edit' 
+                ? '<span class="menu-icon">✏️</span> Update Product' 
+                : '<span class="menu-icon">💾</span> Save Product';
+        }
+
+        if (error.message.includes('barcode')) {
+            alert(`❌ Error: ${error.message}\\n\\nPlease use a different barcode.`);
+            document.getElementById('productBarcode').focus();
+        } else {
+            alert(`❌ Error ${mode === 'edit' ? 'updating' : 'saving'} product: ${error.message}\\n\\nPlease try again.`);
+        }
+    }
+}
 
 //End new addition Dec 15t
 
-	clearProductForm() {
-    	// Clear all form fields
-    	const form = document.getElementById('newProductForm');
-    	if (form) {
-        	form.reset();
-    	}
-   	 
-    	// Reset specific fields to defaults
-    	const reorderLevel = document.getElementById('reorderLevel');
-    	if (reorderLevel) {
-        	reorderLevel.value = '5';
-    	}
-   	 
-     	const unit = document.getElementById('unit');
-	if (unit) {
-    	unit.value = 'piece';
-	}
+	// Update clearProductForm() method:
+clearProductForm() {
+    // Clear all form fields
+    const form = document.getElementById('newProductForm');
+    if (form) {
+        form.reset();
+    }
     
+    // Reset mode
+    document.getElementById('productMode').value = 'create';
+    document.getElementById('existingProductId').value = '';
     
-	// Clear calculated fields
-	const profitMargin = document.getElementById('profitMargin');
-	const profitPercentage = document.getElementById('profitPercentage');
-	const totalValue = document.getElementById('totalValue');
+    // Hide mode indicator
+    const modeIndicator = document.getElementById('modeIndicator');
+    if (modeIndicator) {
+        modeIndicator.style.display = 'none';
+    }
     
-	if (profitMargin) profitMargin.value = '';
-	if (profitPercentage) profitPercentage.value = '';
-	if (totalValue) totalValue.value = '';
+    // Reset save button
+    const saveBtn = document.getElementById('saveProductBtn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<span class="menu-icon">💾</span> Save Product';
+    }
     
-	// Hide barcode preview and status
-	const preview = document.getElementById('barcodePreview');
-	const status = document.getElementById('barcodeStatus');
+    // Hide new product button
+    const newProductBtn = document.getElementById('newProductBtn');
+    if (newProductBtn) {
+        newProductBtn.style.display = 'none';
+    }
     
-	if (preview) preview.style.display = 'none';
-	if (status) status.style.display = 'none';
+    // Reset specific fields to defaults
+    const reorderLevel = document.getElementById('reorderLevel');
+    if (reorderLevel) {
+        reorderLevel.value = '5';
+    }
     
-	// Focus on barcode field
-	document.getElementById('productBarcode')?.focus();
-   	 
-   	 
-   	 
-	}
+    const unit = document.getElementById('unit');
+    if (unit) {
+        unit.value = 'piece';
+    }
+    
+    // Clear calculated fields
+    const profitMargin = document.getElementById('profitMargin');
+    const profitPercentage = document.getElementById('profitPercentage');
+    const totalValue = document.getElementById('totalValue');
+    if (profitMargin) profitMargin.value = '';
+    if (profitPercentage) profitPercentage.value = '';
+    if (totalValue) totalValue.value = '';
+    
+    // Hide barcode preview and status
+    const preview = document.getElementById('barcodePreview');
+    const status = document.getElementById('barcodeStatus');
+    if (preview) preview.style.display = 'none';
+    if (status) status.style.display = 'none';
+    
+    // Focus on barcode field
+    document.getElementById('productBarcode')?.focus();
+}
 
 	async processTopUp() {
     	const amountInput = document.getElementById('topupAmount');
@@ -5477,6 +5568,139 @@ printSimpleReceipt(cartItems, totalAmount) {
           	'\n\nSale completed successfully. You can manually print from Reports.');
 	}
 }
+
+
+// Add this method to WebStarNgApp class:
+async checkProductByBarcode(barcodeValue) {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showBarcodeStatus('Please login first', 'error');
+            return null;
+        }
+
+        // Get inventory and check for existing product
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+        
+        // Find product by barcode
+        const existingProduct = products.find(p => p.barcode === barcodeValue);
+        
+        return existingProduct || null;
+    } catch (error) {
+        console.error('Error checking product by barcode:', error);
+        return null;
+    }
+}
+
+
+// Add this method to WebStarNgApp class:
+async loadExistingProduct(product) {
+    try {
+        // Show mode indicator
+        const modeIndicator = document.getElementById('modeIndicator');
+        if (modeIndicator) {
+            modeIndicator.style.display = 'block';
+        }
+        
+        // Update form mode
+        document.getElementById('productMode').value = 'edit';
+        document.getElementById('existingProductId').value = product.id;
+        
+        // Update save button text
+        const saveBtn = document.getElementById('saveProductBtn');
+        if (saveBtn) {
+            saveBtn.innerHTML = '<span class="menu-icon">✏️</span> Update Product';
+        }
+        
+        // Show new product button
+        const newProductBtn = document.getElementById('newProductBtn');
+        if (newProductBtn) {
+            newProductBtn.style.display = 'inline-block';
+        }
+        
+        // Populate form fields
+        document.getElementById('productName').value = product.name || '';
+        document.getElementById('productCategory').value = product.category || '';
+        document.getElementById('productCode').value = product.code || '';
+        document.getElementById('brand').value = product.brand || '';
+        document.getElementById('purchasePrice').value = product.purchasePrice || 0;
+        document.getElementById('sellingPrice').value = product.sellingPrice || 0;
+        document.getElementById('quantity').value = product.quantity || 0;
+        document.getElementById('reorderLevel').value = product.reorderLevel || 5;
+        document.getElementById('productDescription').value = product.description || '';
+        document.getElementById('supplier').value = product.supplier || '';
+        
+        // Optional fields
+        if (document.getElementById('supplierCode')) {
+            document.getElementById('supplierCode').value = product.supplierCode || '';
+        }
+        if (document.getElementById('location')) {
+            document.getElementById('location').value = product.location || '';
+        }
+        if (document.getElementById('expiryDate') && product.expiryDate) {
+            document.getElementById('expiryDate').value = product.expiryDate.split('T')[0];
+        }
+        if (document.getElementById('unit')) {
+            document.getElementById('unit').value = product.unit || 'piece';
+        }
+        
+        // Update calculated fields
+        this.calculateProfit();
+        this.calculateTotalValue();
+        
+        // Show success status
+        this.showBarcodeStatus(`✅ Product found: "${product.name}". Form populated for editing.`, 'success');
+        
+        // Show barcode preview
+        this.showBarcodePreview(product.barcode);
+        
+        // Focus on product name field
+        setTimeout(() => {
+            document.getElementById('productName')?.focus();
+        }, 300);
+        
+    } catch (error) {
+        console.error('Error loading existing product:', error);
+        this.showBarcodeStatus('Error loading product data', 'error');
+    }
+}
+
+
+// Add this method to WebStarNgApp class:
+resetToNewProductMode() {
+    // Reset form mode
+    document.getElementById('productMode').value = 'create';
+    document.getElementById('existingProductId').value = '';
+    
+    // Hide mode indicator
+    const modeIndicator = document.getElementById('modeIndicator');
+    if (modeIndicator) {
+        modeIndicator.style.display = 'none';
+    }
+    
+    // Reset save button
+    const saveBtn = document.getElementById('saveProductBtn');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<span class="menu-icon">💾</span> Save Product';
+    }
+    
+    // Hide new product button
+    const newProductBtn = document.getElementById('newProductBtn');
+    if (newProductBtn) {
+        newProductBtn.style.display = 'none';
+    }
+    
+    // Clear form
+    this.clearProductForm();
+    
+    // Show info message
+    this.showBarcodeStatus('🆕 Creating new product. Enter barcode to check for existing products.', 'info');
+    
+    // Focus on barcode field
+    document.getElementById('productBarcode')?.focus();
+}
+
 
 }
 
