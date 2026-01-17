@@ -4133,3 +4133,15 @@ textarea {
         margin: 10px;
     }
 }
+/* Barcode field styling */
+.barcode-input[readonly] {
+    background-color: #f8f9fa !important;
+    border-color: #dee2e6 !important;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.barcode-input[readonly]:focus {
+    box-shadow: none;
+    border-color: #dee2e6 !important;
+}
