@@ -5316,322 +5316,310 @@ showPaystackPaymentModal() {
 }
 
 // Add this simple print receipt method
-// Enhanced print receipt method with better USB printer support
+// Replace the existing printSimpleReceipt() method with this:
+
 printSimpleReceipt(cartItems, totalAmount) {
-	try {
-    	// Get current user and business info
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) return;
-   	 
-    	const businessName = currentUser.businessName || 'WebStarNg Store';
-    	const businessAddress = currentUser.addressLine1 || '';
-    	const businessTel = currentUser.telephone || '';
-    	const now = new Date();
-    	const dateTime = now.toLocaleString();
-   	 
-    	// Generate receipt number
-    	let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
-    	localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
-   	 
-    	// Create receipt content optimized for thermal/USB printers
-    	let receiptContent = `
-        	<!DOCTYPE html>
-        	<html>
-        	<head>
-            	<title>Sales Receipt #${receiptNumber}</title>
-            	<meta charset="UTF-8">
-            	<style>
-                	/* Thermal printer optimized styles */
-                	@media print {
-                    	@page {
-                        	margin: 0;
-                        	size: 80mm auto;
-                    	}
-                    	body {
-                        	margin: 0;
-                        	padding: 5mm;
-                        	width: 80mm;
-                        	font-family: 'Courier New', monospace;
-                        	font-size: 10pt;
-                        	line-height: 1.2;
-                    	}
-                    	.no-print {
-                        	display: none !important;
-                    	}
-                	}
-               	 
-                	body {
-                    	font-family: 'Courier New', monospace;
-                    	font-size: 10pt;
-                    	line-height: 1.2;
-                    	width: 80mm;
-                    	margin: 0 auto;
-                    	padding: 5mm;
-                	}
-               	 
-                	/* Thermal printer specific */
-                	* {
-                    	box-sizing: border-box;
-                    	max-width: 80mm;
-                	}
-               	 
-                	.business-name {
-                    	font-weight: bold;
-                    	text-align: center;
-                    	font-size: 12pt;
-                    	margin-bottom: 2mm;
-                    	text-transform: uppercase;
-                	}
-               	 
-                	.business-info {
-                    	text-align: center;
-                    	font-size: 9pt;
-                    	margin-bottom: 3mm;
-                    	border-bottom: 1px dashed #000;
-                    	padding-bottom: 2mm;
-                	}
-               	 
-                	.receipt-header {
-                    	text-align: center;
-                    	margin-bottom: 3mm;
-                	}
-               	 
-                	.receipt-number {
-                    	font-weight: bold;
-                    	margin: 2mm 0;
-                    	font-size: 11pt;
-                	}
-               	 
-                	.date-time {
-                    	margin: 2mm 0;
-                    	font-size: 9pt;
-                	}
-               	 
-                	.items-table {
-                    	width: 100%;
-                    	border-collapse: collapse;
-                    	margin: 3mm 0;
-                    	font-size: 9pt;
-                	}
-               	 
-                	.items-table th {
-                    	border-bottom: 1px solid #000;
-                    	padding: 1mm 0;
-                    	text-align: left;
-                    	font-weight: bold;
-                	}
-               	 
-                	.items-table td {
-                    	padding: 1mm 0;
-                    	border-bottom: 1px dashed #ccc;
-                    	vertical-align: top;
-                	}
-               	 
-                	.total-section {
-                    	border-top: 2px solid #000;
-                    	margin-top: 3mm;
-                    	padding-top: 2mm;
-                    	font-weight: bold;
-                    	text-align: right;
-                    	font-size: 11pt;
-                	}
-               	 
-                	.thank-you {
-                    	text-align: center;
-                    	margin-top: 4mm;
-                    	font-style: italic;
-                    	border-top: 1px dashed #000;
-                    	padding-top: 2mm;
-                	}
-               	 
-                	.divider {
-                    	border-top: 1px dashed #000;
-                    	margin: 2mm 0;
-                	}
-               	 
-                	/* Column widths for thermal printer */
-                	.col-item { width: 40%; }
-                	.col-qty { width: 15%; text-align: center; }
-                	.col-price { width: 20%; text-align: right; }
-                	.col-total { width: 25%; text-align: right; }
-               	 
-                	/* Print controls */
-                	.print-controls {
-                    	text-align: center;
-                    	margin-top: 10mm;
-                    	padding: 5mm;
-                    	background: #f5f5f5;
-                    	border-radius: 5mm;
-                	}
-               	 
-                	.print-btn {
-                    	padding: 2mm 5mm;
-                    	background: #2ecc71;
-                    	color: white;
-                    	border: none;
-                    	border-radius: 3mm;
-                    	cursor: pointer;
-                    	font-size: 10pt;
-                    	margin: 2mm;
-                	}
-               	 
-                	.print-btn:hover {
-                    	background: #27ae60;
-                	}
-            	</style>
-            	<script>
-                	// Auto-print function
-                	function autoPrint() {
-                    	// Give the content time to load
-                    	setTimeout(function() {
-                        	if (window.print) {
-                            	window.print();
-                            	// Close window after printing (if user doesn't cancel)
-                            	setTimeout(function() {
-                                	if (!document.hidden) {
-                                    	window.close();
-                                	}
-                            	}, 1000);
-                        	} else {
-                            	alert('Print function not available. Please use browser print (Ctrl+P).');
-                        	}
-                    	}, 500);
-                	}
-               	 
-                	// Trigger auto-print on load
-                	window.onload = function() {
-                    	// Only auto-print if it's the first time opening
-                    	if (!sessionStorage.getItem('receipt_printed_' + ${receiptNumber})) {
-                        	sessionStorage.setItem('receipt_printed_' + ${receiptNumber}, 'true');
-                        	autoPrint();
-                    	}
-                	};
-               	 
-                	// Manual print function
-                	function manualPrint() {
-                    	if (window.print) {
-                        	window.print();
-                    	} else {
-                        	alert('Print function not available. Please use browser print (Ctrl+P).');
-                    	}
-                	}
-               	 
-                	// Print two copies
-                	function printTwoCopies() {
-                    	if (window.print) {
-                        	window.print();
-                        	setTimeout(function() {
-                            	window.print();
-                        	}, 1000);
-                    	} else {
-                        	alert('Print function not available.');
-                    	}
-                	}
-            	</script>
-        	</head>
-        	<body onload="autoPrint()">
-            	<div class="business-name">${businessName}</div>
-            	<div class="business-info">
-                	${businessAddress ? `<div>${businessAddress}</div>` : ''}
-                	${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
-            	</div>
-           	 
-            	<div class="receipt-header">
-                	<div class="receipt-number">RECEIPT #: ${receiptNumber}</div>
-                	<div class="date-time">${dateTime}</div>
-            	</div>
-           	 
-            	<table class="items-table">
-                	<thead>
-                    	<tr>
-                        	<th class="col-item">Item</th>
-                        	<th class="col-qty">Qty</th>
-                        	<th class="col-price">Price</th>
-                        	<th class="col-total">Total</th>
-                    	</tr>
-                	</thead>
-                	<tbody>
-    	`;
-   	 
-    	// Add items with proper formatting
-    	cartItems.forEach(item => {
-        	// Truncate long product names for thermal printer
-        	const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
-       	 
-        	receiptContent += `
-            	<tr>
-                	<td class="col-item">${itemName}</td>
-                	<td class="col-qty">${item.quantity}</td>
-                	<td class="col-price">₦${item.sellingPrice.toFixed(2)}</td>
-                	<td class="col-total">₦${item.subtotal.toFixed(2)}</td>
-            	</tr>
-        	`;
-    	});
-   	 
-    	// Add totals and footer
-    	receiptContent += `
-                	</tbody>
-            	</table>
-           	 
-            	<div class="divider"></div>
-           	 
-            	<div class="total-section">
-                	<div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
-            	</div>
-           	 
-            	<div class="divider"></div>
-           	 
-            	<div class="thank-you">
-                	<div>Thank you for your purchase!</div>
-                	<div>Please come again!</div>
-            	</div>
-           	 
-            	<!-- Customer copy notice -->
-            	<div style="text-align: center; margin-top: 3mm; font-size: 8pt; border-top: 1px dashed #ccc; padding-top: 2mm;">
-                	*** CUSTOMER COPY ***
-            	</div>
-           	 
-            	<!-- Print controls (only visible if auto-print fails) -->
-            	<div class="print-controls no-print">
-                	<h3>Print Receipt</h3>
-                	<button class="print-btn" onclick="manualPrint()">🖨️ Print Now</button>
-                	<button class="print-btn" onclick="printTwoCopies()">🖨️🖨️ Print 2 Copies</button>
-                	<button class="print-btn" onclick="window.close()" style="background: #95a5a6;">Close Window</button>
-                	<p style="font-size: 9pt; margin-top: 3mm;">
-                    	If receipt doesn't print automatically:<br>
-                    	1. Select your USB printer<br>
-                    	2. Set paper size to 80mm/3"<br>
-                    	3. Disable headers/footers<br>
-                    	4. Set margins to minimum
-                	</p>
-            	</div>
-        	</body>
-        	</html>
-    	`;
-   	 
-    	// Open in new window optimized for printing
-    	const printWindow = window.open('', '_blank',
-        	'width=400,height=600,location=no,menubar=no,toolbar=no,status=no');
-   	 
-    	if (!printWindow) {
-        	// If popup is blocked, show alert
-        	alert('⚠️ Popup blocked! Please allow popups to print receipt.\n\nAfter allowing, press OK to try again.');
-        	window.open('', '_blank', 'width=400,height=600').document.write(receiptContent);
-        	return;
-    	}
-   	 
-    	printWindow.document.write(receiptContent);
-    	printWindow.document.close();
-   	 
-    	// Focus on the print window
-    	printWindow.focus();
-   	 
-	} catch (error) {
-    	console.error('Error printing receipt:', error);
-    	// Show error but don't fail the sale
-    	alert('⚠️ Unable to print receipt. Error: ' + error.message +
-          	'\n\nSale completed successfully. You can manually print from Reports.');
-	}
+    try {
+        // Get current user and business info
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+
+        const businessName = currentUser.businessName || 'WebStarNg Store';
+        const businessAddress = currentUser.addressLine1 || '';
+        const businessTel = currentUser.telephone || '';
+        const now = new Date();
+        const dateTime = now.toLocaleString();
+
+        // Generate receipt number
+        let receiptNumber = parseInt(localStorage.getItem('receipt_counter') || '1000');
+        localStorage.setItem('receipt_counter', (receiptNumber + 1).toString());
+
+        // Create receipt content optimized for thermal/USB printers
+        let receiptContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Sales Receipt #${receiptNumber}</title>
+                <meta charset="UTF-8">
+                <style>
+                    /* Thermal printer optimized styles - NO PRINT CONTROLS */
+                    @media print {
+                        @page {
+                            margin: 0;
+                            size: 80mm auto;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 5mm;
+                            width: 80mm;
+                            font-family: 'Courier New', monospace;
+                            font-size: 10pt;
+                            line-height: 1.2;
+                        }
+                    }
+                    
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 10pt;
+                        line-height: 1.2;
+                        width: 80mm;
+                        margin: 0 auto;
+                        padding: 5mm;
+                    }
+                    
+                    .business-name {
+                        font-weight: bold;
+                        text-align: center;
+                        font-size: 12pt;
+                        margin-bottom: 2mm;
+                        text-transform: uppercase;
+                    }
+                    
+                    .business-info {
+                        text-align: center;
+                        font-size: 9pt;
+                        margin-bottom: 3mm;
+                        border-bottom: 1px dashed #000;
+                        padding-bottom: 2mm;
+                    }
+                    
+                    .receipt-header {
+                        text-align: center;
+                        margin-bottom: 3mm;
+                    }
+                    
+                    .receipt-number {
+                        font-weight: bold;
+                        margin: 2mm 0;
+                        font-size: 11pt;
+                    }
+                    
+                    .date-time {
+                        margin: 2mm 0;
+                        font-size: 9pt;
+                    }
+                    
+                    .items-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 3mm 0;
+                        font-size: 9pt;
+                    }
+                    
+                    .items-table th {
+                        border-bottom: 1px solid #000;
+                        padding: 1mm 0;
+                        text-align: left;
+                        font-weight: bold;
+                    }
+                    
+                    .items-table td {
+                        padding: 1mm 0;
+                        border-bottom: 1px dashed #ccc;
+                        vertical-align: top;
+                    }
+                    
+                    .total-section {
+                        border-top: 2px solid #000;
+                        margin-top: 3mm;
+                        padding-top: 2mm;
+                        font-weight: bold;
+                        text-align: right;
+                        font-size: 11pt;
+                    }
+                    
+                    .thank-you {
+                        text-align: center;
+                        margin-top: 4mm;
+                        font-style: italic;
+                        border-top: 1px dashed #000;
+                        padding-top: 2mm;
+                    }
+                    
+                    .divider {
+                        border-top: 1px dashed #000;
+                        margin: 2mm 0;
+                    }
+                    
+                    /* Column widths for thermal printer */
+                    .col-item { width: 40%; }
+                    .col-qty { width: 15%; text-align: center; }
+                    .col-price { width: 20%; text-align: right; }
+                    .col-total { width: 25%; text-align: right; }
+                </style>
+                <script>
+                    // Auto-print function - SILENT VERSION
+                    function autoPrint() {
+                        // Wait a moment for content to load
+                        setTimeout(function() {
+                            if (window.print) {
+                                window.print();
+                                // Close immediately after attempting to print
+                                setTimeout(function() {
+                                    // This will close the iframe, not the main window
+                                    if (window.frameElement) {
+                                        window.frameElement.parentNode.removeChild(window.frameElement);
+                                    }
+                                }, 100);
+                            }
+                        }, 300);
+                    }
+                    
+                    // Trigger auto-print immediately on load
+                    window.addEventListener('load', autoPrint);
+                    // Also try on DOMContentLoaded in case load event fires too early
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(autoPrint, 300);
+                    });
+                </script>
+            </head>
+            <body>
+                <div class="business-name">${businessName}</div>
+                <div class="business-info">
+                    ${businessAddress ? `<div>${businessAddress}</div>` : ''}
+                    ${businessTel ? `<div>Tel: ${businessTel}</div>` : ''}
+                </div>
+                
+                <div class="receipt-header">
+                    <div class="receipt-number">RECEIPT #: ${receiptNumber}</div>
+                    <div class="date-time">${dateTime}</div>
+                </div>
+                
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th class="col-item">Item</th>
+                            <th class="col-qty">Qty</th>
+                            <th class="col-price">Price</th>
+                            <th class="col-total">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+        // Add items with proper formatting
+        cartItems.forEach(item => {
+            // Truncate long product names for thermal printer
+            const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+            receiptContent += `
+                        <tr>
+                            <td class="col-item">${itemName}</td>
+                            <td class="col-qty">${item.quantity}</td>
+                            <td class="col-price">₦${item.sellingPrice.toFixed(2)}</td>
+                            <td class="col-total">₦${item.subtotal.toFixed(2)}</td>
+                        </tr>`;
+        });
+
+        // Add totals and footer
+        receiptContent += `
+                    </tbody>
+                </table>
+                
+                <div class="divider"></div>
+                
+                <div class="total-section">
+                    <div style="font-size: 12pt;">TOTAL: ₦${totalAmount.toFixed(2)}</div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="thank-you">
+                    <div>Thank you for your purchase!</div>
+                    <div>Please come again!</div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 3mm; font-size: 8pt; border-top: 1px dashed #ccc; padding-top: 2mm;">
+                    *** CUSTOMER COPY ***
+                </div>
+            </body>
+            </html>`;
+
+        // ======================================================
+        // NEW: CREATE INVISIBLE IFRAME FOR SILENT PRINTING
+        // ======================================================
+        
+        // Create a completely hidden iframe
+        const iframe = document.createElement('iframe');
+        
+        // Make it invisible
+        iframe.style.position = 'fixed';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-9999';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '-9999px';
+        
+        // Append to body
+        document.body.appendChild(iframe);
+        
+        // Write content to iframe
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(receiptContent);
+        iframeDoc.close();
+        
+        // Clean up after printing (remove iframe)
+        const cleanup = () => {
+            setTimeout(() => {
+                if (iframe && iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }, 3000); // Remove after 3 seconds
+        };
+        
+        // Attach cleanup to iframe's print event
+        iframe.contentWindow.addEventListener('afterprint', cleanup);
+        
+        // Also cleanup if print dialog is cancelled
+        setTimeout(cleanup, 5000);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error in silent receipt printing:', error);
+        
+        // Fallback: Try minimal popup without controls
+        try {
+            // Create a minimal popup that auto-closes
+            const popup = window.open('', '_blank', 
+                'width=1,height=1,left=-9999,top=-9999,location=no,menubar=no,toolbar=no,status=no');
+            
+            if (popup) {
+                popup.document.write(`
+                    <html>
+                    <head>
+                        <title>Print</title>
+                        <script>
+                            window.onload = function() {
+                                window.print();
+                                setTimeout(function() {
+                                    window.close();
+                                }, 100);
+                            };
+                        </script>
+                    </head>
+                    <body style="display:none;">
+                        Receipt printing...
+                    </body>
+                    </html>
+                `);
+                popup.document.close();
+                
+                // Close after a timeout
+                setTimeout(() => {
+                    if (popup && !popup.closed) {
+                        popup.close();
+                    }
+                }, 1000);
+            }
+        } catch (fallbackError) {
+            console.error('Fallback printing also failed:', fallbackError);
+        }
+        
+        return false;
+    }
 }
 
 
