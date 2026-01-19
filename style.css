@@ -122,6 +122,7 @@ body {
     margin-bottom: 5px;
 }
 
+/*
 .error-message {
     color: #e74c3c;
     margin-top: 20px;
@@ -129,7 +130,7 @@ body {
     background: #fee;
     border-radius: 5px;
     display: none;
-}
+}*/
 
 /* Dashboard Styles */
 .navbar {
@@ -2330,13 +2331,14 @@ textarea {
     margin: 5px 0;
 }
 
+/*
 .error-message {
     text-align: center;
     padding: 40px 20px;
     background: #f8f9fa;
     border-radius: 12px;
     margin: 20px 0;
-}
+}*/
 
 .error-message h3 {
     color: #e74c3c;
@@ -2462,6 +2464,7 @@ textarea {
     box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 
+/*
 @keyframes slideIn {
     from {
         transform: translateX(100%);
@@ -2472,6 +2475,7 @@ textarea {
         opacity: 1;
     }
 }
+*/
 
 /* Responsive styles */
 @media (max-width: 768px) {
@@ -4133,6 +4137,7 @@ textarea {
         margin: 10px;
     }
 }
+
 /* Barcode field styling */
 .barcode-input[readonly] {
     background-color: #f8f9fa !important;
@@ -4144,4 +4149,112 @@ textarea {
 .barcode-input[readonly]:focus {
     box-shadow: none;
     border-color: #dee2e6 !important;
+}
+
+/* Login Error Styles */
+.login-error-container {
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #e74c3c;
+    box-shadow: 0 5px 15px rgba(231, 76, 60, 0.1);
+}
+
+.error-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.error-icon {
+    background: #e74c3c;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.error-details {
+    color: #7f8c8d;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #e74c3c;
+}
+
+.error-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Button styles for error actions */
+.error-actions .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    flex: 1;
+}
+
+.error-actions .btn-secondary {
+    background: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+    flex: 1;
+}
+
+.error-actions .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.error-actions .btn-secondary:hover {
+    transform: translateY(-2px);
+    background: #7f8c8d;
+}
+
+/* Responsive error actions */
+@media (max-width: 480px) {
+    .error-actions {
+        flex-direction: column;
+    }
+    
+    .error-actions button {
+        width: 100%;
+    }
+}
+
+.error-message {
+    margin-top: 20px;
+    padding: 0;
+    border-radius: 10px;
+    display: none;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
