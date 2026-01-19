@@ -26,61 +26,82 @@ class AuthManager {
     }
 
     async handleLogin(event) {
-        event.preventDefault();
-        
-        const userID = document.getElementById('userID').value.trim();
-        const password = document.getElementById('password').value;
-        const errorMessage = document.getElementById('errorMessage');
-
-        // Clear previous errors
-        errorMessage.style.display = 'none';
-        errorMessage.textContent = '';
-
-        try {
-            // Get all users
-            const data = await api.getData();
-            const user = data.users.find(u => u.userID === userID);
-
-            // Check credentials
-            if (user && user.password === password) {
-                // Successful login - update last login time
-                await api.updateUser(userID, { lastLogin: new Date().toISOString() });
-                
-                // Set session
-                this.setSession(user);
-                window.location.href = 'dashboard.html';
-            } else if (userID === 'tmp101' && password === '12345') {
-                // Demo user login
-                const demoUser = {
-                    userID: 'tmp101',
-                    fullName: 'Demo Test User',
-                    wallet: 5000.00,
-                    inventoryBinId: 'inventory_tmp101',
-                    salesBinId: 'sales_tmp101',
-                    purchasesBinId: 'purchases_tmp101'
-                };
-                this.setSession(demoUser);
-                window.location.href = 'dashboard.html';
-            } else {
-                // Check if user exists
-                if (user) {
-                    // User exists but wrong password
-                    throw new Error('Invalid password');
-                } else {
-                    // User doesn't exist - show registration form
-                    this.showRegistrationForm(userID);
-                    return;
-                }
-            }
-        } catch (error) {
-            if (error.message === 'User ID already exists') {
-                this.showRegistrationForm(userID, true);
-            } else {
-                errorMessage.textContent = error.message;
-                errorMessage.style.display = 'block';
-            }
-        }
+    event.preventDefault();
+    
+    const userID = document.getElementById('userID').value.trim();
+    const password = document.getElementById('password').value;
+    const errorMessage = document.getElementById('errorMessage');
+    
+    // Clear previous errors
+    errorMessage.style.display = 'none';
+    errorMessage.textContent = '';
+    errorMessage.innerHTML = '';
+    
+    // Clear any previous signup button
+    const existingSignupBtn = document.getElementById('signupButton');
+    if (existingSignupBtn) {
+        existingSignupBtn.remove();
     }
+    
+    try {
+        // Get all users
+        const data = await api.getData();
+        const user = data.users.find(u => u.userID === userID);
+        
+        // Check credentials
+        if (user && user.password === password) {
+            // Successful login - update last login time
+            await api.updateUser(userID, { lastLogin: new Date().toISOString() });
+            
+            // Set session
+            this.setSession(user);
+            window.location.href = 'dashboard.html';
+            
+        } else if (userID === 'tmp101' && password === '12345') {
+            // Demo user login
+            const demoUser = {
+                userID: 'tmp101',
+                fullName: 'Demo Test User',
+                wallet: 5000.00,
+                inventoryBinId: 'inventory_tmp101',
+                salesBinId: 'sales_tmp101',
+                purchasesBinId: 'purchases_tmp101'
+            };
+            
+            this.setSession(demoUser);
+            window.location.href = 'dashboard.html';
+            
+        } else {
+            // Login failed - determine the reason
+            let errorType = '';
+            let errorDetails = '';
+            
+            if (!userID) {
+                errorType = 'empty_userid';
+                errorDetails = 'Please enter your User ID';
+            } else if (!password) {
+                errorType = 'empty_password';
+                errorDetails = 'Please enter your password';
+            } else if (!user) {
+                errorType = 'user_not_found';
+                errorDetails = `User ID "${userID}" not found`;
+            } else {
+                errorType = 'wrong_password';
+                errorDetails = 'Incorrect password';
+            }
+            
+            // Show error message with signup option
+            this.showLoginError(errorType, errorDetails, userID);
+            return;
+        }
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        
+        // Show generic error
+        this.showLoginError('general_error', 'Login failed. Please try again.', userID);
+    }
+}
 
   async handleRegistration(event) {
     event.preventDefault();
@@ -175,33 +196,42 @@ class AuthManager {
     }
 }
 
-    showRegistrationForm(userID = '', userExists = false) {
-        const loginBox = document.getElementById('loginBox');
-        const registrationBox = document.getElementById('registrationBox');
+   showRegistrationForm(userID = '', userExists = false) {
+    const loginBox = document.getElementById('loginBox');
+    const registrationBox = document.getElementById('registrationBox');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    // Hide login form
+    loginBox.style.display = 'none';
+    
+    // Hide error message
+    if (errorMessage) {
+        errorMessage.style.display = 'none';
+        errorMessage.innerHTML = '';
+    }
+    
+    // Show registration form
+    registrationBox.style.display = 'block';
+    
+    // Pre-fill user ID if provided
+    if (userID) {
+        document.getElementById('newUserID').value = userID;
         
-        // Hide login form
-        loginBox.style.display = 'none';
-        
-        // Show registration form
-        registrationBox.style.display = 'block';
-        
-        // Pre-fill user ID if provided
-        if (userID) {
-            document.getElementById('newUserID').value = userID;
-            
-            // If user exists, show appropriate message
-            if (userExists) {
-                const errorElement = document.getElementById('registrationError');
-                errorElement.textContent = 'This user ID already exists. Please choose a different one or login with the correct password.';
-                errorElement.style.display = 'block';
-            } else {
-                const errorElement = document.getElementById('registrationError');
-                errorElement.textContent = 'User not found. Please create a new account with unique storage bins.';
-                errorElement.style.display = 'block';
-            }
+        // If user exists, show appropriate message
+        if (userExists) {
+            const errorElement = document.getElementById('registrationError');
+            errorElement.textContent = 'This user ID already exists. Please choose a different one or login with the correct password.';
+            errorElement.style.display = 'block';
+        } else {
+            const errorElement = document.getElementById('registrationError');
+            errorElement.textContent = `Creating new account for: ${userID}`;
+            errorElement.style.display = 'block';
+            errorElement.style.backgroundColor = '#e3f2fd';
+            errorElement.style.color = '#1565c0';
+            errorElement.style.border = '1px solid #bbdefb';
         }
     }
-
+}
     showLoginForm() {
         const loginBox = document.getElementById('loginBox');
         const registrationBox = document.getElementById('registrationBox');
@@ -255,6 +285,111 @@ class AuthManager {
     getCurrentUser() {
         return this.currentUser;
     }
+    
+    
+// Add this method to AuthManager class in auth.js:
+showLoginError(errorType, errorMessage, userID = '') {
+    const errorElement = document.getElementById('errorMessage');
+    if (!errorElement) return;
+    
+    let errorTitle = 'Login Failed';
+    let errorDetails = errorMessage;
+    let showSignupButton = false;
+    
+    // Customize based on error type
+    switch(errorType) {
+        case 'user_not_found':
+            errorTitle = 'Account Not Found';
+            errorDetails = `No account found with User ID: "${userID}"`;
+            showSignupButton = true;
+            break;
+            
+        case 'wrong_password':
+            errorTitle = 'Incorrect Password';
+            errorDetails = 'The password you entered is incorrect. Please try again.';
+            break;
+            
+        case 'empty_userid':
+            errorTitle = 'User ID Required';
+            errorDetails = 'Please enter your User ID to continue.';
+            break;
+            
+        case 'empty_password':
+            errorTitle = 'Password Required';
+            errorDetails = 'Please enter your password to continue.';
+            break;
+            
+        case 'general_error':
+            errorTitle = 'Login Error';
+            errorDetails = errorMessage;
+            break;
+    }
+    
+    // Create error HTML
+    errorElement.innerHTML = `
+        <div class="login-error-container">
+            <div class="error-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div class="error-icon" style="background: #e74c3c; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                    !
+                </div>
+                <h3 style="color: #e74c3c; margin: 0; font-size: 1.1em;">${errorTitle}</h3>
+            </div>
+            
+            <div class="error-details" style="color: #7f8c8d; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #e74c3c;">
+                ${errorDetails}
+            </div>
+            
+            ${showSignupButton ? `
+                <div class="error-actions" style="display: flex; gap: 10px; align-items: center;">
+                    <button type="button" class="btn-secondary" onclick="auth.retryLogin()" style="flex: 1; padding: 12px;">
+                        <span style="margin-right: 5px;">↻</span> Try Again
+                    </button>
+                    <button type="button" class="btn-primary" id="signupButton" onclick="auth.showRegistrationForm('${userID}')" style="flex: 1; padding: 12px;">
+                        <span style="margin-right: 5px;">👤</span> Sign Up Instead
+                    </button>
+                </div>
+            ` : `
+                <div class="error-actions" style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-primary" onclick="auth.retryLogin()" style="flex: 1; padding: 12px;">
+                        <span style="margin-right: 5px;">↻</span> Try Again
+                    </button>
+                </div>
+            `}
+        </div>
+    `;
+    
+    errorElement.style.display = 'block';
+    
+    // Focus on the appropriate field
+    setTimeout(() => {
+        if (errorType === 'empty_userid' || errorType === 'user_not_found') {
+            document.getElementById('userID').focus();
+        } else if (errorType === 'empty_password' || errorType === 'wrong_password') {
+            document.getElementById('password').focus();
+        }
+    }, 100);
+}    
+
+
+// Add this method to AuthManager class in auth.js:
+retryLogin() {
+    const errorMessage = document.getElementById('errorMessage');
+    if (errorMessage) {
+        errorMessage.style.display = 'none';
+        errorMessage.innerHTML = '';
+    }
+    
+    // Clear any signup button
+    const existingSignupBtn = document.getElementById('signupButton');
+    if (existingSignupBtn) {
+        existingSignupBtn.remove();
+    }
+    
+    // Clear only the password field for retry
+    document.getElementById('password').value = '';
+    document.getElementById('password').focus();
+}
+    
 }
 
 // Create global Auth instance
