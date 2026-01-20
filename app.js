@@ -1763,6 +1763,7 @@ getBuyProductsForm() {
     	}
    	 
     	// New System User Form
+    /*
     	const newSystemUserForm = document.getElementById('newSystemUserForm');
     	if (newSystemUserForm) {
         	newSystemUserForm.addEventListener('submit', (e) => {
@@ -1771,7 +1772,28 @@ getBuyProductsForm() {
             	this.loadMenuContent('setup');
         	});
     	}
+    	*/
    	 
+   	 
+   	 const newSystemUserForm = document.getElementById('newSystemUserForm');
+        if (newSystemUserForm) {
+            newSystemUserForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.createSystemUser();
+            });
+        }
+        
+     
+     // Create User Button
+      const createUserBtn = document.getElementById('createUserBtn');
+      if (createUserBtn) {
+          const newBtn = createUserBtn.cloneNode(true);
+          createUserBtn.parentNode.replaceChild(newBtn, createUserBtn);
+          newBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              this.createSystemUser();
+          });
+      }   
    	 
  	// Buy Products Search Button
 	const searchProductBtn = document.getElementById('searchProductBtn');
@@ -1823,6 +1845,7 @@ getBuyProductsForm() {
     	});
 	}    
    	 
+
 
 
    	 
@@ -4742,75 +4765,137 @@ updateUserDisplay(user) {
 
 
 // Add this method if it doesn't exist, or fix the existing one:
+// In getNewUserForm() method in app.js, add inheritance info:
 getNewUserForm() {
-	return `
-    	<div class="content-page">
-        	<h2>👤 Create New User</h2>
-        	<p>Create a new system user account. This feature is only available to Administrators.</p>
-       	 
-        	<div class="user-group-info">
-            	<strong>⚠️ Administrator Access Required</strong>
-            	<p>Only users with Administrator privileges (userGroup 3) can create new users.</p>
-        	</div>
-       	 
-        	<form id="newSystemUserForm" class="content-form">
-            	<div class="form-row">
-                	<div class="form-group">
-                    	<label for="newSystemUserID" class="required-field">User ID *</label>
-                    	<input type="text" id="newSystemUserID" name="newSystemUserID" required
-                           	placeholder="Enter unique user ID">
-                	</div>
-                	<div class="form-group">
-                    	<label for="newSystemFullName" class="required-field">Full Name *</label>
-                    	<input type="text" id="newSystemFullName" name="newSystemFullName" required
-                           	placeholder="Enter full name">
-                	</div>
-            	</div>
-           	 
-            	<div class="form-row">
-                	<div class="form-group">
-                    	<label for="newSystemPassword" class="required-field">Password *</label>
-                    	<input type="password" id="newSystemPassword" name="newSystemPassword" required
-                           	placeholder="Enter password">
-                	</div>
-                	<div class="form-group">
-                    	<label for="confirmSystemPassword" class="required-field">Confirm Password *</label>
-                    	<input type="password" id="confirmSystemPassword" name="confirmSystemPassword" required
-                           	placeholder="Confirm password">
-                	</div>
-            	</div>
-           	 
-            	<div class="form-row">
-                	<div class="form-group">
-                    	<label for="newUserGroup" class="required-field">User Group *</label>
-                    	<select id="newUserGroup" name="newUserGroup" required>
-                        	<option value="0">Basic User (Limited Access)</option>
-                        	<option value="1">Standard User</option>
-                        	<option value="2">Manager</option>
-                        	<option value="3">Administrator</option>
-                    	</select>
-                    	<div class="form-hint">
-                        	Basic users cannot access "Sales of the Day" report
-                    	</div>
-                	</div>
-                	<div class="form-group">
-                    	<label for="newUserEmail">Email Address</label>
-                    	<input type="email" id="newUserEmail" name="newUserEmail"
-                           	placeholder="Enter email address">
-                	</div>
-            	</div>
-           	 
-            	<div class="form-actions-content">
-                	<button type="submit" class="btn-primary">
-                    	<span class="menu-icon">👤</span> Create User
-                	</button>
-                	<button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">
-                    	<span class="menu-icon">↩️</span> Cancel
-                	</button>
-            	</div>
-        	</form>
-    	</div>
-	`;
+    // Get current user to show what will be inherited
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    
+    return `
+        <div class="content-page">
+            <h2>👤 Create New User</h2>
+            <p>Create a new system user account. This feature is only available to Administrators.</p>
+            
+            <!-- Inheritance Information -->
+            <div class="inheritance-info" style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px; border-left: 5px solid #2196f3;">
+                <h3 style="color: #1976d2; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                    <span>🔄</span> Inheritance Information
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div>
+                        <strong>Creating User:</strong><br>
+                        <span>${currentUser?.userID || 'Current User'}</span>
+                    </div>
+                    <div>
+                        <strong>Business Name:</strong><br>
+                        <span>${currentUser?.businessName || 'Company name'}</span>
+                    </div>
+                    <div>
+                        <strong>Contact:</strong><br>
+                        <span>${currentUser?.telephone || '070 56 7356 63'}</span>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding: 12px; background: white; border-radius: 8px; font-size: 0.9em;">
+                    <strong>⚠️ Note:</strong> New user will inherit:
+                    <ul style="margin: 8px 0 0 20px;">
+                        <li>Same business information</li>
+                        <li>Access to shared inventory structure</li>
+                        <li>Separate sales and purchase records</li>
+                        <li>Independent wallet balance (starts at ₦0)</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <form id="newSystemUserForm" class="content-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newSystemUserID" class="required-field">User ID *</label>
+                        <input type="text" id="newSystemUserID" name="newSystemUserID" required
+                            placeholder="Enter unique user ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="newSystemFullName" class="required-field">Full Name *</label>
+                        <input type="text" id="newSystemFullName" name="newSystemFullName" required
+                            placeholder="Enter full name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newSystemPassword" class="required-field">Password *</label>
+                        <input type="password" id="newSystemPassword" name="newSystemPassword" required
+                            placeholder="Enter password">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmSystemPassword" class="required-field">Confirm Password *</label>
+                        <input type="password" id="confirmSystemPassword" name="confirmSystemPassword" required
+                            placeholder="Confirm password">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newUserGroup" class="required-field">User Group *</label>
+                        <select id="newUserGroup" name="newUserGroup" required>
+                            <option value="0">Basic User (Limited Access)</option>
+                            <option value="1">Standard User</option>
+                            <option value="2">Manager</option>
+                            <option value="3" ${currentUser?.userGroup === 3 ? '' : 'disabled'}>Administrator</option>
+                        </select>
+                        <div class="form-hint">
+                            Basic users cannot access "Sales of the Day" report
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserEmail">Email Address</label>
+                        <input type="email" id="newUserEmail" name="newUserEmail"
+                            placeholder="Enter email address"
+                            value="${currentUser?.email || ''}">
+                    </div>
+                </div>
+                
+                <!-- Business Information Section (Read-only, showing inherited values) -->
+                <div class="form-section" style="margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">Inherited Business Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Business Name (Inherited)</label>
+                            <input type="text" readonly value="${currentUser?.businessName || 'Company name'}" 
+                                class="readonly-field" style="background: #e9ecef;">
+                        </div>
+                        <div class="form-group">
+                            <label>Telephone (Inherited)</label>
+                            <input type="text" readonly value="${currentUser?.telephone || '070 56 7356 63'}" 
+                                class="readonly-field" style="background: #e9ecef;">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Address Line 1 (Inherited)</label>
+                            <input type="text" readonly value="${currentUser?.addressLine1 || 'Address line 1'}" 
+                                class="readonly-field" style="background: #e9ecef;">
+                        </div>
+                        <div class="form-group">
+                            <label>Email (Inherited)</label>
+                            <input type="text" readonly value="${currentUser?.email || 'xemail@xmail.com'}" 
+                                class="readonly-field" style="background: #e9ecef;">
+                        </div>
+                    </div>
+                    <div style="font-size: 0.9em; color: #6c757d; margin-top: 10px;">
+                        <span>ℹ️</span> This information is inherited from ${currentUser?.userID || 'the creating user'}
+                    </div>
+                </div>
+                
+                <div class="form-actions-content">
+                    <button type="submit" class="btn-primary" id="createUserBtn">
+                        <span class="menu-icon">👤</span> Create User with Inheritance
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="app.loadMenuContent('setup')">
+                        <span class="menu-icon">↩️</span> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
 }
 
 
@@ -5799,6 +5884,94 @@ resetToNewProductMode() {
         status.style.backgroundColor = '#e3f2fd';
         status.style.color = '#1565c0';
         status.style.border = '1px solid #bbdefb';
+    }
+}
+
+
+
+// Add this method to WebStarNgApp class in app.js:
+async createSystemUser() {
+    // Get form values
+    const newUserID = document.getElementById('newSystemUserID').value.trim();
+    const newFullName = document.getElementById('newSystemFullName').value.trim();
+    const newPassword = document.getElementById('newSystemPassword').value;
+    const confirmPassword = document.getElementById('confirmSystemPassword').value;
+    const userGroup = parseInt(document.getElementById('newUserGroup').value) || 0;
+    const userEmail = document.getElementById('newUserEmail')?.value.trim() || '';
+    
+    // Get current user (the creator)
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) {
+        alert('Please login to create users');
+        return;
+    }
+    
+    // Validate form
+    if (!newUserID || !newFullName || !newPassword) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        alert('Passwords do not match');
+        document.getElementById('confirmSystemPassword').focus();
+        return;
+    }
+    
+    if (newPassword.length < 4) {
+        alert('Password must be at least 4 characters long');
+        document.getElementById('newSystemPassword').focus();
+        return;
+    }
+    
+    // Check user group permissions
+    if (userGroup === 3 && currentUser.userGroup !== 3) {
+        alert('Only Administrators can create other Administrators');
+        return;
+    }
+    
+    try {
+        // Disable create button
+        const createBtn = document.getElementById('createUserBtn');
+        if (createBtn) {
+            createBtn.disabled = true;
+            createBtn.innerHTML = '<span class="spinner"></span> Creating User...';
+        }
+        
+        // Prepare user data
+        const userData = {
+            userID: newUserID,
+            password: newPassword,
+            fullName: newFullName,
+            userGroup: userGroup,
+            email: userEmail || currentUser.email || 'xemail@xmail.com'
+        };
+        
+        // Create user with inheritance from current user
+        const createdUser = await api.createUser(userData, currentUser);
+        
+        // Show success message with inheritance details
+        alert(`✅ User "${newFullName}" created successfully!\n\n📋 Inheritance Details:\n• Business: ${createdUser.businessName}\n• Contact: ${createdUser.telephone}\n• Email: ${createdUser.email}\n• User Group: ${this.getUserGroupLabel(userGroup)}\n\nUser can now login with ID: ${newUserID}`);
+        
+        // Return to setup menu
+        this.loadMenuContent('setup');
+        
+    } catch (error) {
+        console.error('Error creating user:', error);
+        
+        // Re-enable create button
+        const createBtn = document.getElementById('createUserBtn');
+        if (createBtn) {
+            createBtn.disabled = false;
+            createBtn.innerHTML = '<span class="menu-icon">👤</span> Create User with Inheritance';
+        }
+        
+        if (error.message.includes('already exists')) {
+            alert(`❌ User ID "${newUserID}" already exists. Please choose a different ID.`);
+            document.getElementById('newSystemUserID').focus();
+        } else {
+            alert(`❌ Error creating user: ${error.message}`);
+        }
     }
 }
 
