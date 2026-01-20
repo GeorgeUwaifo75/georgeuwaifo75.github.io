@@ -15,13 +15,28 @@ class WebStarNgApp {
     
 	constructor() {
    	this.currentProduct = null; // Add this line
- 
-    	this.init();
+    this.performanceLog = [];
+    this.init();
 	}
 
+ logPerformance(operation, duration) {
+        this.performanceLog.push({ operation, duration, timestamp: Date.now() });
+        
+        // Keep only last 100 logs
+        if (this.performanceLog.length > 100) {
+            this.performanceLog.shift();
+        }
+        
+        // Log slow operations
+        if (duration > 1000) {
+            console.warn(`Slow operation: ${operation} took ${duration}ms`);
+        }
+    }
 
 
 	async init() {
+	      console.time('AppInit');
+       
       	this.checkAuth();
       	await this.loadUserData();
       	this.setupEventListeners();
@@ -34,6 +49,8 @@ class WebStarNgApp {
       	if (!localStorage.getItem('receipt_counter')) {
           	localStorage.setItem('receipt_counter', '1000');
       	}
+      	
+      	 console.timeEnd('AppInit');
 	}
 
 	checkAuth() {
@@ -42,6 +59,25 @@ class WebStarNgApp {
         	window.location.href = 'index.html';
     	}
 	}
+
+
+
+// Add preloading method
+async preloadCriticalData() {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return;
+    
+    // Preload inventory data in background when user logs in
+    setTimeout(async () => {
+        try {
+            await this.getCachedInventory(currentUser.userID);
+            console.log('Inventory preloaded');
+        } catch (error) {
+            console.warn('Inventory preload failed:', error);
+        }
+    }, 2000); // Wait 2 seconds after login
+}
+
 
 	async loadUserData() {
     	try {
@@ -63,6 +99,11 @@ class WebStarNgApp {
             	this.updateUserDisplay(userData);
             	// Update session with fresh data
             	localStorage.setItem('webstarng_user', JSON.stringify(userData));
+        
+         // Preload critical data
+            this.preloadCriticalData();
+        
+        
         	}
     	} catch (error) {
         	console.error('Error loading user data:', error);
@@ -812,56 +853,60 @@ renderCart() {
 
 
 // Add barcode search functionality
+// Update searchBarcode() method to use cache:
 async searchBarcode(barcodeValue) {
-	if (!barcodeValue || barcodeValue.trim() === '') {
-    	this.showBarcodeError('Please enter a barcode');
-    	return null;
-	}
-    
-	// Show loading
-	this.showBarcodeLoading(true);
-    
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	this.showBarcodeError('Please login first');
-        	return null;
-    	}
-   	 
-    	// Get user's inventory
-    	const inventoryData = await api.getUserInventory(currentUser.userID);
-    	const products = inventoryData.products || [];
-   	 
-    	// Search for product by barcode
-    	const product = products.find(p => p.barcode === barcodeValue);
-   	 
-    	if (product) {
-        	// Update barcode display
-        	this.updateBarcodeDisplay(barcodeValue);
-       	 
-        	// Check if product has enough quantity
-        	const cartItem = this.cart.find(item => item.barcode === barcodeValue);
-        	const currentCartQuantity = cartItem ? cartItem.quantity : 0;
-       	 
-        	if (currentCartQuantity >= product.quantity) {
-            	this.showBarcodeError(`Only ${product.quantity} items available in stock`);
-            	return null;
-        	}
-       	 
-        	return product;
-    	} else {
-        	this.showBarcodeError(`Product with barcode "${barcodeValue}" not found in inventory`);
-        	return null;
-    	}
-	} catch (error) {
-    	console.error('Error searching barcode:', error);
-    	this.showBarcodeError('Error searching inventory. Please try again.');
-    	return null;
-	} finally {
-    	this.showBarcodeLoading(false);
-	}
-}
+    if (!barcodeValue || barcodeValue.trim() === '') {
+        this.showBarcodeError('Please enter a barcode');
+        return null;
+    }
 
+    // Show loading
+    this.showBarcodeLoading(true);
+
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            this.showBarcodeError('Please login first');
+            return null;
+        }
+
+        // Use cached inventory
+        const inventoryData = await this.getCachedInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+
+        // Use Map for O(1) lookup instead of array.find()
+        const productMap = new Map();
+        products.forEach(p => productMap.set(p.barcode, p));
+        
+        const product = productMap.get(barcodeValue);
+
+        if (product) {
+            // Update barcode display
+            this.updateBarcodeDisplay(barcodeValue);
+
+            // Check if product has enough quantity
+            const cartItem = this.cart.find(item => item.barcode === barcodeValue);
+            const currentCartQuantity = cartItem ? cartItem.quantity : 0;
+
+            if (currentCartQuantity >= product.quantity) {
+                this.showBarcodeError(`Only ${product.quantity} items available in stock`);
+                return null;
+            }
+
+            return product;
+        } else {
+            this.showBarcodeError(`Product with barcode "${barcodeValue}" not found in inventory`);
+            return null;
+        }
+
+    } catch (error) {
+        console.error('Error searching barcode:', error);
+        this.showBarcodeError('Error searching inventory. Please try again.');
+        return null;
+    } finally {
+        this.showBarcodeLoading(false);
+    }
+}
 showBarcodeError(message) {
 	const barcodeInput = document.getElementById('barcode');
 	if (barcodeInput) {
@@ -1949,143 +1994,276 @@ getBuyProductsForm() {
 
 
 // Add processSale method
+// Replace the entire processSale() method with this optimized version:
 async processSale() {
-	if (this.cart.length === 0) {
-    	alert('Cart is empty. Add products before processing sale.');
-    	return;
-	}
+    // Validation Phase
+    if (this.cart.length === 0) {
+        alert('Cart is empty. Add products before processing sale.');
+        return;
+    }
+
+    const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
     
-	const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
+    // Quick validation before confirmation
+    if (total <= 0) {
+        alert('Invalid sale amount. Please check cart items.');
+        return;
+    }
+
+    // Confirm sale with important info upfront
+    const confirmMessage = `Process sale for ₦${total.toFixed(2)}?\n\n` +
+                          `• Transaction fee: ₦25 (deducted from wallet)\n` +
+                          `• Items in cart: ${this.cart.length}\n` +
+                          `• After sale, you'll return to sales interface`;
     
-	// Confirm sale
-	if (!confirm(`Process sale for ₦${total.toFixed(2)}?\n\nA transaction fee of ₦25 will be deducted from your wallet.`)) {
-    	return;
-	}
-    
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	alert('Please login first');
-        	return;
-    	}
-   	 
-    	// CHECK DEMO USER TRANSACTION LIMIT
-    	if (currentUser.userID === 'tmp101') {
-        	const canProceed = await this.checkDemoTransactionLimit(currentUser.userID);
-        	if (!canProceed) {
-            	alert('⚠️ Demo User Limit Reached\n\nDemo users are limited to 3 transactions per day.\nPlease create a regular account for unlimited transactions.');
-            	return;
-        	}
-    	}
-   	 
-    	// Check if user has at least ₦25 in wallet
-    	if (currentUser.wallet < 25) {
-        	alert(`Insufficient funds for transaction fee.\n\nRequired: ₦25.00\nAvailable: ₦${currentUser.wallet.toFixed(2)}\n\nPlease add funds to your wallet.`);
-        	return;
-    	}
-   	 
-    	// Get current inventory to check stock
-    	const inventoryData = await api.getUserInventory(currentUser.userID);
-    	const products = inventoryData.products || [];
-   	 
-    	// Check stock availability
-    	for (const cartItem of this.cart) {
-        	const product = products.find(p => p.id === cartItem.productId);
-        	if (!product) {
-            	throw new Error(`Product "${cartItem.name}" no longer exists in inventory`);
-        	}
-       	 
-        	if (product.quantity < cartItem.quantity) {
-            	throw new Error(`Insufficient stock for "${cartItem.name}". Available: ${product.quantity}, Requested: ${cartItem.quantity}`);
-        	}
-    	}
-   	 
-    	// Process each item (update inventory)
-    	for (const cartItem of this.cart) {
-        	// Update inventory quantity
-        	const product = products.find(p => p.id === cartItem.productId);
-        	const newQuantity = product.quantity - cartItem.quantity;
-       	 
-        	// Update product in inventory
-        	const updatedProduct = {
-            	...product,
-            	quantity: newQuantity,
-            	updatedAt: new Date().toISOString()
-        	};
-       	 
-        	// Find product index and update
-        	const productIndex = products.findIndex(p => p.id === cartItem.productId);
-        	products[productIndex] = updatedProduct;
-       	 
-        	// Save updated inventory
-        	inventoryData.products = products;
-        	inventoryData.lastUpdated = new Date().toISOString();
-       	 
-        	await api.updateUserInventory(currentUser.userID, inventoryData);
-       	 
-        	// Record sale transaction with server timestamp
-        	await api.addSalesTransaction(currentUser.userID, {
-            	productId: cartItem.productId,
-            	productName: cartItem.name,
-            	barcode: cartItem.barcode,
-            	quantity: cartItem.quantity,
-            	unitPrice: cartItem.sellingPrice,
-            	amount: cartItem.subtotal,
-            	transactionId: this.currentCartId,
-            	paymentMethod: 'cash',
-            	customerInfo: 'Walk-in Customer',
-            	notes: `Sold ${cartItem.quantity} ${cartItem.name}`,
-            	// Add server-side timestamp for validation
-            	serverTimestamp: new Date().toISOString(),
-            	isDemoUser: currentUser.userID === 'tmp101'
-        	});
-    	}
-   	 
-    	// DEDUCT ₦25 from wallet (transaction fee) instead of adding sale amount
-    	const newBalance = currentUser.wallet - 25;
-   	 
-    	// Update user's wallet balance in the database
-    	await api.updateUser(currentUser.userID, { wallet: newBalance });
-   	 
-    	// Update local session
-    	currentUser.wallet = newBalance;
-    	localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
-   	 
-    	// For demo user, update transaction counter
-    	if (currentUser.userID === 'tmp101') {
-        	await this.updateDemoTransactionCounter(currentUser.userID);
-    	}
-   	 
-  	 
-   	 
-    	// Show success message
-    	alert(`✅ Sale completed successfully!\n\n📊 Sale Amount: ₦${total.toFixed(2)}\n💰 New Balance: ₦${newBalance.toFixed(2)}`);
-      	// Add after the alert, before clearing cart:
-   	 
-    	// Print receipt after successful sale
-      	try {
-          	this.printSimpleReceipt(this.cart, total);
-      	} catch (printError) {
-          	console.error('Receipt printing failed:', printError);
-          	// Continue even if printing fails
-      	}
-             	 
-   	 
-    	// Clear cart
-    	this.cart = [];
-    	this.saveCart();
-     	 
-   	 
-    	// Update UI with new balance
-    	this.updateUserDisplay(currentUser);
-   	 
-    	// RETURN TO REFRESHED SALES INTERFACE instead of products page
-    	this.loadSellProductsInterface();
-   	 
-	} catch (error) {
-    	console.error('Error processing sale:', error);
-    	alert(`❌ Sale failed: ${error.message}`);
-	}
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    try {
+        // Get user info once
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login first');
+            return;
+        }
+
+        const userID = currentUser.userID;
+        const isDemoUser = userID === 'tmp101';
+
+        // DEMO USER CHECK - Optimized
+        if (isDemoUser) {
+            const canProceed = await this.checkDemoTransactionLimit(userID);
+            if (!canProceed) {
+                alert('⚠️ Demo User Limit Reached\n\nDemo users are limited to 3 transactions per day.\nPlease create a regular account for unlimited transactions.');
+                return;
+            }
+        }
+
+        // WALLET CHECK - Optimized (minimum required: ₦25)
+        if (currentUser.wallet < 25) {
+            alert(`Insufficient funds for transaction fee.\n\nRequired: ₦25.00\nAvailable: ₦${currentUser.wallet.toFixed(2)}\n\nPlease add funds to your wallet.`);
+            return;
+        }
+
+        // STOCK CHECK - Batch processing with early exit
+        //console.time('StockCheck');
+        //const inventoryData = await api.getUserInventory(userID);
+        //const products = inventoryData.products || [];
+        
+        
+        console.time('StockCheck');
+        const inventoryData = await this.getCachedInventory(userID);
+        const products = inventoryData.products || [];
+        
+        
+        const stockIssues = [];
+        const productMap = new Map(); // Faster lookup than array.find()
+        
+        // Create a map of product IDs for O(1) lookup
+        products.forEach(product => {
+            productMap.set(product.id, product);
+        });
+
+        // Validate stock for all items at once
+        for (const cartItem of this.cart) {
+            const product = productMap.get(cartItem.productId);
+            
+            if (!product) {
+                stockIssues.push(`Product "${cartItem.name}" no longer exists in inventory`);
+                continue;
+            }
+
+            if (product.quantity < cartItem.quantity) {
+                stockIssues.push(`Insufficient stock for "${cartItem.name}". Available: ${product.quantity}, Requested: ${cartItem.quantity}`);
+            }
+        }
+
+        if (stockIssues.length > 0) {
+            console.timeEnd('StockCheck');
+            alert('❌ Stock Issues:\n\n' + stockIssues.join('\n'));
+            return;
+        }
+        console.timeEnd('StockCheck');
+
+        // PROCESS TRANSACTION - Batch operations
+        console.time('TransactionProcessing');
+        
+        // Prepare all updates in parallel
+        const timestamp = new Date().toISOString();
+        const transactionId = this.currentCartId;
+        const newBalance = currentUser.wallet - 25; // Fixed fee
+        
+        // 1. Update inventory (batch operation)
+        await this.updateInventoryBatch(userID, this.cart, products, timestamp);
+        
+        // 2. Record sales transaction (single call with all items)
+        await this.recordSalesBatch(userID, this.cart, transactionId, timestamp, isDemoUser);
+        
+        // 3. Update wallet balance (single call)
+        await api.updateUser(userID, { wallet: newBalance });
+        
+        console.timeEnd('TransactionProcessing');
+
+        // UPDATE UI AND LOCAL STORAGE - Single operation
+        console.time('UIUpdate');
+        currentUser.wallet = newBalance;
+        localStorage.setItem('webstarng_user', JSON.stringify(currentUser));
+        
+        // Print receipt (non-blocking)
+        setTimeout(() => {
+            try {
+                this.printSimpleReceipt(this.cart, total);
+            } catch (printError) {
+                console.warn('Receipt printing failed:', printError);
+                // Continue even if printing fails
+            }
+        }, 100); // Small delay to not block main process
+
+        // Show success message with all details
+        const successMessage = 
+            `✅ Sale completed successfully!\n\n` +
+            `📊 Sale Amount: ₦${total.toFixed(2)}\n` +
+            `📦 Items Sold: ${this.cart.length}\n` +
+            `💰 Transaction Fee: ₦25.00\n` +
+            `💳 New Balance: ₦${newBalance.toFixed(2)}\n` +
+            `🆔 Transaction ID: ${transactionId.substring(0, 12)}...`;
+        
+        alert(successMessage);
+        
+        // Clear cart efficiently
+        this.cart = [];
+        this.saveCart();
+        
+        // Update UI with new balance
+        this.updateUserDisplay(currentUser);
+        
+        // Load refreshed sales interface without blocking
+        setTimeout(() => {
+            this.loadSellProductsInterface();
+        }, 50);
+        
+        console.timeEnd('UIUpdate');
+
+        // Demo user counter update (non-blocking)
+        if (isDemoUser) {
+            setTimeout(() => {
+                this.updateDemoTransactionCounter(userID);
+            }, 0);
+        }
+
+    } catch (error) {
+        console.error('Error processing sale:', error);
+        
+        // User-friendly error messages
+        let errorMessage = '❌ Sale failed: ';
+        
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+            errorMessage += 'Network error. Please check your connection.';
+        } else if (error.message.includes('timeout')) {
+            errorMessage += 'Request timeout. Please try again.';
+        } else if (error.message.includes('insufficient')) {
+            errorMessage += 'Insufficient funds or stock.';
+        } else {
+            errorMessage += error.message;
+        }
+        
+        alert(errorMessage);
+        
+        // Optionally: Re-enable UI elements if they were disabled
+        const payNowBtn = document.getElementById('payNowBtn');
+        if (payNowBtn) {
+            payNowBtn.disabled = false;
+        }
+    }
+}
+
+// Add these helper methods to WebStarNgApp class:
+
+// Batch update inventory
+async updateInventoryBatch(userID, cartItems, products, timestamp) {
+    try {
+        // Create a map for quick product updates
+        const productMap = new Map();
+        products.forEach(product => {
+            productMap.set(product.id, { ...product });
+        });
+
+        // Apply all quantity updates
+        cartItems.forEach(cartItem => {
+            const product = productMap.get(cartItem.productId);
+            if (product) {
+                product.quantity -= cartItem.quantity;
+                product.updatedAt = timestamp;
+                product.lastModifiedBy = userID;
+            }
+        });
+
+        // Convert map back to array
+        const updatedProducts = Array.from(productMap.values());
+        
+        // Single API call to update inventory
+        const inventoryData = {
+            products: updatedProducts,
+            lastUpdated: timestamp,
+            lastModifiedBy: userID
+        };
+
+        return await api.updateUserInventory(userID, inventoryData);
+    } catch (error) {
+        console.error('Error in batch inventory update:', error);
+        throw error;
+    }
+}
+
+// Batch record sales transactions
+async recordSalesBatch(userID, cartItems, transactionId, timestamp, isDemoUser) {
+    try {
+        // Get existing sales data first
+        const salesData = await api.getUserSales(userID);
+        
+        // Create all transactions in one go
+        const newTransactions = cartItems.map(cartItem => ({
+            productId: cartItem.productId,
+            productName: cartItem.name,
+            barcode: cartItem.barcode,
+            quantity: cartItem.quantity,
+            unitPrice: cartItem.sellingPrice,
+            amount: cartItem.subtotal,
+            transactionId: transactionId,
+            paymentMethod: 'cash',
+            customerInfo: 'Walk-in Customer',
+            notes: `Sold ${cartItem.quantity} ${cartItem.name}`,
+            serverTimestamp: timestamp,
+            isDemoUser: isDemoUser,
+            performedBy: userID,
+            userID: userID,
+            id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: timestamp,
+            clientInfo: {
+                userAgent: navigator.userAgent,
+                timestamp: timestamp,
+                performedBy: userID
+            }
+        }));
+
+        // Add all transactions at once
+        salesData.transactions = [...(salesData.transactions || []), ...newTransactions];
+        
+        // Calculate total sales from all transactions (more accurate)
+        salesData.totalSales = salesData.transactions.reduce((sum, transaction) => {
+            return sum + (parseFloat(transaction.amount) || 0);
+        }, 0);
+        
+        salesData.lastUpdated = timestamp;
+        salesData.lastModifiedBy = userID;
+
+        // Single API call to update sales
+        return await api.updateUserSalesBin(userID, salesData);
+    } catch (error) {
+        console.error('Error in batch sales recording:', error);
+        throw error;
+    }
 }
 
 
@@ -3975,81 +4153,121 @@ loadSellProductsInterface() {
 }
 
 // Demo user transaction limit methods
+// Update checkDemoTransactionLimit() method:
 async checkDemoTransactionLimit(userID) {
-	if (userID !== 'tmp101') {
-    	return true; // Not a demo user, no limit
-	}
-    
-	try {
-    	// Get today's sales for the demo user
-    	const today = new Date().toISOString().split('T')[0];
-    	const salesData = await api.getUserSales(userID);
-    	const transactions = salesData.transactions || [];
-   	 
-    	// Count today's transactions using SERVER timestamps to prevent date manipulation
-    	const todayTransactionCount = transactions.filter(transaction => {
-        	if (!transaction.timestamp && !transaction.serverTimestamp) return false;
-       	 
-        	// Use server timestamp if available (more secure)
-        	const timestamp = transaction.serverTimestamp || transaction.timestamp;
-        	const transactionDate = new Date(timestamp).toISOString().split('T')[0];
-        	return transactionDate === today;
-    	}).length;
-   	 
-    	console.log(`Demo user transactions today: ${todayTransactionCount}`);
-   	 
-    	// Check if limit reached
-    	if (todayTransactionCount >= 3) {
-        	return false;
-    	}
-   	 
-    	return true;
-   	 
-	} catch (error) {
-    	console.error('Error checking demo transaction limit:', error);
-    	// If there's an error, allow the transaction (fail open for usability)
-    	return true;
-	}
+    if (userID !== 'tmp101') {
+        return true; // Not a demo user, no limit
+    }
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Cache check in localStorage to avoid API calls when possible
+        const cacheKey = `demo_limit_${today}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        
+        if (cachedData) {
+            const { count, timestamp } = JSON.parse(cachedData);
+            const cacheAge = Date.now() - timestamp;
+            
+            // Use cache if less than 5 minutes old
+            if (cacheAge < 5 * 60 * 1000) {
+                console.log(`Using cached demo limit: ${count}/3`);
+                return count < 3;
+            }
+        }
+
+        // Get fresh data from server
+        const salesData = await api.getUserSales(userID, false, false);
+        const transactions = salesData.transactions || [];
+        
+        // Count today's transactions efficiently
+        const todayTransactionCount = transactions.reduce((count, transaction) => {
+            if (!transaction.timestamp && !transaction.serverTimestamp) return count;
+            
+            const timestamp = transaction.serverTimestamp || transaction.timestamp;
+            const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+            
+            return transactionDate === today ? count + 1 : count;
+        }, 0);
+
+        console.log(`Demo user transactions today: ${todayTransactionCount}/3`);
+        
+        // Cache the result
+        localStorage.setItem(cacheKey, JSON.stringify({
+            count: todayTransactionCount,
+            timestamp: Date.now()
+        }));
+
+        // Check if limit reached
+        return todayTransactionCount < 3;
+    } catch (error) {
+        console.error('Error checking demo transaction limit:', error);
+        // If there's an error, allow the transaction (fail open for usability)
+        return true;
+    }
 }
 
+// Update updateDemoTransactionCounter() method:
 async updateDemoTransactionCounter(userID) {
-	if (userID !== 'tmp101') {
-    	return; // Not a demo user
-	}
-    
-	try {
-    	// Get current demo user data
-    	const demoUser = await api.getUser(userID);
-    	if (!demoUser) return;
-   	 
-    	// Update demo transaction counter in user data
-    	const today = new Date().toISOString().split('T')[0];
-    	const lastTransactionDate = demoUser.lastTransactionDate || '';
-   	 
-    	if (lastTransactionDate === today) {
-        	// Increment today's counter
-        	demoUser.demoTransactionsToday = (demoUser.demoTransactionsToday || 0) + 1;
-    	} else {
-        	// Reset counter for new day
-        	demoUser.demoTransactionsToday = 1;
-        	demoUser.lastTransactionDate = today;
-    	}
-   	 
-    	// Update last transaction time (server time)
-    	demoUser.lastTransactionTime = new Date().toISOString();
-   	 
-    	// Save updated user data
-    	await api.updateUser(userID, {
-        	demoTransactionsToday: demoUser.demoTransactionsToday,
-        	lastTransactionDate: demoUser.lastTransactionDate,
-        	lastTransactionTime: demoUser.lastTransactionTime
-    	});
-   	 
-    	console.log(`Demo transaction counter updated: ${demoUser.demoTransactionsToday}/3 today`);
-   	 
-	} catch (error) {
-    	console.error('Error updating demo transaction counter:', error);
-	}
+    if (userID !== 'tmp101') {
+        return; // Not a demo user
+    }
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const cacheKey = `demo_limit_${today}`;
+        
+        // Update cache first (immediate response)
+        const cachedData = localStorage.getItem(cacheKey);
+        let newCount = 1;
+        
+        if (cachedData) {
+            const data = JSON.parse(cachedData);
+            newCount = (data.count || 0) + 1;
+        }
+        
+        localStorage.setItem(cacheKey, JSON.stringify({
+            count: newCount,
+            timestamp: Date.now()
+        }));
+
+        console.log(`Demo transaction counter updated (cache): ${newCount}/3`);
+        
+        // Update server asynchronously (don't wait for it)
+        setTimeout(async () => {
+            try {
+                const demoUser = await api.getUser(userID);
+                if (!demoUser) return;
+
+                const lastTransactionDate = demoUser.lastTransactionDate || '';
+                
+                if (lastTransactionDate === today) {
+                    // Increment today's counter
+                    demoUser.demoTransactionsToday = (demoUser.demoTransactionsToday || 0) + 1;
+                } else {
+                    // Reset counter for new day
+                    demoUser.demoTransactionsToday = 1;
+                    demoUser.lastTransactionDate = today;
+                }
+
+                demoUser.lastTransactionTime = new Date().toISOString();
+
+                // Update user data (fire and forget)
+                api.updateUser(userID, {
+                    demoTransactionsToday: demoUser.demoTransactionsToday,
+                    lastTransactionDate: demoUser.lastTransactionDate,
+                    lastTransactionTime: demoUser.lastTransactionTime
+                }).catch(err => console.warn('Background update failed:', err));
+                
+            } catch (error) {
+                console.warn('Error in background demo counter update:', error);
+            }
+        }, 0);
+        
+    } catch (error) {
+        console.error('Error updating demo transaction counter:', error);
+    }
 }
 
 // Add server-side timestamp validation on page load
@@ -6213,7 +6431,80 @@ async createSystemUser() {
     }
 }
 
+
+// Cache inventory data to reduce API calls
+async getCachedInventory(userID) {
+    const cacheKey = `inventory_cache_${userID}`;
+    const cacheTimestampKey = `inventory_cache_timestamp_${userID}`;
+    
+    const cachedData = localStorage.getItem(cacheKey);
+    const cacheTime = localStorage.getItem(cacheTimestampKey);
+    
+    // Use cache if less than 30 seconds old
+    if (cachedData && cacheTime) {
+        const age = Date.now() - parseInt(cacheTime);
+        if (age < 30000) { // 30 seconds
+            return JSON.parse(cachedData);
+        }
+    }
+    
+    // Fetch fresh data
+    const inventoryData = await api.getUserInventory(userID);
+    
+    // Cache the data
+    localStorage.setItem(cacheKey, JSON.stringify(inventoryData));
+    localStorage.setItem(cacheTimestampKey, Date.now().toString());
+    
+    return inventoryData;
 }
+
+// Clear inventory cache
+clearInventoryCache(userID) {
+    localStorage.removeItem(`inventory_cache_${userID}`);
+    localStorage.removeItem(`inventory_cache_timestamp_${userID}`);
+}
+
+
+// Add debounce function to prevent rapid UI updates
+debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Update renderCart() to use debouncing
+renderCart = this.debounce(function() {
+    // Original renderCart code here
+    const cartItemsContainer = document.getElementById('cartItems');
+    // ... rest of the function
+}, 100); // 100ms delay
+
+// Update quantity controls to use debounced version
+updateQuantity(itemId, newQuantity) {
+    if (newQuantity < 1) {
+        this.removeFromCart(itemId);
+        return;
+    }
+
+    const item = this.cart.find(item => item.id === itemId);
+    if (item) {
+        item.quantity = newQuantity;
+        item.subtotal = item.quantity * item.sellingPrice;
+        this.saveCart();
+        this.renderCart(); // Now debounced
+    }
+}
+
+}
+
+
+
 
 // Global functions for modals (existing functionality)
 function showAddFunds() {
