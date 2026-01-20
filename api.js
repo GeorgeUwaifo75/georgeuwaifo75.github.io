@@ -54,6 +54,7 @@ async addPurchaseToUserBin(userID, purchaseData) {
 
 
 // Add this method to JSONBinAPI class in api.js
+// In updateProductQuantity() method in api.js, add user tracking:
 async updateProductQuantity(userID, productId, newQuantity) {
     try {
         const user = await this.getUser(userID);
@@ -69,16 +70,18 @@ async updateProductQuantity(userID, productId, newQuantity) {
         if (productIndex === -1) {
             throw new Error('Product not found in inventory');
         }
-        
+
         // Update quantity
         const currentQuantity = parseInt(products[productIndex].quantity) || 0;
         products[productIndex].quantity = currentQuantity + newQuantity;
         products[productIndex].updatedAt = new Date().toISOString();
+        products[productIndex].lastModifiedBy = userID;  // Track who modified
         
         // Save updated inventory
         inventory.products = products;
         inventory.lastUpdated = new Date().toISOString();
-        
+        inventory.lastModifiedBy = userID;
+
         const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
             method: 'PUT',
             headers: {
@@ -306,117 +309,201 @@ async initializeData() {
     }
 
     // Get user's inventory data
-    async getUserInventory(userID) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.inventoryBinId) {
-                return { products: [], categories: [], userID: userID };
-            }
-
-            const response = await fetch(`${this.baseURL}/${user.inventoryBinId}/latest`, {
-                headers: {
-                    'X-Master-Key': this.apiKey
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch inventory data');
-            }
-
-            const data = await response.json();
-            return data.record;
-        } catch (error) {
-            console.error('Error fetching inventory:', error);
-            return { products: [], categories: [], userID: userID };
+   // In api.js, update getUserInventory() method:
+async getUserInventory(userID) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.inventoryBinId) {
+            return { products: [], categories: [], userID: userID, shared: false };
         }
+        
+        const response = await fetch(`${this.baseURL}/${user.inventoryBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch inventory data');
+        }
+        
+        const data = await response.json();
+        const inventoryData = data.record;
+        
+        // Add sharing information if this is a shared inventory
+        const sharingInfo = {
+            shared: user.sharesInventory || false,
+            sharedFrom: user.parentUserID || null,
+            isSharedInventory: user.sharesInventory || false
+        };
+        
+        return { ...inventoryData, ...sharingInfo };
+        
+    } catch (error) {
+        console.error('Error fetching inventory:', error);
+        return { products: [], categories: [], userID: userID, shared: false };
     }
-
+}
     // Get user's sales data
-    async getUserSales(userID) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.salesBinId) {
-                return { transactions: [], totalSales: 0, userID: userID };
-            }
-
-            const response = await fetch(`${this.baseURL}/${user.salesBinId}/latest`, {
-                headers: {
-                    'X-Master-Key': this.apiKey
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch sales data');
-            }
-
-            const data = await response.json();
-            return data.record;
-        } catch (error) {
-            console.error('Error fetching sales:', error);
-            return { transactions: [], totalSales: 0, userID: userID };
+  // In api.js, update getUserSales() method:
+async getUserSales(userID, filterByUser = false) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.salesBinId) {
+            return { transactions: [], totalSales: 0, userID: userID, shared: false };
         }
-    }
 
+        const response = await fetch(`${this.baseURL}/${user.salesBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch sales data');
+        }
+
+        const data = await response.json();
+        const salesData = data.record;
+        
+        // Add sharing information
+        const sharingInfo = {
+            shared: user.sharedSales || false,
+            sharedFrom: user.parentUserID || null,
+            isSharedSales: user.sharedSales || false,
+            totalTransactions: salesData.transactions ? salesData.transactions.length : 0
+        };
+        
+        // If filtering by user and shared database, filter transactions
+        let filteredTransactions = salesData.transactions || [];
+        if (filterByUser && user.sharedSales) {
+            filteredTransactions = filteredTransactions.filter(transaction => 
+                transaction.performedBy === userID || transaction.userID === userID
+            );
+        }
+        
+        // Calculate user-specific total
+        let userTotalSales = 0;
+        if (filterByUser && user.sharedSales) {
+            userTotalSales = filteredTransactions.reduce((sum, transaction) => {
+                return sum + (parseFloat(transaction.amount) || 0);
+            }, 0);
+        } else {
+            userTotalSales = salesData.totalSales || 0;
+        }
+        
+        return { 
+            ...salesData, 
+            ...sharingInfo,
+            transactions: filteredTransactions,
+            userTotalSales: userTotalSales,
+            allTransactions: salesData.transactions || []  // Keep all for admin view
+        };
+        
+    } catch (error) {
+        console.error('Error fetching sales:', error);
+        return { transactions: [], totalSales: 0, userID: userID, shared: false };
+    }
+}
     // Get user's purchases data
-    async getUserPurchases(userID) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.purchasesBinId) {
-                return { transactions: [], totalPurchases: 0, userID: userID };
-            }
-
-            const response = await fetch(`${this.baseURL}/${user.purchasesBinId}/latest`, {
-                headers: {
-                    'X-Master-Key': this.apiKey
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch purchases data');
-            }
-
-            const data = await response.json();
-            return data.record;
-        } catch (error) {
-            console.error('Error fetching purchases:', error);
-            return { transactions: [], totalPurchases: 0, userID: userID };
+   // In api.js, update getUserPurchases() method:
+async getUserPurchases(userID, filterByUser = false) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.purchasesBinId) {
+            return { transactions: [], totalPurchases: 0, userID: userID, shared: false };
         }
+
+        const response = await fetch(`${this.baseURL}/${user.purchasesBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch purchases data');
+        }
+
+        const data = await response.json();
+        const purchasesData = data.record;
+        
+        // Add sharing information
+        const sharingInfo = {
+            shared: user.sharedPurchases || false,
+            sharedFrom: user.parentUserID || null,
+            isSharedPurchases: user.sharedPurchases || false,
+            totalTransactions: purchasesData.transactions ? purchasesData.transactions.length : 0
+        };
+        
+        // If filtering by user and shared database, filter transactions
+        let filteredTransactions = purchasesData.transactions || [];
+        if (filterByUser && user.sharedPurchases) {
+            filteredTransactions = filteredTransactions.filter(transaction => 
+                transaction.performedBy === userID || transaction.userID === userID
+            );
+        }
+        
+        // Calculate user-specific total
+        let userTotalPurchases = 0;
+        if (filterByUser && user.sharedPurchases) {
+            userTotalPurchases = filteredTransactions.reduce((sum, transaction) => {
+                return sum + (parseFloat(transaction.amount) || 0);
+            }, 0);
+        } else {
+            userTotalPurchases = purchasesData.totalPurchases || 0;
+        }
+        
+        return { 
+            ...purchasesData, 
+            ...sharingInfo,
+            transactions: filteredTransactions,
+            userTotalPurchases: userTotalPurchases,
+            allTransactions: purchasesData.transactions || []  // Keep all for admin view
+        };
+        
+    } catch (error) {
+        console.error('Error fetching purchases:', error);
+        return { transactions: [], totalPurchases: 0, userID: userID, shared: false };
     }
+}
     
     
    
     // Add product to user's inventory
- // In api.js, update the addProductToInventory method:
+// In api.js, update addProductToInventory() method:
 async addProductToInventory(userID, productData) {
     try {
         const user = await this.getUser(userID);
         if (!user || !user.inventoryBinId) {
             throw new Error('User inventory bin not found');
         }
-
+        
         const inventory = await this.getUserInventory(userID);
+        
+        // For shared inventory, check for duplicates across all users
+        if (user.sharesInventory && productData.barcode) {
+            const duplicateBarcode = inventory.products?.find(p => p.barcode === productData.barcode);
+            if (duplicateBarcode) {
+                throw new Error(`Barcode "${productData.barcode}" already exists in shared inventory for product: "${duplicateBarcode.name}"`);
+            }
+        }
+        
         const newProduct = {
             ...productData,
             id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            // Generate barcode if not provided
             barcode: productData.barcode || `BC${Date.now().toString().slice(-10)}`,
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            // Track which user added this product
+            addedBy: userID,
+            lastModifiedBy: userID
         };
-
-        // Check for duplicate barcode
-        if (inventory.products) {
-            const duplicateBarcode = inventory.products.find(p => p.barcode === newProduct.barcode);
-            if (duplicateBarcode) {
-                // Generate unique barcode if duplicate found
-                newProduct.barcode = `BC${Date.now()}${Math.floor(Math.random() * 1000)}`;
-            }
-        }
-
+        
         inventory.products = inventory.products || [];
         inventory.products.push(newProduct);
         inventory.lastUpdated = new Date().toISOString();
-
+        inventory.lastModifiedBy = userID;
+        
         const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
             method: 'PUT',
             headers: {
@@ -425,8 +512,9 @@ async addProductToInventory(userID, productData) {
             },
             body: JSON.stringify(inventory)
         });
-
+        
         return await response.json();
+        
     } catch (error) {
         console.error('Error adding product:', error);
         throw error;
@@ -434,7 +522,8 @@ async addProductToInventory(userID, productData) {
 }
 
     // Add sales transaction
-    async addSalesTransaction(userID, transactionData) {
+   // In api.js, update addSalesTransaction() method:
+async addSalesTransaction(userID, transactionData) {
     try {
         const user = await this.getUser(userID);
         if (!user || !user.salesBinId) {
@@ -442,22 +531,28 @@ async addProductToInventory(userID, productData) {
         }
 
         const sales = await this.getUserSales(userID);
+        
         const newTransaction = {
             ...transactionData,
             id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             timestamp: new Date().toISOString(),
-            // Add server timestamp that can't be manipulated by client
+            // Add user info for shared database
+            performedBy: userID,
+            userID: userID,  // Include user ID in transaction
+            // Add server timestamp
             serverTimestamp: new Date().toISOString(),
-            // Add user agent and IP fingerprint (simplified)
+            // Add client info
             clientInfo: {
                 userAgent: navigator.userAgent,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                performedBy: userID
             }
         };
 
         sales.transactions.push(newTransaction);
         sales.totalSales = (sales.totalSales || 0) + (transactionData.amount || 0);
         sales.lastUpdated = new Date().toISOString();
+        sales.lastModifiedBy = userID;
 
         const response = await fetch(`${this.baseURL}/${user.salesBinId}`, {
             method: 'PUT',
@@ -474,41 +569,51 @@ async addProductToInventory(userID, productData) {
         throw error;
     }
 }
-
     // Add purchase transaction
-    async addPurchaseTransaction(userID, transactionData) {
-        try {
-            const user = await this.getUser(userID);
-            if (!user || !user.purchasesBinId) {
-                throw new Error('User purchases bin not found');
-            }
-
-            const purchases = await this.getUserPurchases(userID);
-            const newTransaction = {
-                ...transactionData,
-                id: `purch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                timestamp: new Date().toISOString()
-            };
-
-            purchases.transactions.push(newTransaction);
-            purchases.totalPurchases = (purchases.totalPurchases || 0) + (transactionData.amount || 0);
-            purchases.lastUpdated = new Date().toISOString();
-
-            const response = await fetch(`${this.baseURL}/${user.purchasesBinId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey
-                },
-                body: JSON.stringify(purchases)
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error adding purchase transaction:', error);
-            throw error;
+    // In api.js, update addPurchaseTransaction() method:
+async addPurchaseTransaction(userID, transactionData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.purchasesBinId) {
+            throw new Error('User purchases bin not found');
         }
+
+        const purchases = await this.getUserPurchases(userID);
+        
+        const newTransaction = {
+            ...transactionData,
+            id: `purch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            // Add user info for shared database
+            performedBy: userID,
+            userID: userID,  // Include user ID in transaction
+            // Add client info
+            clientInfo: {
+                performedBy: userID,
+                timestamp: new Date().toISOString()
+            }
+        };
+
+        purchases.transactions.push(newTransaction);
+        purchases.totalPurchases = (purchases.totalPurchases || 0) + (transactionData.amount || 0);
+        purchases.lastUpdated = new Date().toISOString();
+        purchases.lastModifiedBy = userID;
+
+        const response = await fetch(`${this.baseURL}/${user.purchasesBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(purchases)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error adding purchase transaction:', error);
+        throw error;
     }
+}
 
     // Local storage fallback methods
     useLocalStorage() {
@@ -598,9 +703,9 @@ async createUser(userData, creatingUser = null) {
         throw new Error('User ID already exists');
     }
     
-    // If creatingUser is provided, inherit their bins and business data
+    // If creatingUser is provided, share ALL bins
     if (creatingUser) {
-        // Use creating user's bins
+        // SHARE ALL BINS - SAME DATABASE
         const newUser = {
             ...userData,
             wallet: 0.00,
@@ -608,10 +713,10 @@ async createUser(userData, creatingUser = null) {
             createdAt: new Date().toISOString(),
             lastLogin: null,
             
-            // INHERIT BINS FROM CREATING USER
-            inventoryBinId: creatingUser.inventoryBinId,
-            salesBinId: creatingUser.salesBinId,
-            purchasesBinId: creatingUser.purchasesBinId,
+            // SHARE ALL BINS (SAME DATABASE)
+            inventoryBinId: creatingUser.inventoryBinId,      // Same inventory
+            salesBinId: creatingUser.salesBinId,              // Same sales
+            purchasesBinId: creatingUser.purchasesBinId,      // Same purchases
             
             // INHERIT BUSINESS INFORMATION
             userGroup: userData.userGroup || creatingUser.userGroup || 0,
@@ -621,18 +726,24 @@ async createUser(userData, creatingUser = null) {
             telephone: creatingUser.telephone || '070 56 7356 63',
             email: creatingUser.email || 'xemail@xmail.com',
             
-            // Track parent user for reference
+            // Tracking fields
             createdBy: creatingUser.userID,
             parentUserID: creatingUser.userID,
-            isBranchAccount: true
+            isBranchAccount: true,
+            sharesAllBins: true,               // Flag to indicate fully shared
+            sharedInventory: true,
+            sharedSales: true,
+            sharedPurchases: true
         };
+        
+        // NO NEED TO CREATE SEPARATE BINS - USING SHARED BINS
         
         data.users.push(newUser);
         await this.updateData(data);
         return newUser;
         
     } else {
-        // Original logic for standalone users (from registration page)
+        // Original logic for standalone users
         const bins = await this.createUserBins(userData.userID);
         
         const newUser = {
@@ -652,7 +763,8 @@ async createUser(userData, creatingUser = null) {
             email: userData.email || 'xemail@xmail.com',
             createdBy: 'self',
             parentUserID: null,
-            isBranchAccount: false
+            isBranchAccount: false,
+            sharesAllBins: false
         };
         
         data.users.push(newUser);
