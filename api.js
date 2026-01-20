@@ -346,7 +346,8 @@ async getUserInventory(userID) {
 }
     // Get user's sales data
   // In api.js, update getUserSales() method:
-async getUserSales(userID, filterByUser = false) {
+// In api.js, update getUserSales() method:
+async getUserSales(userID, filterByUser = true, isAdmin = false) {
     try {
         const user = await this.getUser(userID);
         if (!user || !user.salesBinId) {
@@ -365,7 +366,7 @@ async getUserSales(userID, filterByUser = false) {
 
         const data = await response.json();
         const salesData = data.record;
-        
+
         // Add sharing information
         const sharingInfo = {
             shared: user.sharedSales || false,
@@ -373,41 +374,49 @@ async getUserSales(userID, filterByUser = false) {
             isSharedSales: user.sharedSales || false,
             totalTransactions: salesData.transactions ? salesData.transactions.length : 0
         };
-        
-        // If filtering by user and shared database, filter transactions
+
         let filteredTransactions = salesData.transactions || [];
-        if (filterByUser && user.sharedSales) {
-            filteredTransactions = filteredTransactions.filter(transaction => 
-                transaction.performedBy === userID || transaction.userID === userID
-            );
-        }
-        
-        // Calculate user-specific total
         let userTotalSales = 0;
-        if (filterByUser && user.sharedSales) {
-            userTotalSales = filteredTransactions.reduce((sum, transaction) => {
-                return sum + (parseFloat(transaction.amount) || 0);
-            }, 0);
+
+        // If user has shared database OR admin viewing shared database
+        if (user.sharedSales || (isAdmin && user.sharedSales)) {
+            // For admin users (group 2 or 3) - show ALL transactions without filtering
+            if (isAdmin) {
+                // Admin sees everything - no filtering needed
+                filteredTransactions = filteredTransactions;
+                userTotalSales = salesData.totalSales || 0;
+            } else {
+                // Non-admin users in shared database - filter by their userID
+                filteredTransactions = filteredTransactions.filter(transaction =>
+                    transaction.performedBy === userID || transaction.userID === userID
+                );
+                userTotalSales = filteredTransactions.reduce((sum, transaction) => {
+                    return sum + (parseFloat(transaction.amount) || 0);
+                }, 0);
+            }
         } else {
+            // Regular user with own database - show all their transactions
             userTotalSales = salesData.totalSales || 0;
         }
-        
-        return { 
-            ...salesData, 
+
+        return {
+            ...salesData,
             ...sharingInfo,
             transactions: filteredTransactions,
             userTotalSales: userTotalSales,
-            allTransactions: salesData.transactions || []  // Keep all for admin view
+            allTransactions: salesData.transactions || [] // Keep all for admin view
         };
-        
     } catch (error) {
         console.error('Error fetching sales:', error);
         return { transactions: [], totalSales: 0, userID: userID, shared: false };
     }
 }
+
+
+
     // Get user's purchases data
-   // In api.js, update getUserPurchases() method:
-async getUserPurchases(userID, filterByUser = false) {
+  // In api.js, update getUserPurchases() method:
+async getUserPurchases(userID, filterByUser = true, isAdmin = false) {
     try {
         const user = await this.getUser(userID);
         if (!user || !user.purchasesBinId) {
@@ -426,7 +435,7 @@ async getUserPurchases(userID, filterByUser = false) {
 
         const data = await response.json();
         const purchasesData = data.record;
-        
+
         // Add sharing information
         const sharingInfo = {
             shared: user.sharedPurchases || false,
@@ -434,33 +443,38 @@ async getUserPurchases(userID, filterByUser = false) {
             isSharedPurchases: user.sharedPurchases || false,
             totalTransactions: purchasesData.transactions ? purchasesData.transactions.length : 0
         };
-        
-        // If filtering by user and shared database, filter transactions
+
         let filteredTransactions = purchasesData.transactions || [];
-        if (filterByUser && user.sharedPurchases) {
-            filteredTransactions = filteredTransactions.filter(transaction => 
-                transaction.performedBy === userID || transaction.userID === userID
-            );
-        }
-        
-        // Calculate user-specific total
         let userTotalPurchases = 0;
-        if (filterByUser && user.sharedPurchases) {
-            userTotalPurchases = filteredTransactions.reduce((sum, transaction) => {
-                return sum + (parseFloat(transaction.amount) || 0);
-            }, 0);
+
+        // If user has shared database OR admin viewing shared database
+        if (user.sharedPurchases || (isAdmin && user.sharedPurchases)) {
+            // For admin users (group 2 or 3) - show ALL transactions without filtering
+            if (isAdmin) {
+                // Admin sees everything - no filtering needed
+                filteredTransactions = filteredTransactions;
+                userTotalPurchases = purchasesData.totalPurchases || 0;
+            } else {
+                // Non-admin users in shared database - filter by their userID
+                filteredTransactions = filteredTransactions.filter(transaction =>
+                    transaction.performedBy === userID || transaction.userID === userID
+                );
+                userTotalPurchases = filteredTransactions.reduce((sum, transaction) => {
+                    return sum + (parseFloat(transaction.amount) || 0);
+                }, 0);
+            }
         } else {
+            // Regular user with own database - show all their transactions
             userTotalPurchases = purchasesData.totalPurchases || 0;
         }
-        
-        return { 
-            ...purchasesData, 
+
+        return {
+            ...purchasesData,
             ...sharingInfo,
             transactions: filteredTransactions,
             userTotalPurchases: userTotalPurchases,
-            allTransactions: purchasesData.transactions || []  // Keep all for admin view
+            allTransactions: purchasesData.transactions || [] // Keep all for admin view
         };
-        
     } catch (error) {
         console.error('Error fetching purchases:', error);
         return { transactions: [], totalPurchases: 0, userID: userID, shared: false };
