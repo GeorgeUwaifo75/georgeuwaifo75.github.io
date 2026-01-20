@@ -936,6 +936,57 @@ async inheritUserBins(parentUserID, newUserID) {
         };
     }
 }
+ 
+// Add this method to JSONBinAPI class in api.js:
+async updateUserSalesBin(userID, salesData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.salesBinId) {
+            throw new Error('User sales bin not found');
+        }
+
+        // Single API call to update entire sales bin
+        const response = await fetch(`${this.baseURL}/${user.salesBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(salesData)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error updating sales bin:', error);
+        throw error;
+    }
+} 
+ 
+
+// Add this method to JSONBinAPI class in api.js:
+async updateUserInventoryBatch(userID, inventoryData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user || !user.inventoryBinId) {
+            throw new Error('User inventory bin not found');
+        }
+
+        // Single API call to update entire inventory
+        const response = await fetch(`${this.baseURL}/${user.inventoryBinId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey
+            },
+            body: JSON.stringify(inventoryData)
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error updating inventory batch:', error);
+        throw error;
+    }
+}
    
 }
 
