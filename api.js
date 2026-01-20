@@ -9,8 +9,6 @@ constructor() {
     }
       
      
-
-
 // Add this method to JSONBinAPI class in api.js
 async addPurchaseToUserBin(userID, purchaseData) {
     try {
@@ -589,45 +587,78 @@ async addProductToInventory(userID, productData) {
         return user !== undefined;
     }
 
-    // Create new user with bins
 // Create new user with bins
-async createUser(userData) {
+// In api.js, update the createUser() method:
+async createUser(userData, creatingUser = null) {
     const data = await this.getData();
- 
+    
     // Check if user already exists
     const existingUser = data.users.find(u => u.userID === userData.userID);
     if (existingUser) {
         throw new Error('User ID already exists');
     }
- 
-    // Create bins for the new user
-    const bins = await this.createUserBins(userData.userID);
- 
-    // Add user with metadata, bin IDs, and default business info
-    const newUser = {
-        ...userData,
-        wallet: 0.00, // NEW: Default wallet value set to 0
-        contacts: [],
-        createdAt: new Date().toISOString(),
-        lastLogin: null,
-        inventoryBinId: bins.inventoryBinId,
-        salesBinId: bins.salesBinId,
-        purchasesBinId: bins.purchasesBinId,
-        // NEW FIELDS WITH DEFAULTS:
-        userGroup: 0, // Default to basic user (0)
-        businessName: 'Company name',
-        addressLine1: 'Address line 1',
-        addressLine2: 'Address line 2',
-        telephone: '070 56 7356 63',
-        email: 'xemail@xmail.com'
-    };
- 
-    data.users.push(newUser);
- 
-    // Update data
-    await this.updateData(data);
- 
-    return newUser;
+    
+    // If creatingUser is provided, inherit their bins and business data
+    if (creatingUser) {
+        // Use creating user's bins
+        const newUser = {
+            ...userData,
+            wallet: 0.00,
+            contacts: [],
+            createdAt: new Date().toISOString(),
+            lastLogin: null,
+            
+            // INHERIT BINS FROM CREATING USER
+            inventoryBinId: creatingUser.inventoryBinId,
+            salesBinId: creatingUser.salesBinId,
+            purchasesBinId: creatingUser.purchasesBinId,
+            
+            // INHERIT BUSINESS INFORMATION
+            userGroup: userData.userGroup || creatingUser.userGroup || 0,
+            businessName: creatingUser.businessName || 'Company name',
+            addressLine1: creatingUser.addressLine1 || 'Address line 1',
+            addressLine2: creatingUser.addressLine2 || 'Address line 2',
+            telephone: creatingUser.telephone || '070 56 7356 63',
+            email: creatingUser.email || 'xemail@xmail.com',
+            
+            // Track parent user for reference
+            createdBy: creatingUser.userID,
+            parentUserID: creatingUser.userID,
+            isBranchAccount: true
+        };
+        
+        data.users.push(newUser);
+        await this.updateData(data);
+        return newUser;
+        
+    } else {
+        // Original logic for standalone users (from registration page)
+        const bins = await this.createUserBins(userData.userID);
+        
+        const newUser = {
+            ...userData,
+            wallet: 0.00,
+            contacts: [],
+            createdAt: new Date().toISOString(),
+            lastLogin: null,
+            inventoryBinId: bins.inventoryBinId,
+            salesBinId: bins.salesBinId,
+            purchasesBinId: bins.purchasesBinId,
+            userGroup: userData.userGroup || 0,
+            businessName: userData.businessName || 'Company name',
+            addressLine1: userData.addressLine1 || 'Address line 1',
+            addressLine2: userData.addressLine2 || 'Address line 2',
+            telephone: userData.telephone || '070 56 7356 63',
+            email: userData.email || 'xemail@xmail.com',
+            createdBy: 'self',
+            parentUserID: null,
+            isBranchAccount: false
+        };
+        
+        data.users.push(newUser);
+        await this.updateData(data);
+        return newUser;
+    }
 }
 
     async updateUser(userID, updates) {
@@ -674,6 +705,111 @@ async createUser(userData) {
         return newBalance;
     }
 
+
+// Add this method to JSONBinAPI class in api.js:
+async inheritUserBins(parentUserID, newUserID) {
+    try {
+        const parentUser = await this.getUser(parentUserID);
+        if (!parentUser) {
+            throw new Error('Parent user not found');
+        }
+        
+        // Check if parent user has bins
+        if (!parentUser.inventoryBinId || !parentUser.salesBinId || !parentUser.purchasesBinId) {
+            throw new Error('Parent user does not have required bins');
+        }
+        
+        // For inventory: Create a copy of parent's inventory structure
+        const parentInventory = await this.getUserInventory(parentUserID);
+        const newInventory = {
+            userID: newUserID,
+            products: [], // Start with empty products array
+            categories: parentInventory.categories || [],
+            createdAt: new Date().toISOString(),
+            lastUpdated: null,
+            inheritedFrom: parentUserID,
+            isSharedInventory: true
+        };
+        
+        // Create new inventory bin with inherited structure
+        const inventoryResponse = await fetch(this.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey,
+                'X-Bin-Name': `inventory_${newUserID}_inherit_${Date.now()}`
+            },
+            body: JSON.stringify(newInventory)
+        });
+        
+        const inventoryResult = await inventoryResponse.json();
+        const inventoryBinId = inventoryResult.metadata.id;
+        
+        // For sales: Create empty sales bin
+        const salesData = {
+            userID: newUserID,
+            transactions: [],
+            totalSales: 0,
+            createdAt: new Date().toISOString(),
+            lastUpdated: null,
+            inheritedFrom: parentUserID
+        };
+        
+        const salesResponse = await fetch(this.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey,
+                'X-Bin-Name': `sales_${newUserID}_inherit_${Date.now()}`
+            },
+            body: JSON.stringify(salesData)
+        });
+        
+        const salesResult = await salesResponse.json();
+        const salesBinId = salesResult.metadata.id;
+        
+        // For purchases: Create empty purchases bin
+        const purchasesData = {
+            userID: newUserID,
+            transactions: [],
+            totalPurchases: 0,
+            createdAt: new Date().toISOString(),
+            lastUpdated: null,
+            inheritedFrom: parentUserID
+        };
+        
+        const purchasesResponse = await fetch(this.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey,
+                'X-Bin-Name': `purchases_${newUserID}_inherit_${Date.now()}`
+            },
+            body: JSON.stringify(purchasesData)
+        });
+        
+        const purchasesResult = await purchasesResponse.json();
+        const purchasesBinId = purchasesResult.metadata.id;
+        
+        return {
+            inventoryBinId,
+            salesBinId,
+            purchasesBinId,
+            success: true,
+            inheritedFrom: parentUserID
+        };
+        
+    } catch (error) {
+        console.error('Error inheriting user bins:', error);
+        return {
+            inventoryBinId: `inventory_${newUserID}_local`,
+            salesBinId: `sales_${newUserID}_local`,
+            purchasesBinId: `purchases_${newUserID}_local`,
+            success: false,
+            error: error.message
+        };
+    }
+}
    
 }
 
