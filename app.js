@@ -142,34 +142,43 @@ setupMenuNavigation() {
 
 	// Submenu item clicks - ONLY check specific restricted features
 	const submenuLinks = document.querySelectorAll('.submenu a');
-	submenuLinks.forEach(link => {
-    	link.addEventListener('click', (e) => {
-        	e.preventDefault();
-       	 
-        	const action = link.getAttribute('data-action');
-       	 
-        	// ONLY check for "sales-day" restriction for basic users
-        	if (action === 'sales-day') {
-            	const perms = this.checkUserPermissions();
-            	if (!perms.canAccessSalesReport) {
-                	this.showAccessDenied('"Sales of the Day" Report');
-                	return;
-            	}
-        	}
-       	 
-        	// ONLY check for "new-user" restriction for non-admins
-        	if (action === 'new-user') {
-            	const perms = this.checkUserPermissions();
-            	if (!perms.canCreateUsers) {
-                	this.showAccessDenied('Create New Users');
-                	return;
-            	}
-        	}
-       	 
-        	// Allow all other actions
-        	this.handleMenuAction(action);
-    	});
-	});
+	// In setupMenuNavigation() method, update the submenu links section:
+  submenuLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const action = link.getAttribute('data-action');
+        
+        // ONLY check for "sales-day" restriction for basic users
+        if (action === 'sales-day') {
+            const perms = this.checkUserPermissions();
+            if (!perms.canAccessSalesReport) {
+                this.showAccessDenied('"Sales of the Day" Report');
+                return;
+            }
+        }
+        
+       // Check for "purchase-day" restriction for basic users
+            if (action === 'purchase-day') {
+                const perms = this.checkUserPermissions();
+                if (!perms.canAccessSalesReport) { // Use same permission as sales report
+                    this.showAccessDenied('"Purchase of the Day" Report');
+                    return;
+                }
+            }  
+        
+        // ONLY check for "new-user" restriction for non-admins
+        if (action === 'new-user') {
+            const perms = this.checkUserPermissions();
+            if (!perms.canCreateUsers) {
+                this.showAccessDenied('Create New Users');
+                return;
+            }
+        }
+        
+        // Allow all other actions
+        this.handleMenuAction(action);
+    });
+});
     
 	// Update menu visibility (hide specific items)
 	const perms = this.checkUserPermissions();
@@ -177,38 +186,48 @@ setupMenuNavigation() {
 }
 
 // Add method to update menu visibility
-// Replace updateMenuVisibility with this corrected version:
+// Update updateMenuVisibility() in app.js:
 updateMenuVisibility(userGroup) {
-	userGroup = parseInt(userGroup) || 0;
+    userGroup = parseInt(userGroup) || 0;
     
-	// ONLY hide "Sales of the day" for basic users (userGroup 0)
-	const salesReportLink = document.querySelector('[data-action="sales-day"]');
-	if (salesReportLink) {
-    	const shouldShow = userGroup >= 1;  // Show for groups 1,2,3
-    	const listItem = salesReportLink.closest('li');
-    	if (listItem) {
-        	listItem.style.display = shouldShow ? 'block' : 'none';
-    	}
-	}
+    // Show "Sales of the day" only for groups 1, 2, 3
+    const salesReportLink = document.querySelector('[data-action="sales-day"]');
+    if (salesReportLink) {
+        const shouldShow = userGroup >= 1; // Show for groups 1,2,3
+        const listItem = salesReportLink.closest('li');
+        if (listItem) {
+            listItem.style.display = shouldShow ? 'block' : 'none';
+        }
+    }
     
-	// ONLY hide "New User" for non-admin users (userGroup < 3)
-	const newUserLink = document.querySelector('[data-action="new-user"]');
-	if (newUserLink) {
-    	const shouldShow = userGroup === 3;  // Show only for admin
-    	const listItem = newUserLink.closest('li');
-    	if (listItem) {
-        	listItem.style.display = shouldShow ? 'block' : 'none';
-    	}
-	}
+    // Show "Purchase of the day" only for groups 1, 2, 3
+    const purchaseReportLink = document.querySelector('[data-action="purchase-day"]');
+    if (purchaseReportLink) {
+        const shouldShow = userGroup >= 1; // Show for groups 1,2,3
+        const listItem = purchaseReportLink.closest('li');
+        if (listItem) {
+            listItem.style.display = shouldShow ? 'block' : 'none';
+        }
+    }
     
-	// DO NOT hide the entire Setup menu - everyone can access it
+    // Only hide "New User" for non-admin users (userGroup < 3)
+    const newUserLink = document.querySelector('[data-action="new-user"]');
+    if (newUserLink) {
+        const shouldShow = userGroup === 3; // Show only for admin
+        const listItem = newUserLink.closest('li');
+        if (listItem) {
+            listItem.style.display = shouldShow ? 'block' : 'none';
+        }
+    }
     
-	// Update user group display
-	const userGroupElement = document.getElementById('sidebarUserGroup');
-	if (userGroupElement) {
-    	userGroupElement.textContent = this.getUserGroupLabel(userGroup);
-    	userGroupElement.className = `user-group-badge group-${userGroup}`;
-	}
+    // DO NOT hide the entire Setup menu - everyone can access it
+    
+    // Update user group display
+    const userGroupElement = document.getElementById('sidebarUserGroup');
+    if (userGroupElement) {
+        userGroupElement.textContent = this.getUserGroupLabel(userGroup);
+        userGroupElement.className = `user-group-badge group-${userGroup}`;
+    }
 }
 
 	// Home functionality
@@ -334,6 +353,15 @@ handleMenuAction(action) {
         	return;
     	}
 	}
+   
+   // Check permissions for purchase report
+    if (action === 'purchase-day') {
+        const perms = this.checkUserPermissions();
+        if (!perms.canAccessSalesReport) { // Use same permission as sales report
+            this.showAccessDenied('"Purchase of the Day" Report');
+            return;
+        }
+    } 
     
 	if (action === 'new-user') {
     	const perms = this.checkUserPermissions();
@@ -355,12 +383,7 @@ handleMenuAction(action) {
         	subtitle = 'Purchase products for your business';
         	contentHTML = this.getBuyProductsForm();
         	break;
-    	/*    
-    	case 'wallet-topup':
-        	title = 'Wallet TopUp';
-        	subtitle = 'Add funds to your wallet';
-        	contentHTML = this.getWalletTopUpForm();
-        	break; */
+    	
        	 
     	case 'sales-day':
         	title = 'Sales Report';
@@ -437,7 +460,7 @@ handleMenuAction(action) {
 	}
     
 	// Only update if not handled asynchronously
-	if (action !== 'sales-day' && action !== 'inventory-report') {
+ if (action !== 'sales-day' && action !== 'purchase-day' && action !== 'inventory-report') {
     	contentTitle.textContent = title;
     	contentSubtitle.textContent = subtitle;
     	dynamicContent.innerHTML = contentHTML;
@@ -2588,161 +2611,242 @@ clearProductForm() {
     	window.location.href = 'index.html';
 	}
     
-   async getSalesReport() {
-   // Check permissions first
-    
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	return '<div class="error-message">Please login to view sales report</div>';
-    	}
-   	 
-    	// Get today's date in YYYY-MM-DD format
-    	const today = new Date().toISOString().split('T')[0];
-   	 
-    	// Get sales data using the user's salesBinId
-    	const salesData = await api.getUserSales(currentUser.userID);
-    	const transactions = salesData.transactions || [];
-   	 
-    	// Filter today's transactions
-    	const todayTransactions = transactions.filter(transaction => {
-        	if (!transaction.timestamp) return false;
-        	const transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
-        	return transactionDate === today;
-    	});
-   	 
-   	  // Add shared database header
-        const sharedHeader = salesData.shared ? `
-            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
-                <strong>🔄 Shared Sales Database</strong>
-                <p style="margin: 5px 0 0 0; color: #1565c0;">
-                    Viewing your transactions from shared database. 
-                    ${salesData.sharedFrom ? `Shared from: ${salesData.sharedFrom}` : ''}
+   // In app.js, replace the getSalesReport() method with this:
+
+// Update getSalesReport() method in app.js:
+async getSalesReport() {
+    // Check permissions first
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            return '<div class="error-message">Please login to view sales report</div>';
+        }
+
+        const userGroup = currentUser.userGroup || 0;
+        const isAdmin = userGroup >= 2; // Groups 2 (Manager) and 3 (Admin) are admins
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get sales data - pass isAdmin flag to API
+        const salesData = await api.getUserSales(currentUser.userID, true, isAdmin);
+        const allTransactions = salesData.allTransactions || [];
+        const filteredTransactions = salesData.transactions || [];
+
+        // Filter today's transactions from the appropriate dataset
+        let todayTransactions = [];
+        
+        if (isAdmin) {
+            // Admin sees ALL transactions in the database for today
+            todayTransactions = allTransactions.filter(transaction => {
+                if (!transaction.timestamp && !transaction.serverTimestamp) return false;
+                const timestamp = transaction.serverTimestamp || transaction.timestamp;
+                const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+                return transactionDate === today;
+            });
+        } else {
+            // Non-admin users see only their transactions
+            todayTransactions = filteredTransactions.filter(transaction => {
+                if (!transaction.timestamp && !transaction.serverTimestamp) return false;
+                const timestamp = transaction.serverTimestamp || transaction.timestamp;
+                const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+                return transactionDate === today;
+            });
+        }
+
+        // Add admin indicator header
+        const adminHeader = isAdmin ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4CAF50;">
+                <strong>👑 Admin View - All Sales</strong>
+                <p style="margin: 5px 0 0 0; color: #2e7d32;">
+                    You are viewing ALL sales transactions for today (Admin privilege).
                 </p>
-                <div style="margin-top: 10px; font-size: 0.9em; color: #1976d2;">
-                    📊 Total transactions in database: ${salesData.totalTransactions || 0}
-                    ${salesData.totalTransactions > todayTransactions.length ? 
-                        ` | Your transactions today: ${todayTransactions.length}` : ''}
-                </div>
             </div>
         ` : '';
-        
-   	 
-   	 
-   	 
-    	// Calculate total sales for today
-    	const totalSales = todayTransactions.reduce((sum, transaction) => {
-        	return sum + (parseFloat(transaction.amount) || 0);
-    	}, 0);
-   	 
-    	if (todayTransactions.length === 0) {
-        	return `
-            	<div class="content-page">
-                	<h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
-                	<div class="no-sales-message">
-                    	<div class="no-sales-icon">📊</div>
-                    	<h3>No Sales Today</h3>
-                    	<p>There are no sales transactions recorded for today (${today}).</p>
-                    	<button class="btn-primary" onclick="app.handleMenuAction('sell-now')">
-                        	Start Selling
-                    	</button>
-                	</div>
-            	</div>
-        	`;
-    	}
-   	 
-    	// Sort transactions by timestamp (newest first)
-    	todayTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-   	 
-    	return `
-        	<div class="content-page">
-        	${sharedHeader}
-            	<div class="report-header">
-                	<div>
-                    	<h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
-                    	<p class="report-date">Date: ${today}</p>
-                	</div>
-                	<div class="export-actions">
-                    	<button class="export-btn csv-btn" onclick="app.exportSalesToCSV()">
-                        	📥 Export CSV
-                    	</button>
-                    	<button class="export-btn excel-btn" onclick="app.exportSalesToExcel()">
-                        	📊 Export Excel
-                    	</button>
-                	</div>
-            	</div>
-           	 
-            	<div class="sales-summary">
-                	<div class="summary-item">
-                    	<span class="summary-label">Total Transactions:</span>
-                    	<span class="summary-value">${todayTransactions.length}</span>
-                	</div>
-                	<div class="summary-item">
-                    	<span class="summary-label">Total Amount:</span>
-                    	<span class="summary-value">₦${totalSales.toFixed(2)}</span>
-                	</div>
-                	<div class="summary-item">
-                    	<span class="summary-label">Total Items:</span>
-                    	<span class="summary-value">${todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0)}</span>
-                	</div>
-            	</div>
-           	 
-            	<h3>Today's Sales Transactions</h3>
-           	 
-            	<div class="sales-list">
-                	${todayTransactions.map((transaction, index) => `
-                    	<div class="sale-item">
-                        	<div class="sale-header">
-                            	<span class="sale-number">${index + 1}.</span>
-                            	<span class="sale-time">${new Date(transaction.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            	<span class="sale-id">ID: ${transaction.transactionId || transaction.id || 'N/A'}</span>
-                        	</div>
-                        	<div class="sale-details">
-                            	<div class="sale-product">
-                                	<strong>${transaction.productName || 'Unknown Product'}</strong>
-                                	${transaction.description ? `<div class="sale-description">${transaction.description}</div>` : ''}
-                            	</div>
-                            	<div class="sale-info">
-                                	<div class="sale-quantity">Qty: ${transaction.quantity || 1}</div>
-                                	<div class="sale-price">₦${(transaction.unitPrice || transaction.amount || 0).toFixed(2)} each</div>
-                                	<div class="sale-amount">₦${(transaction.amount || 0).toFixed(2)}</div>
-                            	</div>
-                        	</div>
-                        	${transaction.barcode ? `<div class="sale-barcode">Barcode: <code>${transaction.barcode}</code></div>` : ''}
-                        	${transaction.paymentMethod ? `<div class="sale-payment">Payment: ${transaction.paymentMethod}</div>` : ''}
-                    	</div>
-                	`).join('')}
-            	</div>
-           	 
-            	<div class="sales-total">
-                	<div class="total-label">TOTAL SALES FOR TODAY:</div>
-                	<div class="total-amount">₦${totalSales.toFixed(2)}</div>
-            	</div>
-           	 
-            	<div class="report-footer">
-                	<p>Report generated on ${new Date().toLocaleString()}</p>
-                	<p>User: ${currentUser.userID} | Report ID: ${Date.now()}</p>
-            	</div>
-        	</div>
-    	`;
-	} catch (error) {
-    	console.error('Error generating sales report:', error);
-    	return `
-        	<div class="content-page">
-            	<div class="error-message">
-                	<h3>Error Loading Sales Report</h3>
-                	<p>Unable to load sales data. Please try again.</p>
-                	<button class="btn-primary" onclick="app.handleMenuAction('sales-day')">
-                    	Retry
-                	</button>
-            	</div>
-        	</div>
-    	`;
-	}
-    
- 
- 
-    
+
+        // Add user-specific header for non-admins
+        const userHeader = !isAdmin ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <strong>👤 User View - Your Sales Only</strong>
+                <p style="margin: 5px 0 0 0; color: #1565c0;">
+                    You are viewing only your sales transactions for today.
+                </p>
+            </div>
+        ` : '';
+
+        // Calculate total sales for today
+        const totalSales = todayTransactions.reduce((sum, transaction) => {
+            return sum + (parseFloat(transaction.amount) || 0);
+        }, 0);
+
+        // Calculate transactions by user (for admin view)
+        let transactionsByUser = {};
+        if (isAdmin) {
+            todayTransactions.forEach(transaction => {
+                const userID = transaction.performedBy || transaction.userID || 'Unknown';
+                if (!transactionsByUser[userID]) {
+                    transactionsByUser[userID] = {
+                        count: 0,
+                        total: 0,
+                        transactions: []
+                    };
+                }
+                transactionsByUser[userID].count++;
+                transactionsByUser[userID].total += (parseFloat(transaction.amount) || 0);
+                transactionsByUser[userID].transactions.push(transaction);
+            });
+        }
+
+        if (todayTransactions.length === 0) {
+            return `
+                <div class="content-page">
+                    <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
+                    ${adminHeader}
+                    ${userHeader}
+                    <div class="no-sales-message">
+                        <div class="no-sales-icon">📊</div>
+                        <h3>No Sales Today</h3>
+                        <p>There are no sales transactions recorded for today (${today}).</p>
+                        ${!isAdmin ? '<p><em>Only your transactions are shown. Admin users can see all transactions.</em></p>' : ''}
+                        <button class="btn-primary" onclick="app.handleMenuAction('sell-now')">
+                            Start Selling
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Sort transactions by timestamp (newest first)
+        todayTransactions.sort((a, b) => new Date(b.timestamp || b.serverTimestamp) - new Date(a.timestamp || a.serverTimestamp));
+
+        return `
+            <div class="content-page">
+                ${adminHeader}
+                ${userHeader}
+                
+                <div class="report-header">
+                    <div>
+                        <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
+                        <p class="report-date">Date: ${today}</p>
+                        ${isAdmin ? `<p style="color: #4CAF50; font-weight: bold;">👑 Admin View: All Transactions</p>` : 
+                                     `<p style="color: #2196f3; font-weight: bold;">👤 User View: Your Transactions Only</p>`}
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn csv-btn" onclick="app.exportSalesToCSV()">
+                            📥 Export CSV
+                        </button>
+                        <button class="export-btn excel-btn" onclick="app.exportSalesToExcel()">
+                            📊 Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Admin Summary Section -->
+                ${isAdmin ? `
+                    <div class="admin-summary-section" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h3 style="color: #4CAF50; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                            <span>📊</span> Sales Breakdown by User
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            ${Object.entries(transactionsByUser).map(([userID, data]) => `
+                                <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4CAF50;">
+                                    <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">${userID}</div>
+                                    <div style="color: #27ae60; font-size: 1.2em; font-weight: bold;">₦${data.total.toFixed(2)}</div>
+                                    <div style="color: #7f8c8d; font-size: 0.9em;">${data.count} transaction(s)</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid #eee;">
+                            <div style="font-weight: bold; color: #2c3e50;">Total Users Today:</div>
+                            <div style="font-size: 1.1em; font-weight: bold; color: #4CAF50;">${Object.keys(transactionsByUser).length}</div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <div class="sales-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Total Transactions:</span>
+                        <span class="summary-value">${todayTransactions.length}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Amount:</span>
+                        <span class="summary-value">₦${totalSales.toFixed(2)}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Items:</span>
+                        <span class="summary-value">${todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0)}</span>
+                    </div>
+                    ${isAdmin ? `
+                        <div class="summary-item">
+                            <span class="summary-label">Unique Users:</span>
+                            <span class="summary-value">${Object.keys(transactionsByUser).length}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <h3>Today's Sales Transactions${isAdmin ? ' (All Users)' : ' (Your Sales)'}</h3>
+                <div class="sales-list">
+                    ${todayTransactions.map((transaction, index) => {
+                        const userID = transaction.performedBy || transaction.userID || 'Unknown';
+                        const isCurrentUser = userID === currentUser.userID;
+                        const userBadge = isAdmin ? `
+                            <span class="user-badge ${isCurrentUser ? 'current-user' : 'other-user'}" 
+                                  style="padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;"
+                                  title="${isCurrentUser ? 'Your transaction' : `User: ${userID}`}">
+                                ${isCurrentUser ? '👤 You' : `👥 ${userID.substring(0, 8)}${userID.length > 8 ? '...' : ''}`}
+                            </span>
+                        ` : '';
+                        
+                        return `
+                        <div class="sale-item">
+                            <div class="sale-header">
+                                <span class="sale-number">${index + 1}.</span>
+                                <span class="sale-time">${new Date(transaction.timestamp || transaction.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                ${userBadge}
+                                <span class="sale-id">ID: ${transaction.transactionId || transaction.id || 'N/A'}</span>
+                            </div>
+                            <div class="sale-details">
+                                <div class="sale-product">
+                                    <strong>${transaction.productName || 'Unknown Product'}</strong>
+                                    ${transaction.description ? `<div class="sale-description">${transaction.description}</div>` : ''}
+                                </div>
+                                <div class="sale-info">
+                                    <div class="sale-quantity">Qty: ${transaction.quantity || 1}</div>
+                                    <div class="sale-price">₦${(transaction.unitPrice || transaction.amount || 0).toFixed(2)} each</div>
+                                    <div class="sale-amount">₦${(transaction.amount || 0).toFixed(2)}</div>
+                                </div>
+                            </div>
+                            ${transaction.barcode ? `<div class="sale-barcode">Barcode: <code>${transaction.barcode}</code></div>` : ''}
+                            ${transaction.paymentMethod ? `<div class="sale-payment">Payment: ${transaction.paymentMethod}</div>` : ''}
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <div class="sales-total">
+                    <div class="total-label">TOTAL SALES FOR TODAY${isAdmin ? ' (ALL USERS)' : ' (YOUR SALES)'}:</div>
+                    <div class="total-amount">₦${totalSales.toFixed(2)}</div>
+                </div>
+
+                <div class="report-footer">
+                    <p>Report generated on ${new Date().toLocaleString()}</p>
+                    <p>User: ${currentUser.userID} | ${isAdmin ? 'Admin View (All Transactions)' : 'User View (Your Transactions Only)'} | Report ID: ${Date.now()}</p>
+                </div>
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Error generating sales report:', error);
+        return `
+            <div class="content-page">
+                <div class="error-message">
+                    <h3>Error Loading Sales Report</h3>
+                    <p>Unable to load sales data. Please try again.</p>
+                    <button class="btn-primary" onclick="app.handleMenuAction('sales-day')">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        `;
+    }
 }
  
 // Export methods for inventory report
@@ -4473,239 +4577,331 @@ showPurchaseMessage(message, type = 'info') {
 
 
 // Add this method to the WebStarNgApp class in app.js
+// Update getPurchaseReport() method in app.js:
 async getPurchaseReport() {
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	return `<div class="error-message">Please login to view purchase report</div>`;
-    	}
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            return `<div class="error-message">Please login to view purchase report</div>`;
+        }
 
-    	// Get today's date in YYYY-MM-DD format
-    	const today = new Date().toISOString().split('T')[0];
-   	 
-    	// Get purchases data using the user's purchasesBinId
-    	const purchasesData = await api.getUserPurchases(currentUser.userID);
-    	const transactions = purchasesData.transactions || [];
-   	 
-    	// Filter today's purchase transactions
-    	const todayPurchases = transactions.filter(transaction => {
-        	if (!transaction.timestamp && !transaction.purchaseDate) return false;
-       	 
-        	// Use purchaseDate if available, otherwise use timestamp
-        	const transactionDate = transaction.purchaseDate || transaction.timestamp;
-        	const dateStr = new Date(transactionDate).toISOString().split('T')[0];
-        	return dateStr === today;
-    	});
+        const userGroup = currentUser.userGroup || 0;
+        const isAdmin = userGroup >= 2; // Groups 2 (Manager) and 3 (Admin) are admins
+        const today = new Date().toISOString().split('T')[0];
 
-    	// Calculate totals for today
-    	const totalPurchases = todayPurchases.reduce((sum, purchase) => {
-        	return sum + (parseFloat(purchase.amount) || 0);
-    	}, 0);
+        // Get purchases data - pass isAdmin flag to API
+        const purchasesData = await api.getUserPurchases(currentUser.userID, true, isAdmin);
+        const allTransactions = purchasesData.allTransactions || [];
+        const filteredTransactions = purchasesData.transactions || [];
 
-    	const totalItems = todayPurchases.reduce((sum, purchase) => {
-        	return sum + (parseInt(purchase.quantity) || 1);
-    	}, 0);
+        // Filter today's transactions from the appropriate dataset
+        let todayPurchases = [];
+        
+        if (isAdmin) {
+            // Admin sees ALL transactions in the database for today
+            todayPurchases = allTransactions.filter(transaction => {
+                if (!transaction.timestamp && !transaction.purchaseDate) return false;
+                const transactionDate = transaction.purchaseDate || transaction.timestamp;
+                const dateStr = new Date(transactionDate).toISOString().split('T')[0];
+                return dateStr === today;
+            });
+        } else {
+            // Non-admin users see only their transactions
+            todayPurchases = filteredTransactions.filter(transaction => {
+                if (!transaction.timestamp && !transaction.purchaseDate) return false;
+                const transactionDate = transaction.purchaseDate || transaction.timestamp;
+                const dateStr = new Date(transactionDate).toISOString().split('T')[0];
+                return dateStr === today;
+            });
+        }
 
-    	// Calculate by supplier
-    	const supplierSummary = {};
-    	todayPurchases.forEach(purchase => {
-        	const supplier = purchase.supplier || 'Unknown';
-        	supplierSummary[supplier] = (supplierSummary[supplier] || 0) + (parseFloat(purchase.amount) || 0);
-    	});
+        // Add admin indicator header
+        const adminHeader = isAdmin ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800;">
+                <strong>👑 Admin View - All Purchases</strong>
+                <p style="margin: 5px 0 0 0; color: #ef6c00;">
+                    You are viewing ALL purchase transactions for today (Admin privilege).
+                </p>
+            </div>
+        ` : '';
 
-    	// Sort suppliers by total amount
-    	const sortedSuppliers = Object.entries(supplierSummary)
-        	.sort(([,a], [,b]) => b - a)
-        	.slice(0, 5); // Top 5 suppliers
+        // Add user-specific header for non-admins
+        const userHeader = !isAdmin ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <strong>👤 User View - Your Purchases Only</strong>
+                <p style="margin: 5px 0 0 0; color: #1565c0;">
+                    You are viewing only your purchase transactions for today.
+                </p>
+            </div>
+        ` : '';
 
-    	// Sort transactions by time (newest first)
-    	todayPurchases.sort((a, b) => {
-        	const timeA = new Date(a.timestamp || a.purchaseDate);
-        	const timeB = new Date(b.timestamp || b.purchaseDate);
-        	return timeB - timeA;
-    	});
+        // Calculate totals for today
+        const totalPurchases = todayPurchases.reduce((sum, purchase) => {
+            return sum + (parseFloat(purchase.amount) || 0);
+        }, 0);
 
-    	if (todayPurchases.length === 0) {
-        	return `
-            	<div class="content-page">
-                	<h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
-                	<div class="no-sales-message">
-                    	<div class="no-sales-icon">📦</div>
-                    	<h3>No Purchases Today</h3>
-                    	<p>There are no purchase transactions recorded for today (${today}).</p>
-                    	<button class="btn-primary" onclick="app.handleMenuAction('buy-products')">
-                        	Make a Purchase
-                    	</button>
-                	</div>
-            	</div>
-        	`;
-    	}
+        const totalItems = todayPurchases.reduce((sum, purchase) => {
+            return sum + (parseInt(purchase.quantity) || 1);
+        }, 0);
 
-    	return `
-        	<div class="content-page">
-            	<div class="report-header">
-                	<div>
-               	 
-               	 
-                    	<h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
-                    	<p class="report-date">Date: ${today}</p>
-                   	 
-                   	 
-                	</div>
-                	<div class="export-actions">
-                    	<button class="export-btn excel-btn" onclick="app.exportPurchasesToExcel()">
-                        	📊 Export Excel
-                    	</button>
-                	</div>
-            	</div>
+        // Calculate by supplier
+        const supplierSummary = {};
+        // Calculate by user (for admin view)
+        let purchasesByUser = {};
+        
+        todayPurchases.forEach(purchase => {
+            const supplier = purchase.supplier || 'Unknown';
+            supplierSummary[supplier] = (supplierSummary[supplier] || 0) + (parseFloat(purchase.amount) || 0);
+            
+            // For admin view, track by user
+            if (isAdmin) {
+                const userID = purchase.performedBy || purchase.userID || 'Unknown';
+                if (!purchasesByUser[userID]) {
+                    purchasesByUser[userID] = {
+                        count: 0,
+                        total: 0,
+                        purchases: []
+                    };
+                }
+                purchasesByUser[userID].count++;
+                purchasesByUser[userID].total += (parseFloat(purchase.amount) || 0);
+                purchasesByUser[userID].purchases.push(purchase);
+            }
+        });
 
-            	<!-- Purchase Summary -->
-            	<div class="purchase-summary" style="margin: 20px 0; padding: 20px;  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px;">
-                	<div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: space-around;">
-                    	<div class="summary-item">
-                        	<span class="summary-label">Total Purchases:</span>
-                        	<span class="summary-value">${todayPurchases.length}</span>
-                    	</div>
-                    	<div class="summary-item">
-                        	<span class="summary-label">Total Amount:</span>
-                        	<span class="summary-value">₦${totalPurchases.toFixed(2)}</span>
-                    	</div>
-                    	<div class="summary-item">
-                        	<span class="summary-label">Total Items:</span>
-                        	<span class="summary-value">${totalItems}</span>
-                    	</div>
-                    	<div class="summary-item">
-                        	<span class="summary-label">Avg. per Purchase:</span>
-                        	<span class="summary-value">₦${(totalPurchases / todayPurchases.length).toFixed(2)}</span>
-                    	</div>
-                	</div>
-            	</div>
+        // Sort suppliers by total amount
+        const sortedSuppliers = Object.entries(supplierSummary)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5); // Top 5 suppliers
 
-            	<!-- Top Suppliers -->
-            	${sortedSuppliers.length > 0 ? `
-                	<div class="supplier-summary" style="margin: 30px 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                    	<h3 style="color: #2c3e50; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                        	<span class="menu-icon">🏢</span> Top Suppliers Today
-                    	</h3>
-                    	<div class="suppliers-list" style="display: flex; flex-direction: column; gap: 12px;">
-                        	${sortedSuppliers.map(([supplier, amount]) => `
-                            	<div class="supplier-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
-                                	<div style="display: flex; align-items: center; gap: 10px;">
-                                    	<span style="font-weight: 600; color: #2c3e50;">${supplier}</span>
-                                	</div>
-                                	<span style="font-weight: 700; color: #27ae60;">₦${amount.toFixed(2)}</span>
-                            	</div>
-                        	`).join('')}
-                    	</div>
-                	</div>
-            	` : ''}
+        // Sort transactions by time (newest first)
+        todayPurchases.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.purchaseDate);
+            const timeB = new Date(b.timestamp || b.purchaseDate);
+            return timeB - timeA;
+        });
 
-            	<!-- Purchase Transactions -->
-            	<h3 style="color: #2c3e50; margin: 30px 0 20px 0;">Today's Purchase Transactions</h3>
-            	<div class="purchase-list">
-                	${todayPurchases.map((purchase, index) => {
-                    	const timestamp = purchase.timestamp || purchase.purchaseDate;
-                    	const time = new Date(timestamp);
-                    	const supplier = purchase.supplier || 'Unknown';
-                    	const productName = purchase.productName || 'Unknown Product';
-                    	const quantity = purchase.quantity || 1;
-                    	const unitPrice = purchase.unitPrice || 0;
-                    	const amount = purchase.amount || 0;
-                    	const notes = purchase.notes || '';
-                    	const previousStock = purchase.previousStock || 'N/A';
-                    	const newStock = purchase.newStock || 'N/A';
+        if (todayPurchases.length === 0) {
+            return `
+                <div class="content-page">
+                    <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
+                    ${adminHeader}
+                    ${userHeader}
+                    <div class="no-sales-message">
+                        <div class="no-sales-icon">📦</div>
+                        <h3>No Purchases Today</h3>
+                        <p>There are no purchase transactions recorded for today (${today}).</p>
+                        ${!isAdmin ? '<p><em>Only your transactions are shown. Admin users can see all transactions.</em></p>' : ''}
+                        <button class="btn-primary" onclick="app.handleMenuAction('buy-products')">
+                            Make a Purchase
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
 
-                    	return `
-                        	<div class="purchase-item" style="background: white; border: 1px solid #e1e5e9; border-radius: 8px; padding: 15px; margin-bottom: 15px; transition: all 0.3s ease;">
-                            	<div class="purchase-header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1;">
-                                	<span class="purchase-number" style="font-weight: 700; color: #2c3e50; min-width: 30px;">${index + 1}.</span>
-                                	<span class="purchase-time" style="color: #3498db; font-weight: 600; font-size: 0.95em;">
-                                    	${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                	</span>
-                                	<span class="purchase-id" style="color: #7f8c8d; font-size: 0.85em; font-family: 'Courier New', monospace; margin-left: auto;">
-                                    	ID: ${purchase.id || 'N/A'}
-                                	</span>
-                            	</div>
-                           	 
-                            	<div class="purchase-details" style="margin-bottom: 10px;">
-                                	<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
-                                    	<div style="flex: 1; min-width: 300px;">
-                                        	<strong style="color: #2c3e50; font-size: 1.1em; display: block; margin-bottom: 5px;">${productName}</strong>
-                                        	${purchase.description ? `<div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">${purchase.description}</div>` : ''}
-                                        	${notes ? `<div style="color: #f39c12; font-size: 0.9em; margin-top: 5px; padding: 5px; background: #fff9e6; border-radius: 4px;">📝 ${notes}</div>` : ''}
-                                    	</div>
-                                    	<div style="min-width: 250px;">
-                                        	<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                                            	<div>
-                                                	<div style="font-size: 0.9em; color: #7f8c8d;">Quantity</div>
-                                                	<div style="font-weight: 600; color: #2c3e50;">${quantity}</div>
-                                            	</div>
-                                            	<div>
-                                                	<div style="font-size: 0.9em; color: #7f8c8d;">Unit Price</div>
-                                                	<div style="font-weight: 600; color: #3498db;">₦${unitPrice.toFixed(2)}</div>
-                                            	</div>
-                                            	<div>
-                                                	<div style="font-size: 0.9em; color: #7f8c8d;">Total</div>
-                                                	<div style="font-weight: 700; color: #2ecc71; font-size: 1.1em;">₦${amount.toFixed(2)}</div>
-                                            	</div>
-                                            	<div>
-                                                	<div style="font-size: 0.9em; color: #7f8c8d;">Type</div>
-                                                	<div style="font-weight: 600; color: #9b59b6;">${purchase.type || 'Purchase'}</div>
-                                            	</div>
-                                        	</div>
-                                    	</div>
-                                	</div>
-                            	</div>
-                           	 
-                            	<div class="purchase-footer" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 10px; border-top: 1px solid #f1f1f1; font-size: 0.9em; color: #7f8c8d;">
-                                	<div style="display: flex; align-items: center; gap: 5px;">
-                                    	<span>🏢</span>
-                                    	<span>Supplier: <strong>${supplier}</strong></span>
-                                	</div>
-                                	${purchase.barcode ? `
-                                    	<div style="display: flex; align-items: center; gap: 5px;">
-                                        	<span>📊</span>
-                                        	<span>Barcode: <code style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">${purchase.barcode}</code></span>
-                                    	</div>
-                                	` : ''}
-                                	<div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
-                                    	<span>📦</span>
-                                    	<span>Stock: ${previousStock} → ${newStock}</span>
-                                	</div>
-                            	</div>
-                        	</div>
-                    	`;
-                	}).join('')}
-            	</div>
+        return `
+            <div class="content-page">
+                ${adminHeader}
+                ${userHeader}
+                
+                <div class="report-header">
+                    <div>
+                        <h2>Purchase Report - ${new Date().toLocaleDateString()}</h2>
+                        <p class="report-date">Date: ${today}</p>
+                        ${isAdmin ? `<p style="color: #ff9800; font-weight: bold;">👑 Admin View: All Transactions</p>` : 
+                                     `<p style="color: #2196f3; font-weight: bold;">👤 User View: Your Transactions Only</p>`}
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn excel-btn" onclick="app.exportPurchasesToExcel()">
+                            📊 Export Excel
+                        </button>
+                        <button class="export-btn csv-btn" onclick="app.exportPurchasesToCSV()">
+                            📥 Export CSV
+                        </button>
+                    </div>
+                </div>
 
-            	<!-- Total Summary -->
-            	<div class="purchase-total" style="display: flex; justify-content: space-between; align-items: center; padding: 20px; background: #2c3e50; border-radius: 8px; margin: 30px 0; color: white;">
-                	<div class="total-label" style="font-size: 1.2em; font-weight: 600;">TOTAL PURCHASES FOR TODAY:</div>
-                	<div class="total-amount" style="font-size: 1.8em; font-weight: 700; color: #2ecc71;">₦${totalPurchases.toFixed(2)}</div>
-            	</div>
+                <!-- Admin Summary Section -->
+                ${isAdmin ? `
+                    <div class="admin-summary-section" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h3 style="color: #ff9800; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                            <span>📊</span> Purchases Breakdown by User
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            ${Object.entries(purchasesByUser).map(([userID, data]) => `
+                                <div style="padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ff9800;">
+                                    <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">${userID}</div>
+                                    <div style="color: #f57c00; font-size: 1.2em; font-weight: bold;">₦${data.total.toFixed(2)}</div>
+                                    <div style="color: #7f8c8d; font-size: 0.9em;">${data.count} purchase(s)</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid #eee;">
+                            <div style="font-weight: bold; color: #2c3e50;">Total Users Today:</div>
+                            <div style="font-size: 1.1em; font-weight: bold; color: #ff9800;">${Object.keys(purchasesByUser).length}</div>
+                        </div>
+                    </div>
+                ` : ''}
 
-            	<!-- Report Footer -->
-            	<div class="report-footer" style="text-align: center; color: #7f8c8d; font-size: 0.9em; padding-top: 20px; border-top: 1px solid #e1e5e9; margin-top: 30px;">
-                	<p>Report generated on ${new Date().toLocaleString()}</p>
-                	<p>User: ${currentUser.userID} | Report ID: ${Date.now()}</p>
-            	</div>
-        	</div>
-    	`;
+                <div class="purchase-summary" style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #ffb74d 0%, #ff9800 100%); border-radius: 12px;">
+                    <div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: space-around;">
+                        <div class="summary-item">
+                            <span class="summary-label">Total Purchases:</span>
+                            <span class="summary-value">${todayPurchases.length}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Amount:</span>
+                            <span class="summary-value">₦${totalPurchases.toFixed(2)}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Items:</span>
+                            <span class="summary-value">${totalItems}</span>
+                        </div>
+                        ${isAdmin ? `
+                            <div class="summary-item">
+                                <span class="summary-label">Unique Users:</span>
+                                <span class="summary-value">${Object.keys(purchasesByUser).length}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
 
-	} catch (error) {
-    	console.error('Error generating purchase report:', error);
-    	return `
-        	<div class="content-page">
-            	<div class="error-message" style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 12px; margin: 20px 0;">
-                	<h3 style="color: #e74c3c; margin-bottom: 15px;">Error Loading Purchase Report</h3>
-                	<p style="color: #7f8c8d; margin-bottom: 20px;">Unable to load purchase data. Please try again.</p>
-                	<button class="btn-primary" onclick="app.handleMenuAction('purchase-day')">
-                    	Retry
-                	</button>
-            	</div>
-        	</div>
-    	`;
-	}
+                <!-- Top Suppliers -->
+                ${sortedSuppliers.length > 0 ? `
+                    <div class="supplier-summary" style="margin: 30px 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h3 style="color: #2c3e50; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                            <span class="menu-icon">🏢</span> Top Suppliers Today
+                        </h3>
+                        <div class="suppliers-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            ${sortedSuppliers.map(([supplier, amount]) => `
+                                <div class="supplier-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-weight: 600; color: #2c3e50;">${supplier}</span>
+                                    </div>
+                                    <span style="font-weight: 700; color: #ff9800;">₦${amount.toFixed(2)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Purchase Transactions -->
+                <h3 style="color: #2c3e50; margin: 30px 0 20px 0;">Today's Purchase Transactions${isAdmin ? ' (All Users)' : ' (Your Purchases)'}</h3>
+                <div class="purchase-list">
+                    ${todayPurchases.map((purchase, index) => {
+                        const timestamp = purchase.timestamp || purchase.purchaseDate;
+                        const time = new Date(timestamp);
+                        const supplier = purchase.supplier || 'Unknown';
+                        const productName = purchase.productName || 'Unknown Product';
+                        const quantity = purchase.quantity || 1;
+                        const unitPrice = purchase.unitPrice || 0;
+                        const amount = purchase.amount || 0;
+                        const notes = purchase.notes || '';
+                        const previousStock = purchase.previousStock || 'N/A';
+                        const newStock = purchase.newStock || 'N/A';
+                        
+                        // For admin view, show user badge
+                        const userID = purchase.performedBy || purchase.userID || 'Unknown';
+                        const isCurrentUser = userID === currentUser.userID;
+                        const userBadge = isAdmin ? `
+                            <span class="user-badge ${isCurrentUser ? 'current-user' : 'other-user'}" 
+                                  style="padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px; background: ${isCurrentUser ? '#e3f2fd' : '#f3e5f5'}; color: ${isCurrentUser ? '#1565c0' : '#7b1fa2'}; border: 1px solid ${isCurrentUser ? '#2196f3' : '#9c27b0'};"
+                                  title="${isCurrentUser ? 'Your purchase' : `User: ${userID}`}">
+                                ${isCurrentUser ? '👤 You' : `👥 ${userID.substring(0, 8)}${userID.length > 8 ? '...' : ''}`}
+                            </span>
+                        ` : '';
+                        
+                        return `
+                        <div class="purchase-item" style="background: white; border: 1px solid #e1e5e9; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                            <div class="purchase-header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1;">
+                                <span class="purchase-number" style="font-weight: 700; color: #2c3e50; min-width: 30px;">${index + 1}.</span>
+                                <span class="purchase-time" style="color: #3498db; font-weight: 600; font-size: 0.95em;">
+                                    ${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                ${userBadge}
+                                <span class="purchase-id" style="color: #7f8c8d; font-size: 0.85em; font-family: 'Courier New', monospace; margin-left: auto;">
+                                    ID: ${purchase.id || 'N/A'}
+                                </span>
+                            </div>
+                            <div class="purchase-details" style="margin-bottom: 10px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+                                    <div style="flex: 1; min-width: 300px;">
+                                        <strong style="color: #2c3e50; font-size: 1.1em; display: block; margin-bottom: 5px;">${productName}</strong>
+                                        ${purchase.description ? `<div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">${purchase.description}</div>` : ''}
+                                        ${notes ? `<div style="color: #f39c12; font-size: 0.9em; margin-top: 5px; padding: 5px; background: #fff9e6; border-radius: 4px;">📝 ${notes}</div>` : ''}
+                                    </div>
+                                    <div style="min-width: 250px;">
+                                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                                            <div>
+                                                <div style="font-size: 0.9em; color: #7f8c8d;">Quantity</div>
+                                                <div style="font-weight: 600; color: #2c3e50;">${quantity}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 0.9em; color: #7f8c8d;">Unit Price</div>
+                                                <div style="font-weight: 600; color: #3498db;">₦${unitPrice.toFixed(2)}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 0.9em; color: #7f8c8d;">Total</div>
+                                                <div style="font-weight: 700; color: #ff9800; font-size: 1.1em;">₦${amount.toFixed(2)}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 0.9em; color: #7f8c8d;">Type</div>
+                                                <div style="font-weight: 600; color: #9b59b6;">${purchase.type || 'Purchase'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="purchase-footer" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 10px; border-top: 1px solid #f1f1f1; font-size: 0.9em; color: #7f8c8d;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <span>🏢</span>
+                                    <span>Supplier: <strong>${supplier}</strong></span>
+                                </div>
+                                ${purchase.barcode ? `
+                                    <div style="display: flex; align-items: center; gap: 5px;">
+                                        <span>📊</span>
+                                        <span>Barcode: <code style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">${purchase.barcode}</code></span>
+                                    </div>
+                                ` : ''}
+                                <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
+                                    <span>📦</span>
+                                    <span>Stock: ${previousStock} → ${newStock}</span>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <!-- Total Summary -->
+                <div class="purchase-total" style="display: flex; justify-content: space-between; align-items: center; padding: 20px; background: #ff9800; border-radius: 8px; margin: 30px 0; color: white;">
+                    <div class="total-label" style="font-size: 1.2em; font-weight: 600;">TOTAL PURCHASES FOR TODAY${isAdmin ? ' (ALL USERS)' : ' (YOUR PURCHASES)'}:</div>
+                    <div class="total-amount" style="font-size: 1.8em; font-weight: 700; color: #fff3e0;">₦${totalPurchases.toFixed(2)}</div>
+                </div>
+
+                <!-- Report Footer -->
+                <div class="report-footer" style="text-align: center; color: #7f8c8d; font-size: 0.9em; padding-top: 20px; border-top: 1px solid #e1e5e9; margin-top: 30px;">
+                    <p>Report generated on ${new Date().toLocaleString()}</p>
+                    <p>User: ${currentUser.userID} | ${isAdmin ? 'Admin View (All Transactions)' : 'User View (Your Transactions Only)'} | Report ID: ${Date.now()}</p>
+                </div>
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Error generating purchase report:', error);
+        return `
+            <div class="content-page">
+                <div class="error-message" style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 12px; margin: 20px 0;">
+                    <h3 style="color: #e74c3c; margin-bottom: 15px;">Error Loading Purchase Report</h3>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">Unable to load purchase data. Please try again.</p>
+                    <button class="btn-primary" onclick="app.handleMenuAction('purchase-day')">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        `;
+    }
 }
 
 
@@ -4713,26 +4909,23 @@ async getPurchaseReport() {
 
 // Check user permissions based on userGroup
 checkUserPermissions() {
-	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-	if (!currentUser) return { userGroup: 0, hasAccess: false };
-    
-	const userGroup = currentUser.userGroup || 0;
-    
-	// CORRECTED PERMISSION DEFINITIONS:
-	// 0 = Basic User - Can access most features EXCEPT "Sales of the day" report
-	// 1 = Standard User - Can access everything except admin features
-	// 2 = Manager - Can access everything except creating new users
-	// 3 = Super Admin - Full access to all menus
-    
-	return {
-    	userGroup: userGroup,
-    	// Basic users can access everything EXCEPT sales report
-    	canAccessSalesReport: userGroup >= 1,  // Only group 1,2,3
-    	canAccessSetup: userGroup >= 0,    	// Everyone can access setup (corrected)
-    	canAccessAllMenus: userGroup >= 0, 	// Everyone can access menus (corrected)
-    	canCreateUsers: userGroup === 3,   	// Only admin can create users
-    	isAdmin: userGroup === 3
-	};
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return { userGroup: 0, hasAccess: false };
+
+    const userGroup = currentUser.userGroup || 0;
+
+    return {
+        userGroup: userGroup,
+        // Basic users can access everything EXCEPT sales and purchase reports
+        canAccessSalesReport: userGroup >= 1, // Groups 1, 2, 3 can access
+        canAccessPurchaseReport: userGroup >= 1, // Groups 1, 2, 3 can access
+        canViewAllSales: userGroup >= 2, // Only groups 2 and 3 can view all sales
+        canViewAllPurchases: userGroup >= 2, // Only groups 2 and 3 can view all purchases
+        canAccessSetup: userGroup >= 0,
+        canAccessAllMenus: userGroup >= 0,
+        canCreateUsers: userGroup === 3,
+        isAdmin: userGroup >= 2 // Groups 2 and 3 are admins
+    };
 }
 
 // Show access denied message
