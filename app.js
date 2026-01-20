@@ -2611,6 +2611,25 @@ clearProductForm() {
         	return transactionDate === today;
     	});
    	 
+   	  // Add shared database header
+        const sharedHeader = salesData.shared ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <strong>🔄 Shared Sales Database</strong>
+                <p style="margin: 5px 0 0 0; color: #1565c0;">
+                    Viewing your transactions from shared database. 
+                    ${salesData.sharedFrom ? `Shared from: ${salesData.sharedFrom}` : ''}
+                </p>
+                <div style="margin-top: 10px; font-size: 0.9em; color: #1976d2;">
+                    📊 Total transactions in database: ${salesData.totalTransactions || 0}
+                    ${salesData.totalTransactions > todayTransactions.length ? 
+                        ` | Your transactions today: ${todayTransactions.length}` : ''}
+                </div>
+            </div>
+        ` : '';
+        
+   	 
+   	 
+   	 
     	// Calculate total sales for today
     	const totalSales = todayTransactions.reduce((sum, transaction) => {
         	return sum + (parseFloat(transaction.amount) || 0);
@@ -2637,6 +2656,7 @@ clearProductForm() {
    	 
     	return `
         	<div class="content-page">
+        	${sharedHeader}
             	<div class="report-header">
                 	<div>
                     	<h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
@@ -3542,6 +3562,18 @@ async getInventoryReport() {
    	 
     	// Get inventory data using the user's inventoryBinId
     	const inventoryData = await api.getUserInventory(currentUser.userID);
+    	
+    	 // Add shared inventory header
+        const sharedHeader = inventoryData.shared ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px;">
+                <strong>🔄 Shared Inventory Report</strong>
+                <p style="margin: 5px 0 0 0; color: #2e7d32;">
+                    This inventory is shared with other users. Changes affect all users.
+                    ${inventoryData.sharedFrom ? `Shared from: ${inventoryData.sharedFrom}` : ''}
+                </p>
+            </div>
+        ` : '';
+    	
     	const products = inventoryData.products || [];
    	 
     	if (products.length === 0) {
@@ -4758,6 +4790,19 @@ updateUserDisplay(user) {
       	const nextReceipt = parseInt(localStorage.getItem('receipt_counter') || '1000');
       	receiptCounter.textContent = nextReceipt;
   	}
+  
+  
+  
+   // Add shared database indicator if applicable
+    if (user.sharesAllBins || user.sharedSales || user.sharedPurchases) {
+        const userGroupElement = document.getElementById('sidebarUserGroup');
+        if (userGroupElement) {
+            const originalText = userGroupElement.textContent;
+            userGroupElement.textContent = `${originalText} 🔄`;
+            userGroupElement.title = 'Shared Database User';
+        }
+    }
+  
     
 	// Update menu visibility based on permissions
 	this.updateMenuVisibility(userGroup);
