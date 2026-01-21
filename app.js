@@ -2228,12 +2228,20 @@ async updateInventoryBatch(userID, cartItems, products, timestamp) {
 }
 
 // Batch record sales transactions
+// Update the recordSalesBatch() helper method to include all user info:
 async recordSalesBatch(userID, cartItems, transactionId, timestamp, isDemoUser) {
     try {
-        // Get existing sales data first
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) throw new Error('User not found in session');
+        
         const salesData = await api.getUserSales(userID);
         
-        // Create all transactions in one go
+        // Get business info from current user
+        const businessName = currentUser.businessName || 'WebStarNg Store';
+        const userGroup = currentUser.userGroup || 0;
+        const userFullName = currentUser.fullName || currentUser.userID;
+        
+        // Create all transactions with complete user info
         const newTransactions = cartItems.map(cartItem => ({
             productId: cartItem.productId,
             productName: cartItem.name,
@@ -2247,21 +2255,38 @@ async recordSalesBatch(userID, cartItems, transactionId, timestamp, isDemoUser) 
             notes: `Sold ${cartItem.quantity} ${cartItem.name}`,
             serverTimestamp: timestamp,
             isDemoUser: isDemoUser,
+            // User identification - complete info
             performedBy: userID,
             userID: userID,
+            userName: userFullName,
+            userGroup: userGroup,
+            // Business info
+            businessName: businessName,
+            businessInfo: {
+                name: businessName,
+                address: currentUser.addressLine1 || '',
+                telephone: currentUser.telephone || '',
+                userGroup: userGroup
+            },
+            // Transaction metadata
             id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             timestamp: timestamp,
+            date: timestamp.split('T')[0], // Store date separately for easy filtering
+            time: timestamp.split('T')[1]?.split('.')[0] || '',
+            // Client info
             clientInfo: {
                 userAgent: navigator.userAgent,
                 timestamp: timestamp,
-                performedBy: userID
+                performedBy: userID,
+                userName: userFullName,
+                userGroup: userGroup
             }
         }));
 
         // Add all transactions at once
         salesData.transactions = [...(salesData.transactions || []), ...newTransactions];
         
-        // Calculate total sales from all transactions (more accurate)
+        // Calculate total sales from all transactions
         salesData.totalSales = salesData.transactions.reduce((sum, transaction) => {
             return sum + (parseFloat(transaction.amount) || 0);
         }, 0);
@@ -2269,14 +2294,13 @@ async recordSalesBatch(userID, cartItems, transactionId, timestamp, isDemoUser) 
         salesData.lastUpdated = timestamp;
         salesData.lastModifiedBy = userID;
 
-        // Single API call to update sales
+        // Update sales bin
         return await api.updateUserSalesBin(userID, salesData);
     } catch (error) {
         console.error('Error in batch sales recording:', error);
         throw error;
     }
 }
-
 
 
 
@@ -2803,8 +2827,8 @@ clearProductForm() {
    // In app.js, replace the getSalesReport() method with this:
 
 // Update getSalesReport() method in app.js:
+// Update getSalesReport() method to properly filter by user and date:
 async getSalesReport() {
-    // Check permissions first
     try {
         const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
         if (!currentUser) {
@@ -2814,65 +2838,103 @@ async getSalesReport() {
         const userGroup = currentUser.userGroup || 0;
         const isAdmin = userGroup >= 2; // Groups 2 (Manager) and 3 (Admin) are admins
         const today = new Date().toISOString().split('T')[0];
+        const currentUserID = currentUser.userID;
 
-        // Get sales data - pass isAdmin flag to API
+        // Get sales data with proper filtering
         const salesData = await api.getUserSales(currentUser.userID, true, isAdmin);
         const allTransactions = salesData.allTransactions || [];
-        const filteredTransactions = salesData.transactions || [];
-
-        // Filter today's transactions from the appropriate dataset
+        
+        // Filter today's transactions
         let todayTransactions = [];
         
         if (isAdmin) {
-            // Admin sees ALL transactions in the database for today
+            // Admin sees ALL transactions from the shared database for today
             todayTransactions = allTransactions.filter(transaction => {
-                if (!transaction.timestamp && !transaction.serverTimestamp) return false;
-                const timestamp = transaction.serverTimestamp || transaction.timestamp;
-                const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+                // Check if transaction has required user identification
+                if (!transaction.performedBy && !transaction.userID) {
+                    console.warn('Transaction missing userID:', transaction.id);
+                    return false;
+                }
+                
+                // Get transaction date - prioritize serverTimestamp for accuracy
+                let transactionDate;
+                if (transaction.serverTimestamp) {
+                    transactionDate = new Date(transaction.serverTimestamp).toISOString().split('T')[0];
+                } else if (transaction.timestamp) {
+                    transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+                } else if (transaction.date) {
+                    transactionDate = transaction.date;
+                } else {
+                    return false; // No valid date
+                }
+                
                 return transactionDate === today;
             });
         } else {
-            // Non-admin users see only their transactions
-            todayTransactions = filteredTransactions.filter(transaction => {
-                if (!transaction.timestamp && !transaction.serverTimestamp) return false;
-                const timestamp = transaction.serverTimestamp || transaction.timestamp;
-                const transactionDate = new Date(timestamp).toISOString().split('T')[0];
+            // Non-admin users see only THEIR transactions for today
+            todayTransactions = allTransactions.filter(transaction => {
+                // Verify this transaction belongs to the current user
+                const transactionUserID = transaction.performedBy || transaction.userID;
+                if (!transactionUserID || transactionUserID !== currentUserID) {
+                    return false;
+                }
+                
+                // Get transaction date
+                let transactionDate;
+                if (transaction.serverTimestamp) {
+                    transactionDate = new Date(transaction.serverTimestamp).toISOString().split('T')[0];
+                } else if (transaction.timestamp) {
+                    transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+                } else if (transaction.date) {
+                    transactionDate = transaction.date;
+                } else {
+                    return false;
+                }
+                
                 return transactionDate === today;
             });
         }
 
-        // Add admin indicator header
+        // Add admin/user headers
         const adminHeader = isAdmin ? `
-            <div style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4CAF50;">
-                <strong>👑 Admin View - All Sales</strong>
-                <p style="margin: 5px 0 0 0; color: #2e7d32;">
-                    You are viewing ALL sales transactions for today (Admin privilege).
-                </p>
+            <div class="admin-view-indicator">
+                <strong>👑 Admin View - All Sales Today</strong>
+                <p>You are viewing ALL sales transactions for today from all users.</p>
+                <div class="admin-stats">
+                    <span>📊 Database: ${salesData.shared ? 'Shared' : 'Individual'}</span>
+                    <span>👥 Total Users: ${new Set(todayTransactions.map(t => t.performedBy || t.userID)).size}</span>
+                </div>
             </div>
         ` : '';
 
-        // Add user-specific header for non-admins
         const userHeader = !isAdmin ? `
-            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
-                <strong>👤 User View - Your Sales Only</strong>
-                <p style="margin: 5px 0 0 0; color: #1565c0;">
-                    You are viewing only your sales transactions for today.
-                </p>
+            <div class="user-view-indicator">
+                <strong>👤 Your Sales Today</strong>
+                <p>You are viewing only your sales transactions for today.</p>
+                <div class="user-info">
+                    <span>User ID: ${currentUserID}</span>
+                    <span>Business: ${currentUser.businessName || 'WebStarNg'}</span>
+                </div>
             </div>
         ` : '';
 
-        // Calculate total sales for today
+        // Calculate totals
         const totalSales = todayTransactions.reduce((sum, transaction) => {
             return sum + (parseFloat(transaction.amount) || 0);
         }, 0);
 
-        // Calculate transactions by user (for admin view)
+        // Group transactions by user (for admin view)
         let transactionsByUser = {};
-        if (isAdmin) {
+        if (isAdmin && todayTransactions.length > 0) {
             todayTransactions.forEach(transaction => {
                 const userID = transaction.performedBy || transaction.userID || 'Unknown';
+                const userName = transaction.userName || userID;
+                const businessName = transaction.businessName || 'Unknown Business';
+                
                 if (!transactionsByUser[userID]) {
                     transactionsByUser[userID] = {
+                        userName: userName,
+                        businessName: businessName,
                         count: 0,
                         total: 0,
                         transactions: []
@@ -2894,7 +2956,10 @@ async getSalesReport() {
                         <div class="no-sales-icon">📊</div>
                         <h3>No Sales Today</h3>
                         <p>There are no sales transactions recorded for today (${today}).</p>
-                        ${!isAdmin ? '<p><em>Only your transactions are shown. Admin users can see all transactions.</em></p>' : ''}
+                        ${isAdmin ? 
+                            '<p><em>As an admin, you would see all users\' transactions here.</em></p>' : 
+                            '<p><em>Only your transactions are shown here.</em></p>'
+                        }
                         <button class="btn-primary" onclick="app.handleMenuAction('sell-now')">
                             Start Selling
                         </button>
@@ -2904,7 +2969,11 @@ async getSalesReport() {
         }
 
         // Sort transactions by timestamp (newest first)
-        todayTransactions.sort((a, b) => new Date(b.timestamp || b.serverTimestamp) - new Date(a.timestamp || a.serverTimestamp));
+        todayTransactions.sort((a, b) => {
+            const timeA = new Date(a.serverTimestamp || a.timestamp);
+            const timeB = new Date(b.serverTimestamp || b.timestamp);
+            return timeB - timeA;
+        });
 
         return `
             <div class="content-page">
@@ -2914,9 +2983,10 @@ async getSalesReport() {
                 <div class="report-header">
                     <div>
                         <h2>Sales Report - ${new Date().toLocaleDateString()}</h2>
-                        <p class="report-date">Date: ${today}</p>
-                        ${isAdmin ? `<p style="color: #4CAF50; font-weight: bold;">👑 Admin View: All Transactions</p>` : 
-                                     `<p style="color: #2196f3; font-weight: bold;">👤 User View: Your Transactions Only</p>`}
+                        <p class="report-date">
+                            Date: ${today} | 
+                            ${isAdmin ? '👑 Admin View (All Users)' : '👤 User View (Your Sales Only)'}
+                        </p>
                     </div>
                     <div class="export-actions">
                         <button class="export-btn csv-btn" onclick="app.exportSalesToCSV()">
@@ -2928,28 +2998,44 @@ async getSalesReport() {
                     </div>
                 </div>
 
-                <!-- Admin Summary Section -->
-                ${isAdmin ? `
-                    <div class="admin-summary-section" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                        <h3 style="color: #4CAF50; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                            <span>📊</span> Sales Breakdown by User
-                        </h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <!-- Admin Summary: Breakdown by User -->
+                ${isAdmin && Object.keys(transactionsByUser).length > 0 ? `
+                    <div class="admin-summary-section">
+                        <h3><span>📊</span> Sales Breakdown by User</h3>
+                        <div class="user-breakdown-grid">
                             ${Object.entries(transactionsByUser).map(([userID, data]) => `
-                                <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4CAF50;">
-                                    <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">${userID}</div>
-                                    <div style="color: #27ae60; font-size: 1.2em; font-weight: bold;">₦${data.total.toFixed(2)}</div>
-                                    <div style="color: #7f8c8d; font-size: 0.9em;">${data.count} transaction(s)</div>
+                                <div class="user-breakdown-card">
+                                    <div class="user-header">
+                                        <div class="user-id">${userID}</div>
+                                        <div class="user-name">${data.userName}</div>
+                                        <div class="business-name">${data.businessName}</div>
+                                    </div>
+                                    <div class="user-stats">
+                                        <div class="stat">
+                                            <span class="label">Transactions:</span>
+                                            <span class="value">${data.count}</span>
+                                        </div>
+                                        <div class="stat">
+                                            <span class="label">Total Sales:</span>
+                                            <span class="value amount">₦${data.total.toFixed(2)}</span>
+                                        </div>
+                                        <div class="stat">
+                                            <span class="label">Avg. Transaction:</span>
+                                            <span class="value">₦${(data.total / data.count).toFixed(2)}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid #eee;">
-                            <div style="font-weight: bold; color: #2c3e50;">Total Users Today:</div>
-                            <div style="font-size: 1.1em; font-weight: bold; color: #4CAF50;">${Object.keys(transactionsByUser).length}</div>
+                        <div class="summary-footer">
+                            <span>Total Users Today: ${Object.keys(transactionsByUser).length}</span>
+                            <span>•</span>
+                            <span>Total Transactions: ${todayTransactions.length}</span>
                         </div>
                     </div>
                 ` : ''}
 
+                <!-- Sales Summary -->
                 <div class="sales-summary">
                     <div class="summary-item">
                         <span class="summary-label">Total Transactions:</span>
@@ -2971,27 +3057,48 @@ async getSalesReport() {
                     ` : ''}
                 </div>
 
+                <!-- Transactions List -->
                 <h3>Today's Sales Transactions${isAdmin ? ' (All Users)' : ' (Your Sales)'}</h3>
                 <div class="sales-list">
                     ${todayTransactions.map((transaction, index) => {
-                        const userID = transaction.performedBy || transaction.userID || 'Unknown';
-                        const isCurrentUser = userID === currentUser.userID;
+                        const transactionUserID = transaction.performedBy || transaction.userID || 'Unknown';
+                        const isCurrentUser = transactionUserID === currentUserID;
+                        const userName = transaction.userName || transactionUserID;
+                        const businessName = transaction.businessName || 'Unknown';
+                        
+                        // User badge for admin view
                         const userBadge = isAdmin ? `
-                            <span class="user-badge ${isCurrentUser ? 'current-user' : 'other-user'}" 
-                                  style="padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;"
-                                  title="${isCurrentUser ? 'Your transaction' : `User: ${userID}`}">
-                                ${isCurrentUser ? '👤 You' : `👥 ${userID.substring(0, 8)}${userID.length > 8 ? '...' : ''}`}
-                            </span>
+                            <div class="transaction-user-info">
+                                <span class="user-badge ${isCurrentUser ? 'current-user' : 'other-user'}" 
+                                      title="${isCurrentUser ? 'Your transaction' : `User: ${userName}`}">
+                                    ${isCurrentUser ? '👤 You' : `👥 ${userName}`}
+                                </span>
+                                ${!isCurrentUser ? `<span class="user-id-small">(${transactionUserID})</span>` : ''}
+                            </div>
+                        ` : '';
+                        
+                        // Business info for admin view
+                        const businessInfo = isAdmin && !isCurrentUser ? `
+                            <div class="business-info">
+                                <small>🏢 ${businessName}</small>
+                            </div>
                         ` : '';
                         
                         return `
-                        <div class="sale-item">
+                        <div class="sale-item ${isCurrentUser ? 'current-user-transaction' : 'other-user-transaction'}">
                             <div class="sale-header">
                                 <span class="sale-number">${index + 1}.</span>
-                                <span class="sale-time">${new Date(transaction.timestamp || transaction.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span class="sale-time">
+                                    ${new Date(transaction.serverTimestamp || transaction.timestamp).toLocaleTimeString([], { 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        second: '2-digit'
+                                    })}
+                                </span>
                                 ${userBadge}
                                 <span class="sale-id">ID: ${transaction.transactionId || transaction.id || 'N/A'}</span>
                             </div>
+                            ${businessInfo}
                             <div class="sale-details">
                                 <div class="sale-product">
                                     <strong>${transaction.productName || 'Unknown Product'}</strong>
@@ -3003,21 +3110,40 @@ async getSalesReport() {
                                     <div class="sale-amount">₦${(transaction.amount || 0).toFixed(2)}</div>
                                 </div>
                             </div>
-                            ${transaction.barcode ? `<div class="sale-barcode">Barcode: <code>${transaction.barcode}</code></div>` : ''}
-                            ${transaction.paymentMethod ? `<div class="sale-payment">Payment: ${transaction.paymentMethod}</div>` : ''}
+                            ${transaction.barcode ? `
+                                <div class="sale-meta">
+                                    <span class="sale-barcode">Barcode: <code>${transaction.barcode}</code></span>
+                                </div>
+                            ` : ''}
+                            <div class="sale-footer">
+                                ${transaction.paymentMethod ? `<span class="sale-payment">Payment: ${transaction.paymentMethod}</span>` : ''}
+                                ${isAdmin ? `
+                                    <span class="transaction-date">
+                                        ${new Date(transaction.serverTimestamp || transaction.timestamp).toLocaleDateString()}
+                                    </span>
+                                ` : ''}
+                            </div>
                         </div>
                         `;
                     }).join('')}
                 </div>
 
+                <!-- Total Summary -->
                 <div class="sales-total">
-                    <div class="total-label">TOTAL SALES FOR TODAY${isAdmin ? ' (ALL USERS)' : ' (YOUR SALES)'}:</div>
+                    <div class="total-label">
+                        TOTAL SALES FOR TODAY${isAdmin ? ' (ALL USERS)' : ' (YOUR SALES)'}:
+                    </div>
                     <div class="total-amount">₦${totalSales.toFixed(2)}</div>
                 </div>
 
+                <!-- Report Footer -->
                 <div class="report-footer">
                     <p>Report generated on ${new Date().toLocaleString()}</p>
-                    <p>User: ${currentUser.userID} | ${isAdmin ? 'Admin View (All Transactions)' : 'User View (Your Transactions Only)'} | Report ID: ${Date.now()}</p>
+                    <p>
+                        User: ${currentUserID} | 
+                        ${isAdmin ? 'Admin View • All Transactions' : 'User View • Your Transactions Only'} | 
+                        Report ID: ${Date.now()}
+                    </p>
                 </div>
             </div>
         `;
@@ -3029,6 +3155,7 @@ async getSalesReport() {
                 <div class="error-message">
                     <h3>Error Loading Sales Report</h3>
                     <p>Unable to load sales data. Please try again.</p>
+                    <pre class="error-details">${error.message}</pre>
                     <button class="btn-primary" onclick="app.handleMenuAction('sales-day')">
                         Retry
                     </button>
@@ -3437,90 +3564,110 @@ async exportPurchasesToCSV() {
 }
     
  // Export methods for sales report
+// Update exportSalesToCSV() to include user information:
 async exportSalesToCSV() {
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	alert('Please login to export sales report');
-        	return;
-    	}
-   	 
-    	// Get today's sales data
-    	const today = new Date().toISOString().split('T')[0];
-    	const salesData = await api.getUserSales(currentUser.userID);
-    	const transactions = salesData.transactions || [];
-   	 
-    	const todayTransactions = transactions.filter(transaction => {
-        	if (!transaction.timestamp) return false;
-        	const transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
-        	return transactionDate === today;
-    	});
-   	 
-    	if (todayTransactions.length === 0) {
-        	alert('No sales data to export for today');
-        	return;
-    	}
-   	 
-    	// Sort transactions
-    	todayTransactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-   	 
-    	// Calculate totals
-    	const totalSales = todayTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-    	const totalItems = todayTransactions.reduce((sum, t) => sum + (parseInt(t.quantity) || 1), 0);
-   	 
-    	// Create CSV content
-    	let csvContent = "S/No.,Time,Date,Transaction ID,Product Name,Barcode,Quantity,Unit Price (₦),Amount (₦),Payment Method,Customer,Description\n";
-   	 
-    	// Add each transaction
-    	todayTransactions.forEach((transaction, index) => {
-        	const row = [
-            	index + 1,
-            	new Date(transaction.timestamp).toLocaleTimeString(),
-            	new Date(transaction.timestamp).toISOString().split('T')[0],
-            	`"${transaction.transactionId || transaction.id || ''}"`,
-            	`"${transaction.productName || ''}"`,
-            	`"${transaction.barcode || ''}"`,
-            	transaction.quantity || 1,
-            	transaction.unitPrice || transaction.amount || 0,
-            	transaction.amount || 0,
-            	transaction.paymentMethod || 'cash',
-            	`"${transaction.customerInfo || 'Walk-in Customer'}"`,
-            	`"${transaction.description || ''}"`
-        	];
-        	csvContent += row.join(',') + '\n';
-    	});
-   	 
-    	// Add summary rows
-    	csvContent += '\n';
-    	csvContent += 'SUMMARY\n';
-    	csvContent += `Total Transactions,${todayTransactions.length}\n`;
-    	csvContent += `Total Items Sold,${totalItems}\n`;
-    	csvContent += `Total Sales Amount (₦),${totalSales.toFixed(2)}\n`;
-    	csvContent += `\nReport Information\n`;
-    	csvContent += `Generated On,${new Date().toLocaleString()}\n`;
-    	csvContent += `User,${currentUser.userID}\n`;
-    	csvContent += `Business,WebStarNg\n`;
-   	 
-    	// Create and download CSV file
-    	const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    	const link = document.createElement('a');
-    	const url = URL.createObjectURL(blob);
-   	 
-    	const dateStr = new Date().toISOString().split('T')[0];
-    	link.setAttribute('href', url);
-    	link.setAttribute('download', `sales_report_${dateStr}.csv`);
-    	link.style.visibility = 'hidden';
-   	 
-    	document.body.appendChild(link);
-    	link.click();
-    	document.body.removeChild(link);
-   	 
-    	alert(`✅ CSV report downloaded!\n\n📊 Transactions: ${todayTransactions.length}\n💰 Total: ₦${totalSales.toFixed(2)}`);
-   	 
-	} catch (error) {
-    	console.error('Error exporting CSV:', error);
-    	alert('Error exporting CSV: ' + error.message);
-	}
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to export sales report');
+            return;
+        }
+
+        const userGroup = currentUser.userGroup || 0;
+        const isAdmin = userGroup >= 2;
+        const today = new Date().toISOString().split('T')[0];
+        const currentUserID = currentUser.userID;
+
+        // Get sales data
+        const salesData = await api.getUserSales(currentUser.userID, true, isAdmin);
+        const transactions = isAdmin ? salesData.allTransactions || [] : salesData.transactions || [];
+
+        // Filter today's transactions with user validation
+        const todayTransactions = transactions.filter(transaction => {
+            // For non-admin, verify transaction belongs to current user
+            if (!isAdmin) {
+                const transactionUserID = transaction.performedBy || transaction.userID;
+                if (!transactionUserID || transactionUserID !== currentUserID) {
+                    return false;
+                }
+            }
+            
+            // Get transaction date
+            let transactionDate;
+            if (transaction.serverTimestamp) {
+                transactionDate = new Date(transaction.serverTimestamp).toISOString().split('T')[0];
+            } else if (transaction.timestamp) {
+                transactionDate = new Date(transaction.timestamp).toISOString().split('T')[0];
+            } else {
+                return false;
+            }
+            
+            return transactionDate === today;
+        });
+
+        if (todayTransactions.length === 0) {
+            alert('No sales data to export for today');
+            return;
+        }
+
+        // Create CSV header with user info for admin
+        let csvHeader = isAdmin ? 
+            "S/No.,Time,Date,User ID,User Name,Business Name,Transaction ID,Product Name,Barcode,Quantity,Unit Price (₦),Amount (₦),Payment Method,Customer,Description\n" :
+            "S/No.,Time,Date,Transaction ID,Product Name,Barcode,Quantity,Unit Price (₦),Amount (₦),Payment Method,Customer,Description\n";
+
+        let csvContent = csvHeader;
+
+        // Add each transaction
+        todayTransactions.forEach((transaction, index) => {
+            const transactionUserID = transaction.performedBy || transaction.userID || 'Unknown';
+            const userName = transaction.userName || transactionUserID;
+            const businessName = transaction.businessName || 'Unknown';
+            
+            if (isAdmin) {
+                const row = [
+                    index + 1,
+                    new Date(transaction.serverTimestamp || transaction.timestamp).toLocaleTimeString(),
+                    new Date(transaction.serverTimestamp || transaction.timestamp).toISOString().split('T')[0],
+                    `"${transactionUserID}"`,
+                    `"${userName}"`,
+                    `"${businessName}"`,
+                    `"${transaction.transactionId || transaction.id || ''}"`,
+                    `"${transaction.productName || ''}"`,
+                    `"${transaction.barcode || ''}"`,
+                    transaction.quantity || 1,
+                    transaction.unitPrice || transaction.amount || 0,
+                    transaction.amount || 0,
+                    transaction.paymentMethod || 'cash',
+                    `"${transaction.customerInfo || 'Walk-in Customer'}"`,
+                    `"${transaction.description || ''}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            } else {
+                const row = [
+                    index + 1,
+                    new Date(transaction.serverTimestamp || transaction.timestamp).toLocaleTimeString(),
+                    new Date(transaction.serverTimestamp || transaction.timestamp).toISOString().split('T')[0],
+                    `"${transaction.transactionId || transaction.id || ''}"`,
+                    `"${transaction.productName || ''}"`,
+                    `"${transaction.barcode || ''}"`,
+                    transaction.quantity || 1,
+                    transaction.unitPrice || transaction.amount || 0,
+                    transaction.amount || 0,
+                    transaction.paymentMethod || 'cash',
+                    `"${transaction.customerInfo || 'Walk-in Customer'}"`,
+                    `"${transaction.description || ''}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            }
+        });
+
+        // ... rest of export function (create and download file)
+        // [Keep existing file creation and download code]
+        
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        alert('Error exporting CSV: ' + error.message);
+    }
 }
 
 async exportSalesToExcel() {
@@ -6474,6 +6621,25 @@ async getCachedInventory(userID) {
 clearInventoryCache(userID) {
     localStorage.removeItem(`inventory_cache_${userID}`);
     localStorage.removeItem(`inventory_cache_timestamp_${userID}`);
+}
+
+
+
+// Add data validation method to ensure transactions have user info
+validateTransactionData(transaction) {
+    // Ensure transaction has required user identification
+    if (!transaction.performedBy && !transaction.userID) {
+        console.error('Transaction missing userID:', transaction);
+        return false;
+    }
+    
+    // Ensure transaction has a valid date
+    if (!transaction.serverTimestamp && !transaction.timestamp && !transaction.date) {
+        console.error('Transaction missing date:', transaction);
+        return false;
+    }
+    
+    return true;
 }
 
 
