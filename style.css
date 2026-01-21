@@ -4342,3 +4342,187 @@ textarea {
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
+/* Add to style.css */
+
+/* User badges */
+.transaction-user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-badge {
+    padding: 3px 10px;
+    border-radius: 15px;
+    font-size: 0.85em;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.user-badge.current-user {
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #2196f3;
+}
+
+.user-badge.other-user {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border: 1px solid #9c27b0;
+}
+
+.user-id-small {
+    font-size: 0.8em;
+    color: #666;
+    font-family: 'Courier New', monospace;
+}
+
+/* Business info */
+.business-info {
+    margin: 5px 0;
+    padding: 5px 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+/* Admin summary */
+.admin-summary-section {
+    margin: 20px 0;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-left: 4px solid #4CAF50;
+}
+
+.user-breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.user-breakdown-card {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e1e5e9;
+}
+
+.user-breakdown-card .user-header {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.user-breakdown-card .user-id {
+    font-weight: bold;
+    color: #2c3e50;
+    font-family: 'Courier New', monospace;
+}
+
+.user-breakdown-card .user-name {
+    color: #3498db;
+    font-size: 0.9em;
+}
+
+.user-breakdown-card .business-name {
+    color: #7f8c8d;
+    font-size: 0.85em;
+    margin-top: 3px;
+}
+
+.user-breakdown-card .user-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.user-breakdown-card .stat {
+    text-align: center;
+}
+
+.user-breakdown-card .stat .label {
+    display: block;
+    font-size: 0.8em;
+    color: #7f8c8d;
+    margin-bottom: 3px;
+}
+
+.user-breakdown-card .stat .value {
+    display: block;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.user-breakdown-card .stat .value.amount {
+    color: #27ae60;
+}
+
+.summary-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e1e5e9;
+    color: #7f8c8d;
+    font-size: 0.9em;
+}
+
+/* Transaction styling */
+.current-user-transaction {
+    border-left: 4px solid #2196f3;
+}
+
+.other-user-transaction {
+    border-left: 4px solid #9c27b0;
+}
+
+.sale-meta {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f1f1f1;
+    font-size: 0.9em;
+    color: #7f8c8d;
+}
+
+.sale-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+    font-size: 0.85em;
+}
+
+/* View indicators */
+.admin-view-indicator {
+    background: #e8f6f3;
+    border-left: 4px solid #4CAF50;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.user-view-indicator {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.admin-stats, .user-info {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #666;
+}
