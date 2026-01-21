@@ -4526,3 +4526,174 @@ textarea {
     font-size: 0.9em;
     color: #666;
 }
+
+/* Add to style.css */
+
+/* Report Pagination Styles */
+.report-container {
+    font-size: 0.7em; /* 30% reduction from base 1em = 0.7em */
+    line-height: 1.4;
+}
+
+.report-header {
+    font-size: 1.2em; /* Slightly larger for headers */
+    margin-bottom: 20px;
+}
+
+.report-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 25px 0;
+    padding: 15px 0;
+    border-top: 1px solid #e1e5e9;
+    border-bottom: 1px solid #e1e5e9;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.pagination-info {
+    font-size: 0.9em;
+    color: #7f8c8d;
+    margin: 0 15px;
+}
+
+.pagination-button {
+    padding: 8px 16px;
+    margin: 0 5px;
+    border: 1px solid #dee2e6;
+    background: white;
+    color: #2c3e50;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+    min-width: 40px;
+    text-align: center;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.pagination-button.active {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+}
+
+.pagination-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-button.page-number {
+    padding: 6px 12px;
+    margin: 0 2px;
+}
+
+.pagination-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-size-selector {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-size-selector select {
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.9em;
+}
+
+/* Table adjustments for smaller font */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 0.9em;
+}
+
+.report-table th {
+    padding: 10px 8px;
+    background: #2c3e50;
+    color: white;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.report-table td {
+    padding: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.report-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+/* Card adjustments */
+.report-card {
+    padding: 12px;
+    margin: 10px 0;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.9em;
+}
+
+/* Summary items */
+.summary-item {
+    font-size: 0.9em;
+    padding: 8px 12px;
+}
+
+.summary-label {
+    font-size: 0.95em;
+}
+
+.summary-value {
+    font-size: 1.1em;
+}
+
+/* Transaction items */
+.transaction-item {
+    padding: 10px;
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+
+/* Export buttons */
+.export-btn {
+    padding: 8px 16px;
+    font-size: 0.85em;
+}
+
+/* Report footer */
+.report-footer {
+    font-size: 0.8em;
+    padding: 15px 0;
+    margin-top: 20px;
+    border-top: 1px solid #e1e5e9;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .report-container {
+        font-size: 0.65em;
+    }
+    
+    .pagination-button {
+        padding: 6px 12px;
+        margin: 0 2px;
+        min-width: 35px;
+    }
+}
