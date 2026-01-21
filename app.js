@@ -2290,6 +2290,10 @@ async processSale() {
         	} catch (printError) {
             	console.warn('Receipt printing failed:', printError);
             	// Continue even if printing fails
+            	
+            //clearCart	New addition 21st Jan
+            	this.cart = [];
+    	        this.saveCart();
         	}
     	}, 100); // Small delay to not block main process
 
@@ -2305,7 +2309,7 @@ async processSale() {
     	alert(successMessage);
    	 
     	// Clear cart efficiently
-    	this.cart = [];
+    //	this.cart = [];
     	this.saveCart();
    	 
     	// Update UI with new balance
@@ -6124,7 +6128,7 @@ printSimpleReceipt(cartItems, totalAmount) {
                     	</tr>
                 	</thead>
                 	<tbody>`;
-
+/*
     	// Add items with proper formatting
     	cartItems.forEach(item => {
         	// Truncate long product names for thermal printer
@@ -6137,6 +6141,21 @@ printSimpleReceipt(cartItems, totalAmount) {
                         	<td class="col-total">₦${item.subtotal.toFixed(2)}</td>
                     	</tr>`;
     	});
+    	*/
+    	 // Add all cart items to receipt
+        cartItems.forEach((item, index) => {
+          	const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+        
+            receiptContent += `
+            <tr>
+                <td class="item-name">${itemName}</td>
+                <td class="item-qty">${item.quantity}</td>
+                <td class="item-qty">₦${item.sellingPrice.toFixed(2)}</td>
+                <td class="item-price">₦${item.subtotal.toFixed(2)}</td>
+            </tr>`;
+        });
+    	
+    	
 
     	// Add totals and footer
     	receiptContent += `
@@ -6204,6 +6223,11 @@ printSimpleReceipt(cartItems, totalAmount) {
     	// Also cleanup if print dialog is cancelled
     	setTimeout(cleanup, 5000);
    	 
+   	 
+   	 	//clearCart	New addition 21st Jan
+            	this.cart = [];
+    	        this.saveCart();
+    	        
     	return true;
    	 
 	} catch (error) {
@@ -6249,6 +6273,11 @@ printSimpleReceipt(cartItems, totalAmount) {
    	 
     	return false;
 	}
+	
+	
+
+	
+	
 }
 
 
