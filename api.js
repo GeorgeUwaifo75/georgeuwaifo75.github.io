@@ -986,6 +986,252 @@ async updateUserInventoryBatch(userID, inventoryData) {
         throw error;
     }
 }
+  
+  
+// Backup Methods
+async createBackup(userID, backupName = '') {
+    try {
+        // Get all data from the main bin
+        const mainData = await this.getData();
+        
+        // Find the current user
+        const currentUser = mainData.users.find(user => user.userID === userID);
+        if (!currentUser) {
+            throw new Error('User not found');
+        }
+        
+        // Get user's specific data
+        const [inventoryData, salesData, purchasesData] = await Promise.all([
+            this.getUserInventory(userID),
+            this.getUserSales(userID),
+            this.getUserPurchases(userID)
+        ]);
+        
+        // Create backup structure
+        const backupData = {
+            metadata: {
+                backupId: `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                backupName: backupName || `Backup_${new Date().toISOString().split('T')[0]}`,
+                createdBy: userID,
+                timestamp: new Date().toISOString(),
+                version: '1.0',
+                system: 'WebStarNg'
+            },
+            mainData: mainData,
+            userData: {
+                inventory: inventoryData,
+                sales: salesData,
+                purchases: purchasesData,
+                userInfo: currentUser
+            }
+        };
+        
+        // Create a new bin for this backup
+        const backupResponse = await fetch(this.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': this.apiKey,
+                'X-Bin-Name': `backup_${userID}_${Date.now()}_${backupName.replace(/\s+/g, '_')}`
+            },
+            body: JSON.stringify(backupData)
+        });
+        
+        if (!backupResponse.ok) {
+            throw new Error('Failed to create backup bin');
+        }
+        
+        const backupResult = await backupResponse.json();
+        const backupBinId = backupResult.metadata.id;
+        
+        // Add backup record to user's data
+        const backupRecord = {
+            backupId: backupBinId,
+            backupName: backupName || `Backup_${new Date().toLocaleString()}`,
+            timestamp: new Date().toISOString(),
+            size: JSON.stringify(backupData).length,
+            userCount: mainData.users.length,
+            productCount: inventoryData.products?.length || 0,
+            salesCount: salesData.transactions?.length || 0,
+            purchasesCount: purchasesData.transactions?.length || 0
+        };
+        
+        // Update user with backup record
+        await this.updateUser(userID, {
+            backups: currentUser.backups ? [...currentUser.backups, backupRecord] : [backupRecord],
+            lastBackup: new Date().toISOString()
+        });
+        
+        return {
+            success: true,
+            backupBinId: backupBinId,
+            backupRecord: backupRecord,
+            message: 'Backup created successfully'
+        };
+        
+    } catch (error) {
+        console.error('Error creating backup:', error);
+        throw error;
+    }
+}
+
+async getUserBackups(userID) {
+    try {
+        const user = await this.getUser(userID);
+        return user?.backups || [];
+    } catch (error) {
+        console.error('Error fetching user backups:', error);
+        return [];
+    }
+}
+
+async restoreFromBackup(userID, backupBinId) {
+    try {
+        // Get the backup data
+        const response = await fetch(`${this.baseURL}/${backupBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Backup not found or inaccessible');
+        }
+        
+        const data = await response.json();
+        const backupData = data.record;
+        
+        // Validate backup data
+        if (!backupData.metadata || !backupData.mainData) {
+            throw new Error('Invalid backup format');
+        }
+        
+        // For admin users, restore everything
+        const currentUser = await this.getUser(userID);
+        const isAdmin = currentUser.userGroup >= 3;
+        
+        if (isAdmin) {
+            // Restore main data
+            await this.updateData(backupData.mainData);
+            
+            // Log the restoration
+            await this.updateUser(userID, {
+                lastRestore: new Date().toISOString(),
+                restoredBackup: backupBinId,
+                restoreNotes: `Full system restore from backup: ${backupData.metadata.backupName}`
+            });
+            
+            return {
+                success: true,
+                type: 'full',
+                message: 'Full system restore completed successfully'
+            };
+        } else {
+            // For non-admin users, restore only their data
+            const userBackupData = backupData.userData;
+            
+            if (!userBackupData) {
+                throw new Error('User data not found in backup');
+            }
+            
+            // Restore inventory
+            if (userBackupData.inventory) {
+                await this.updateUserInventory(userID, userBackupData.inventory);
+            }
+            
+            // Restore sales
+            if (userBackupData.sales) {
+                await this.updateUserSalesBin(userID, userBackupData.sales);
+            }
+            
+            // Restore purchases
+            if (userBackupData.purchases) {
+                const purchasesBin = await this.getUserPurchases(userID);
+                purchasesBin.transactions = userBackupData.purchases.transactions || [];
+                purchasesBin.totalPurchases = userBackupData.purchases.totalPurchases || 0;
+                await api.updateUserInventoryBatch(userID, purchasesBin); // Using inventory batch for purchases
+            }
+            
+            // Log the restoration
+            await this.updateUser(userID, {
+                lastRestore: new Date().toISOString(),
+                restoredBackup: backupBinId,
+                restoreNotes: `User data restore from backup: ${backupData.metadata.backupName}`
+            });
+            
+            return {
+                success: true,
+                type: 'user',
+                message: 'User data restore completed successfully'
+            };
+        }
+        
+    } catch (error) {
+        console.error('Error restoring from backup:', error);
+        throw error;
+    }
+}
+
+async deleteBackup(userID, backupBinId) {
+    try {
+        // Check if user owns this backup
+        const user = await this.getUser(userID);
+        const backupExists = user?.backups?.find(b => b.backupId === backupBinId);
+        
+        if (!backupExists) {
+            throw new Error('Backup not found or access denied');
+        }
+        
+        // Delete the backup bin
+        const response = await fetch(`${this.baseURL}/${backupBinId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete backup bin');
+        }
+        
+        // Remove backup record from user
+        const updatedBackups = user.backups.filter(b => b.backupId !== backupBinId);
+        await this.updateUser(userID, {
+            backups: updatedBackups
+        });
+        
+        return {
+            success: true,
+            message: 'Backup deleted successfully'
+        };
+        
+    } catch (error) {
+        console.error('Error deleting backup:', error);
+        throw error;
+    }
+}
+
+async downloadBackupFile(backupBinId) {
+    try {
+        const response = await fetch(`${this.baseURL}/${backupBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Backup not found');
+        }
+        
+        const data = await response.json();
+        return data.record;
+        
+    } catch (error) {
+        console.error('Error downloading backup:', error);
+        throw error;
+    }
+}  
+  
    
 }
 
