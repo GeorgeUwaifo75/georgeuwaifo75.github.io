@@ -374,6 +374,27 @@ setupMenuNavigation() {
         	}
     	}
    	 
+   	 // In the submenuLinks.forEach section, add:
+
+// Check for "system-cleanup" restriction (group 3 only)
+if (action === 'system-cleanup') {
+    const perms = this.checkUserPermissions();
+    if (!perms.isAdmin) { // Assuming isAdmin indicates group 3
+        this.showAccessDenied('System CleanUp');
+        return;
+    }
+}
+
+// Check for "wallet-admin" restriction (group 3 only)
+if (action === 'wallet-admin') {
+    const perms = this.checkUserPermissions();
+    if (!perms.isAdmin) {
+        this.showAccessDenied('Wallet Administration');
+        return;
+    }
+}
+   	 
+   	 
     	// Allow all other actions
     	this.handleMenuAction(action);
 	});
@@ -427,6 +448,44 @@ updateMenuVisibility(userGroup) {
     	userGroupElement.textContent = this.getUserGroupLabel(userGroup);
     	userGroupElement.className = `user-group-badge group-${userGroup}`;
 	}
+	
+	
+	// Show "Utilities" menu only for groups 2 and 3
+const utilitiesMenu = document.querySelector('[data-menu="utilities"]');
+if (utilitiesMenu) {
+    const shouldShow = userGroup >= 2; // Show for groups 2,3
+    const listItem = utilitiesMenu.closest('.menu-item');
+    if (listItem) {
+        listItem.style.display = shouldShow ? 'block' : 'none';
+        
+        // If hiding, also close the submenu
+        if (!shouldShow) {
+            listItem.classList.remove('active');
+        }
+    }
+}
+
+// Hide "System CleanUp" and "Wallet Admin" for group 2
+const systemCleanupLink = document.querySelector('[data-action="system-cleanup"]');
+const walletAdminLink = document.querySelector('[data-action="wallet-admin"]');
+
+if (systemCleanupLink) {
+    const shouldShow = userGroup >= 3; // Show only for group 3
+    const listItem = systemCleanupLink.closest('li');
+    if (listItem) {
+        listItem.style.display = shouldShow ? 'block' : 'none';
+    }
+}
+
+if (walletAdminLink) {
+    const shouldShow = userGroup >= 3; // Show only for group 3
+    const listItem = walletAdminLink.closest('li');
+    if (listItem) {
+        listItem.style.display = shouldShow ? 'block' : 'none';
+    }
+}
+	
+	
 }
 
     // Home functionality
@@ -472,13 +531,13 @@ updateMenuVisibility(userGroup) {
    	 let subtitle = '';
   	 
    	 switch(menuType) {
-    	/*    case 'products':
+    	    case 'products':
        		 title = 'Products Management';
        		 subtitle = 'Manage your products and inventory';
        		 contentHTML = this.getProductsContent();
        		 break;
-       		 */
        		 
+      /* 		 
     	case 'products':
    		 title = 'Inventory Report';
    		 subtitle = "Current inventory status";
@@ -494,6 +553,7 @@ updateMenuVisibility(userGroup) {
        		 contentHTML = '<div class="error-message">Error loading sales report</div>';
    		 });
    		 break;
+   		 */
          		 
        		 
    		 case 'reports':
@@ -506,6 +566,11 @@ updateMenuVisibility(userGroup) {
        		 subtitle = 'Configure system settings and users';
        		 contentHTML = this.getSetupContent();
        		 break;
+      case 'utilities':
+            title = 'Utilities';
+            subtitle = 'System utilities and administration tools';
+            contentHTML = this.getBackupRestoreForm();
+            break; 		 
    		 default:
        		 title = 'Dashboard Overview';
        		 subtitle = 'Welcome back to your WebStarNg account';
@@ -654,6 +719,39 @@ handleMenuAction(action) {
    		 subtitle = 'Add funds to your wallet';
    		 contentHTML = this.getWalletTopUpForm();
    		 break;    
+     case 'backup-restore':
+          title = 'Backup & Restore';
+          subtitle = 'Backup or restore system data';
+          contentHTML = this.getBackupRestoreForm();
+          break;
+      
+      case 'system-cleanup':
+          // Check if user is group 3
+          const permsCleanup = this.checkUserPermissions();
+          if (!permsCleanup.isAdmin) { // Assuming isAdmin is for group 3
+              this.showAccessDenied('System CleanUp');
+              return;
+          }
+          title = 'System CleanUp';
+          subtitle = 'Clean up old transactions';
+          contentHTML = this.getSystemCleanupForm();
+          break;
+      
+      case 'wallet-admin':
+          // Check if user is group 3
+          const permsWallet = this.checkUserPermissions();
+          if (!permsWallet.isAdmin) {
+              this.showAccessDenied('Wallet Administration');
+              return;
+          }
+          title = 'Wallet Administration';
+          subtitle = 'Manage user wallet balances';
+          contentHTML = this.getWalletAdminForm();
+          break;  		 
+         		 
+   		 
+   		 
+   		 
    	 default:
    		 return;
     }
@@ -2005,17 +2103,67 @@ getBuyProductsForm() {
    		 });
    	 }
   	 
-   	 // New System User Form
-	/*
-   	 const newSystemUserForm = document.getElementById('newSystemUserForm');
-   	 if (newSystemUserForm) {
-   		 newSystemUserForm.addEventListener('submit', (e) => {
-       		 e.preventDefault();
-       		 alert('New user created successfully!');
-       		 this.loadMenuContent('setup');
-   		 });
-   	 }
-   	 */
+if (document.getElementById('backupList')) {
+    // Initialize backup list when Backup/Restore page loads
+    setTimeout(() => {
+        this.initBackupRestore();
+    }, 100);
+}
+
+
+// Backup/Restore file input
+const backupFile = document.getElementById('backupFile');
+if (backupFile) {
+    backupFile.addEventListener('change', (e) => {
+        app.handleBackupFileSelect(e);
+    });
+}
+
+// Bulk cleanup confirmation
+const confirmBulkCleanup = document.getElementById('confirmBulkCleanup');
+if (confirmBulkCleanup) {
+    confirmBulkCleanup.addEventListener('change', (e) => {
+        const bulkBtn = document.getElementById('bulkCleanupBtn');
+        if (bulkBtn) {
+            bulkBtn.disabled = !e.target.checked;
+        }
+    });
+}
+
+// User search input
+const userSearch = document.getElementById('userSearch');
+if (userSearch) {
+    userSearch.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            app.searchUsers();
+        }
+    });
+}
+
+// Wallet action form validation
+const walletAction = document.getElementById('walletAction');
+const walletAmount = document.getElementById('walletAmount');
+const executeWalletBtn = document.getElementById('executeWalletAction');
+
+if (walletAction && walletAmount && executeWalletBtn) {
+    const validateWalletForm = () => {
+        const action = walletAction.value;
+        const amount = parseFloat(walletAmount.value);
+        
+        let isValid = true;
+        
+        if (action === 'add' || action === 'deduct' || action === 'set') {
+            isValid = !isNaN(amount) && amount >= 0;
+        }
+        
+        executeWalletBtn.disabled = !isValid;
+    };
+    
+    walletAction.addEventListener('change', validateWalletForm);
+    walletAmount.addEventListener('input', validateWalletForm);
+}
+
+
   	 
   	 
   	  const newSystemUserForm = document.getElementById('newSystemUserForm');
@@ -6600,6 +6748,1142 @@ validateTransactionData(transaction) {
     
 	return true;
 }
+
+
+
+getBackupRestoreForm() {
+    return `
+        <div class="content-page">
+            <h2>💾 Backup & Restore</h2>
+            <p>Create backups or restore system data</p>
+            
+            <div class="utilities-container">
+                <!-- Backup Section -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">📥</span> Create Backup</h3>
+                    <div class="utility-card">
+                        <p>Create a complete backup of all your data including:</p>
+                        <ul class="feature-list">
+                            <li>📦 Inventory data (loading...)</li>
+                            <li>💰 Sales transactions</li>
+                            <li>🛒 Purchase transactions</li>
+                            <li>👤 User accounts</li>
+                            <li>🏢 Business settings</li>
+                        </ul>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-primary" onclick="app.createBackup()">
+                                <span class="menu-icon">💾</span> Create Backup Now
+                            </button>
+                            <button class="btn-secondary" onclick="app.downloadSampleBackup()">
+                                <span class="menu-icon">📋</span> Download Template
+                            </button>
+                        </div>
+                        
+                        <div class="form-hint">
+                            ⚠️ Backups are stored securely on JSONBin.io servers
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Restore Section -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">📤</span> Restore Data</h3>
+                    <div class="utility-card">
+                        <div class="warning-box">
+                            <strong>⚠️ Warning:</strong> Restoring will overwrite existing data!
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="backupFile">Select Backup File</label>
+                            <input type="file" 
+                                   id="backupFile" 
+                                   accept=".json,.txt"
+                                   class="file-input">
+                            <div class="form-hint">
+                                Select a previously created backup file (.json format)
+                            </div>
+                        </div>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-primary" onclick="app.restoreBackup()">
+                                <span class="menu-icon">🔄</span> Restore from File
+                            </button>
+                            <button class="btn-secondary" onclick="app.clearRestoreForm()">
+                                <span class="menu-icon">🗑️</span> Clear
+                            </button>
+                        </div>
+                        
+                        <div id="restoreStatus" class="status-message" style="display: none; margin-top: 15px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Backups -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">📅</span> Recent Backups</h3>
+                    <div class="utility-card">
+                        <div id="backupList">
+                            <div class="loading-state">
+                                <span class="spinner"></span>
+                                <p>Loading backups...</p>
+                            </div>
+                        </div>
+                        <div class="utility-actions">
+                            <button class="btn-secondary" onclick="app.refreshBackupList()">
+                                <span class="menu-icon">🔄</span> Refresh List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+getSystemCleanupForm() {
+    return `
+        <div class="content-page">
+            <h2>🧹 System CleanUp</h2>
+            <p class="warning-text">⚠️ Admin Only: Clean up old transaction data</p>
+            
+            <div class="utilities-container">
+                <!-- Sales Cleanup -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">💰</span> Sales Transactions</h3>
+                    <div class="utility-card">
+                        <div class="stats-display">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Transactions:</span>
+                                <span class="stat-value" id="totalSalesCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Old Transactions:</span>
+                                <span class="stat-value" id="oldSalesCount">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="salesAge">Delete sales older than:</label>
+                            <select id="salesAge" class="cleanup-select">
+                                <option value="30">30 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                                <option value="365">1 year</option>
+                            </select>
+                        </div>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-warning" onclick="app.cleanupOldSales()">
+                                <span class="menu-icon">🧹</span> Clean Up Sales
+                            </button>
+                            <button class="btn-secondary" onclick="app.previewSalesCleanup()">
+                                <span class="menu-icon">👁️</span> Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Purchases Cleanup -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">🛒</span> Purchase Transactions</h3>
+                    <div class="utility-card">
+                        <div class="stats-display">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Transactions:</span>
+                                <span class="stat-value" id="totalPurchasesCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Old Transactions:</span>
+                                <span class="stat-value" id="oldPurchasesCount">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="purchasesAge">Delete purchases older than:</label>
+                            <select id="purchasesAge" class="cleanup-select">
+                                <option value="30">30 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                                <option value="365">1 year</option>
+                            </select>
+                        </div>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-warning" onclick="app.cleanupOldPurchases()">
+                                <span class="menu-icon">🧹</span> Clean Up Purchases
+                            </button>
+                            <button class="btn-secondary" onclick="app.previewPurchasesCleanup()">
+                                <span class="menu-icon">👁️</span> Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Bulk Cleanup -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">⚡</span> Bulk Cleanup</h3>
+                    <div class="utility-card danger-card">
+                        <div class="danger-warning">
+                            <strong>⚠️ DANGER ZONE:</strong> This will permanently delete data!
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="confirmBulkCleanup">
+                                I understand this action cannot be undone
+                            </label>
+                        </div>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-danger" id="bulkCleanupBtn" disabled onclick="app.bulkCleanup()">
+                                <span class="menu-icon">💥</span> Bulk Cleanup All Old Data
+                            </button>
+                        </div>
+                        
+                        <div class="form-hint">
+                            This will clean BOTH sales and purchases older than selected age
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+getWalletAdminForm() {
+    return `
+        <div class="content-page">
+            <h2>💰 Wallet Administration</h2>
+            <p class="admin-text">👑 Admin Only: Manage all user wallet balances</p>
+            
+            <div class="utilities-container">
+                <!-- User List -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">👥</span> All Users</h3>
+                    <div class="utility-card">
+                        <div class="search-bar">
+                            <input type="text" 
+                                   id="userSearch" 
+                                   placeholder="Search users..."
+                                   class="search-input">
+                            <button class="btn-small" onclick="app.searchUsers()">
+                                <span class="menu-icon">🔍</span> Search
+                            </button>
+                        </div>
+                        
+                        <div class="users-list" id="usersList">
+                            <div class="loading-state">
+                                <span class="spinner"></span>
+                                <p>Loading users...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Wallet Management -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">💰</span> Wallet Management</h3>
+                    <div class="utility-card">
+                        <div id="selectedUserInfo" style="display: none;">
+                            <h4>Selected User: <span id="selectedUserName"></span></h4>
+                            <div class="user-wallet-info">
+                                <div class="wallet-stat">
+                                    <span class="stat-label">Current Balance:</span>
+                                    <span class="stat-value" id="selectedUserBalance">₦0.00</span>
+                                </div>
+                                <div class="wallet-stat">
+                                    <span class="stat-label">User Group:</span>
+                                    <span class="stat-value" id="selectedUserGroup">Basic</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="walletAction">Action:</label>
+                            <select id="walletAction" class="wallet-select">
+                                <option value="add">Add Funds</option>
+                                <option value="deduct">Deduct Funds</option>
+                                <option value="set">Set Balance</option>
+                                <option value="reset">Reset to Zero</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="walletAmount">Amount (₦):</label>
+                            <input type="number" 
+                                   id="walletAmount" 
+                                   min="0" 
+                                   step="0.01"
+                                   placeholder="Enter amount"
+                                   class="wallet-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="walletReason">Reason:</label>
+                            <input type="text" 
+                                   id="walletReason" 
+                                   placeholder="e.g., Correction, Bonus, Adjustment"
+                                   class="reason-input">
+                        </div>
+                        
+                        <div class="utility-actions">
+                            <button class="btn-primary" id="executeWalletAction" disabled onclick="app.executeWalletAction()">
+                                <span class="menu-icon">✅</span> Execute Action
+                            </button>
+                            <button class="btn-secondary" onclick="app.clearWalletForm()">
+                                <span class="menu-icon">🗑️</span> Clear
+                            </button>
+                        </div>
+                        
+                        <div id="walletActionStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Transaction History -->
+                <div class="utility-section">
+                    <h3><span class="menu-icon">📋</span> Wallet Adjustments</h3>
+                    <div class="utility-card">
+                        <div class="adjustments-list" id="adjustmentsList">
+                            <div class="empty-state">
+                                <span class="empty-icon">💰</span>
+                                <p>No adjustments made yet</p>
+                            </div>
+                        </div>
+                        <button class="btn-secondary" onclick="app.refreshAdjustments()">
+                            <span class="menu-icon">🔄</span> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
+// Backup/Restore Methods
+async createBackup() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            alert('Please login to create backups');
+            return;
+        }
+        
+        // Ask for backup name
+        const backupName = prompt('Enter a name for this backup (optional):', 
+                                 `Backup_${new Date().toLocaleDateString()}`);
+        
+        if (backupName === null) return; // User cancelled
+        
+        // Show loading
+        this.showBackupStatus('Creating backup... Please wait.', 'loading');
+        
+        // Create backup
+        const result = await api.createBackup(currentUser.userID, backupName);
+        
+        if (result.success) {
+            this.showBackupStatus(`
+                <div class="success-message">
+                    <div class="success-icon">✅</div>
+                    <div class="success-content">
+                        <h4>Backup Created Successfully!</h4>
+                        <p>Backup ID: <code>${result.backupBinId.substring(0, 12)}...</code></p>
+                        <p>Name: ${result.backupRecord.backupName}</p>
+                        <p>Time: ${new Date(result.backupRecord.timestamp).toLocaleString()}</p>
+                        <div class="backup-stats">
+                            <span>📦 Products: ${result.backupRecord.productCount}</span>
+                            <span>💰 Sales: ${result.backupRecord.salesCount}</span>
+                            <span>🛒 Purchases: ${result.backupRecord.purchasesCount}</span>
+                        </div>
+                    </div>
+                </div>
+            `, 'success');
+            
+            // Refresh backup list
+            this.loadBackupList();
+            
+        } else {
+            throw new Error('Backup creation failed');
+        }
+        
+    } catch (error) {
+        console.error('Error creating backup:', error);
+        this.showBackupStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Backup Failed</h4>
+                    <p>${error.message}</p>
+                    <p>Please check your internet connection and try again.</p>
+                </div>
+            </div>
+        `, 'error');
+    }
+}
+
+async downloadSampleBackup() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        // Create sample backup structure
+        const sampleBackup = {
+            metadata: {
+                backupId: `sample_${Date.now()}`,
+                backupName: "Sample Backup Template",
+                createdBy: currentUser.userID,
+                timestamp: new Date().toISOString(),
+                version: '1.0',
+                system: 'WebStarNg',
+                type: 'template'
+            },
+            instructions: {
+                title: "WebStarNg Backup Template",
+                description: "This is a sample backup template. Fill in your data following this structure.",
+                usage: "Use this template to create manual backups or to understand the data structure."
+            },
+            dataStructure: {
+                mainData: {
+                    users: [
+                        {
+                            userID: "example_user",
+                            fullName: "Example User",
+                            wallet: 1000.00,
+                            userGroup: 1,
+                            businessName: "Example Business"
+                        }
+                    ]
+                },
+                userData: {
+                    inventory: {
+                        products: [
+                            {
+                                id: "prod_1",
+                                barcode: "EXAMPLE001",
+                                name: "Example Product",
+                                category: "example",
+                                quantity: 10,
+                                sellingPrice: 100.00
+                            }
+                        ]
+                    },
+                    sales: {
+                        transactions: [
+                            {
+                                id: "sale_1",
+                                productName: "Example Product",
+                                amount: 100.00,
+                                timestamp: new Date().toISOString()
+                            }
+                        ]
+                    },
+                    purchases: {
+                        transactions: [
+                            {
+                                id: "purch_1",
+                                productName: "Example Product",
+                                amount: 50.00,
+                                timestamp: new Date().toISOString()
+                            }
+                        ]
+                    }
+                }
+            }
+        };
+        
+        // Convert to JSON and download
+        const jsonStr = JSON.stringify(sampleBackup, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `webstarng_backup_template_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        this.showBackupStatus(`
+            <div class="success-message">
+                <div class="success-icon">📋</div>
+                <div class="success-content">
+                    <h4>Template Downloaded!</h4>
+                    <p>Sample backup template has been downloaded.</p>
+                    <p>Check the JSON structure for creating manual backups.</p>
+                </div>
+            </div>
+        `, 'success');
+        
+    } catch (error) {
+        console.error('Error downloading sample backup:', error);
+        this.showBackupStatus('Error downloading template', 'error');
+    }
+}
+
+handleBackupFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const backupData = JSON.parse(e.target.result);
+            
+            // Validate backup file
+            if (!backupData.metadata || !backupData.metadata.system === 'WebStarNg') {
+                throw new Error('Invalid backup file format');
+            }
+            
+            // Store the backup data temporarily
+            this.selectedBackupFile = {
+                data: backupData,
+                name: file.name,
+                size: file.size,
+                lastModified: file.lastModified
+            };
+            
+            this.showBackupStatus(`
+                <div class="info-message">
+                    <div class="info-icon">📄</div>
+                    <div class="info-content">
+                        <h4>Backup File Ready</h4>
+                        <p><strong>File:</strong> ${file.name}</p>
+                        <p><strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+                        <p><strong>Created:</strong> ${backupData.metadata.timestamp ? 
+                            new Date(backupData.metadata.timestamp).toLocaleString() : 'Unknown'}</p>
+                        <p><strong>Backup Name:</strong> ${backupData.metadata.backupName || 'Unnamed'}</p>
+                    </div>
+                </div>
+            `, 'info');
+            
+        } catch (error) {
+            console.error('Error parsing backup file:', error);
+            this.showBackupStatus(`
+                <div class="error-message">
+                    <div class="error-icon">❌</div>
+                    <div class="error-content">
+                        <h4>Invalid Backup File</h4>
+                        <p>The selected file is not a valid WebStarNg backup file.</p>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                </div>
+            `, 'error');
+            
+            // Clear the file input
+            event.target.value = '';
+        }
+    };
+    
+    reader.onerror = () => {
+        this.showBackupStatus('Error reading file', 'error');
+        event.target.value = '';
+    };
+    
+    reader.readAsText(file);
+}
+
+async restoreBackup() {
+    if (!this.selectedBackupFile) {
+        alert('Please select a backup file first');
+        return;
+    }
+    
+    const backupData = this.selectedBackupFile.data;
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    
+    if (!currentUser) {
+        alert('Please login to restore backup');
+        return;
+    }
+    
+    // Show confirmation with details
+    const confirmMessage = `
+        🚨 RESTORE CONFIRMATION 🚨
+        
+        You are about to restore from backup:
+        
+        📁 Backup: ${backupData.metadata.backupName}
+        📅 Created: ${new Date(backupData.metadata.timestamp).toLocaleString()}
+        👤 By: ${backupData.metadata.createdBy}
+        
+        ⚠️ WARNING: This will overwrite existing data!
+        
+        Type "RESTORE" to confirm:
+    `;
+    
+    const userConfirmation = prompt(confirmMessage);
+    
+    if (userConfirmation !== 'RESTORE') {
+        alert('Restore cancelled');
+        return;
+    }
+    
+    try {
+        this.showBackupStatus('Restoring data... This may take a moment.', 'loading');
+        
+        // Check if user is admin for full restore
+        const isAdmin = currentUser.userGroup >= 3;
+        
+        if (isAdmin) {
+            // For admin - full system restore
+            const result = await this.performFullRestore(backupData, currentUser);
+            this.showRestoreResult(result);
+        } else {
+            // For regular user - user data only restore
+            const result = await this.performUserRestore(backupData, currentUser);
+            this.showRestoreResult(result);
+        }
+        
+    } catch (error) {
+        console.error('Error during restore:', error);
+        this.showBackupStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Restore Failed</h4>
+                    <p>${error.message}</p>
+                    <p>Please check the backup file and try again.</p>
+                </div>
+            </div>
+        `, 'error');
+    }
+}
+
+async performFullRestore(backupData, currentUser) {
+    // Validate admin access
+    if (currentUser.userGroup < 3) {
+        throw new Error('Admin privileges required for full system restore');
+    }
+    
+    // Step 1: Create a backup before restore (safety measure)
+    const safetyBackup = await api.createBackup(currentUser.userID, 'Pre-restore_safety_backup');
+    
+    try {
+        // Step 2: Restore main data
+        if (backupData.mainData) {
+            await api.updateData(backupData.mainData);
+        }
+        
+        // Step 3: Restore all users' data
+        if (backupData.mainData && backupData.mainData.users) {
+            for (const user of backupData.mainData.users) {
+                if (backupData.userData && backupData.userData[user.userID]) {
+                    const userData = backupData.userData[user.userID];
+                    
+                    if (userData.inventory) {
+                        await api.updateUserInventory(user.userID, userData.inventory);
+                    }
+                    
+                    if (userData.sales) {
+                        await api.updateUserSalesBin(user.userID, userData.sales);
+                    }
+                    
+                    if (userData.purchases) {
+                        const purchasesBin = await api.getUserPurchases(user.userID);
+                        purchasesBin.transactions = userData.purchases.transactions || [];
+                        purchasesBin.totalPurchases = userData.purchases.totalPurchases || 0;
+                        await api.updateUserInventoryBatch(user.userID, purchasesBin);
+                    }
+                }
+            }
+        }
+        
+        // Update current user session
+        const updatedUser = await api.getUser(currentUser.userID);
+        localStorage.setItem('webstarng_user', JSON.stringify(updatedUser));
+        
+        return {
+            success: true,
+            type: 'full',
+            safetyBackupId: safetyBackup.backupBinId,
+            message: 'Full system restore completed successfully',
+            stats: {
+                users: backupData.mainData?.users?.length || 0,
+                products: this.countTotalProducts(backupData),
+                sales: this.countTotalSales(backupData),
+                purchases: this.countTotalPurchases(backupData)
+            }
+        };
+        
+    } catch (error) {
+        // Attempt to restore from safety backup
+        console.error('Restore failed, attempting safety restore:', error);
+        try {
+            await api.restoreFromBackup(currentUser.userID, safetyBackup.backupBinId);
+            throw new Error(`Restore failed. System reverted to safety backup. Original error: ${error.message}`);
+        } catch (safetyError) {
+            throw new Error(`Critical restore failure. Contact support. Errors: ${error.message}, ${safetyError.message}`);
+        }
+    }
+}
+
+async performUserRestore(backupData, currentUser) {
+    // Validate user data exists in backup
+    if (!backupData.userData || !backupData.userData[currentUser.userID]) {
+        throw new Error('Your user data not found in this backup');
+    }
+    
+    const userData = backupData.userData[currentUser.userID];
+    
+    // Create safety backup
+    const safetyBackup = await api.createBackup(currentUser.userID, 'Pre-user-restore_safety');
+    
+    try {
+        // Restore user data
+        if (userData.inventory) {
+            await api.updateUserInventory(currentUser.userID, userData.inventory);
+        }
+        
+        if (userData.sales) {
+            await api.updateUserSalesBin(currentUser.userID, userData.sales);
+        }
+        
+        if (userData.purchases) {
+            const purchasesBin = await api.getUserPurchases(currentUser.userID);
+            purchasesBin.transactions = userData.purchases.transactions || [];
+            purchasesBin.totalPurchases = userData.purchases.totalPurchases || 0;
+            await api.updateUserInventoryBatch(currentUser.userID, purchasesBin);
+        }
+        
+        // Update user info if present
+        if (userData.userInfo) {
+            await api.updateUser(currentUser.userID, {
+                ...userData.userInfo,
+                lastRestore: new Date().toISOString()
+            });
+        }
+        
+        // Refresh session
+        const updatedUser = await api.getUser(currentUser.userID);
+        localStorage.setItem('webstarng_user', JSON.stringify(updatedUser));
+        
+        return {
+            success: true,
+            type: 'user',
+            safetyBackupId: safetyBackup.backupBinId,
+            message: 'User data restored successfully',
+            stats: {
+                products: userData.inventory?.products?.length || 0,
+                sales: userData.sales?.transactions?.length || 0,
+                purchases: userData.purchases?.transactions?.length || 0
+            }
+        };
+        
+    } catch (error) {
+        // Restore from safety backup
+        console.error('User restore failed, reverting:', error);
+        try {
+            await api.restoreFromBackup(currentUser.userID, safetyBackup.backupBinId);
+            throw new Error(`Restore failed. Reverted to safety backup. Error: ${error.message}`);
+        } catch (safetyError) {
+            throw new Error(`Critical restore failure. Please contact support.`);
+        }
+    }
+}
+
+showRestoreResult(result) {
+    if (result.success) {
+        this.showBackupStatus(`
+            <div class="success-message">
+                <div class="success-icon">✅</div>
+                <div class="success-content">
+                    <h4>Restore Completed Successfully!</h4>
+                    <p><strong>Type:</strong> ${result.type === 'full' ? 'Full System Restore' : 'User Data Restore'}</p>
+                    
+                    ${result.stats ? `
+                    <div class="restore-stats">
+                        ${result.stats.users ? `<span>👥 Users: ${result.stats.users}</span>` : ''}
+                        ${result.stats.products ? `<span>📦 Products: ${result.stats.products}</span>` : ''}
+                        ${result.stats.sales ? `<span>💰 Sales: ${result.stats.sales}</span>` : ''}
+                        ${result.stats.purchases ? `<span>🛒 Purchases: ${result.stats.purchases}</span>` : ''}
+                    </div>
+                    ` : ''}
+                    
+                    ${result.safetyBackupId ? `
+                    <div class="safety-note">
+                        <small>Safety backup created: ${result.safetyBackupId.substring(0, 12)}...</small>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="restore-actions">
+                        <button class="btn-primary" onclick="app.reloadDashboard()">
+                            🔄 Reload Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `, 'success');
+        
+        // Clear selected file
+        this.selectedBackupFile = null;
+        const fileInput = document.getElementById('backupFile');
+        if (fileInput) fileInput.value = '';
+        
+    } else {
+        throw new Error(result.message || 'Restore failed');
+    }
+}
+
+async loadBackupList() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        const backups = await api.getUserBackups(currentUser.userID);
+        const backupList = document.getElementById('backupList');
+        
+        if (!backupList) return;
+        
+        if (backups.length === 0) {
+            backupList.innerHTML = `
+                <div class="empty-state">
+                    <span class="empty-icon">💾</span>
+                    <p>No backups created yet</p>
+                    <p class="hint">Create your first backup to see it here</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort by timestamp (newest first)
+        backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        backupList.innerHTML = `
+            <div class="backups-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Date</th>
+                            <th>Size</th>
+                            <th>Data</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${backups.map(backup => `
+                            <tr class="backup-item" data-backup-id="${backup.backupId}">
+                                <td>
+                                    <strong>${backup.backupName}</strong>
+                                    <div class="backup-id">${backup.backupId.substring(0, 12)}...</div>
+                                </td>
+                                <td>${new Date(backup.timestamp).toLocaleString()}</td>
+                                <td>${(backup.size / 1024).toFixed(2)} KB</td>
+                                <td>
+                                    <div class="backup-stats-small">
+                                        ${backup.productCount ? `<span title="Products">📦 ${backup.productCount}</span>` : ''}
+                                        ${backup.salesCount ? `<span title="Sales">💰 ${backup.salesCount}</span>` : ''}
+                                        ${backup.purchasesCount ? `<span title="Purchases">🛒 ${backup.purchasesCount}</span>` : ''}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="backup-actions">
+                                        <button class="btn-small" onclick="app.downloadBackup('${backup.backupId}')" title="Download">
+                                            📥
+                                        </button>
+                                        <button class="btn-small" onclick="app.restoreFromBackupId('${backup.backupId}')" title="Restore">
+                                            🔄
+                                        </button>
+                                        <button class="btn-small btn-danger" onclick="app.deleteBackup('${backup.backupId}')" title="Delete">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading backup list:', error);
+        const backupList = document.getElementById('backupList');
+        if (backupList) {
+            backupList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <p>Error loading backups</p>
+                    <button class="btn-small" onclick="app.loadBackupList()">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+async downloadBackup(backupBinId) {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        this.showBackupStatus('Downloading backup...', 'loading');
+        
+        const backupData = await api.downloadBackupFile(backupBinId);
+        
+        // Convert to JSON string
+        const jsonStr = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create filename
+        const backupName = backupData.metadata?.backupName || `backup_${new Date().toISOString().split('T')[0]}`;
+        const filename = `webstarng_backup_${backupName.replace(/\s+/g, '_')}.json`;
+        
+        // Download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        this.showBackupStatus(`
+            <div class="success-message">
+                <div class="success-icon">✅</div>
+                <div class="success-content">
+                    <h4>Backup Downloaded!</h4>
+                    <p>Backup saved as: <code>${filename}</code></p>
+                    <p>Keep this file in a safe location.</p>
+                </div>
+            </div>
+        `, 'success');
+        
+    } catch (error) {
+        console.error('Error downloading backup:', error);
+        this.showBackupStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Download Failed</h4>
+                    <p>${error.message}</p>
+                </div>
+            </div>
+        `, 'error');
+    }
+}
+
+async restoreFromBackupId(backupBinId) {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (!currentUser) return;
+    
+    // Get backup details first
+    try {
+        const backupData = await api.downloadBackupFile(backupBinId);
+        
+        const confirmMessage = `
+            🔄 RESTORE FROM BACKUP
+            
+            Backup: ${backupData.metadata?.backupName || 'Unknown'}
+            Created: ${backupData.metadata?.timestamp ? 
+                new Date(backupData.metadata.timestamp).toLocaleString() : 'Unknown'}
+            By: ${backupData.metadata?.createdBy || 'Unknown'}
+            
+            ⚠️ This will overwrite current data!
+            
+            Type "YES" to confirm restore:
+        `;
+        
+        const userConfirmation = prompt(confirmMessage);
+        
+        if (userConfirmation !== 'YES') {
+            alert('Restore cancelled');
+            return;
+        }
+        
+        this.showBackupStatus('Restoring from backup...', 'loading');
+        
+        const result = await api.restoreFromBackup(currentUser.userID, backupBinId);
+        
+        if (result.success) {
+            this.showBackupStatus(`
+                <div class="success-message">
+                    <div class="success-icon">✅</div>
+                    <div class="success-content">
+                        <h4>Restore Completed!</h4>
+                        <p>${result.message}</p>
+                        <div class="restore-actions">
+                            <button class="btn-primary" onclick="app.reloadDashboard()">
+                                🔄 Reload Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `, 'success');
+            
+            // Refresh backup list
+            this.loadBackupList();
+        } else {
+            throw new Error(result.message || 'Restore failed');
+        }
+        
+    } catch (error) {
+        console.error('Error restoring from backup ID:', error);
+        this.showBackupStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Restore Failed</h4>
+                    <p>${error.message}</p>
+                </div>
+            </div>
+        `, 'error');
+    }
+}
+
+async deleteBackup(backupBinId) {
+    if (!confirm('Are you sure you want to delete this backup?\n\nThis action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        this.showBackupStatus('Deleting backup...', 'loading');
+        
+        const result = await api.deleteBackup(currentUser.userID, backupBinId);
+        
+        if (result.success) {
+            this.showBackupStatus(`
+                <div class="success-message">
+                    <div class="success-icon">✅</div>
+                    <div class="success-content">
+                        <h4>Backup Deleted</h4>
+                        <p>Backup has been permanently deleted.</p>
+                    </div>
+                </div>
+            `, 'success');
+            
+            // Refresh backup list
+            this.loadBackupList();
+        } else {
+            throw new Error(result.message || 'Delete failed');
+        }
+        
+    } catch (error) {
+        console.error('Error deleting backup:', error);
+        this.showBackupStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Delete Failed</h4>
+                    <p>${error.message}</p>
+                </div>
+            </div>
+        `, 'error');
+    }
+}
+
+showBackupStatus(message, type = 'info') {
+    const statusElement = document.getElementById('restoreStatus');
+    if (!statusElement) return;
+    
+    statusElement.innerHTML = message;
+    statusElement.style.display = 'block';
+    
+    // Set styling based on type
+    switch(type) {
+        case 'success':
+            statusElement.className = 'status-message success';
+            break;
+        case 'error':
+            statusElement.className = 'status-message error';
+            break;
+        case 'loading':
+            statusElement.className = 'status-message loading';
+            statusElement.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div class="loading-text">${message}</div>
+            `;
+            break;
+        case 'info':
+            statusElement.className = 'status-message info';
+            break;
+    }
+}
+
+clearRestoreForm() {
+    this.selectedBackupFile = null;
+    
+    const fileInput = document.getElementById('backupFile');
+    if (fileInput) fileInput.value = '';
+    
+    const statusElement = document.getElementById('restoreStatus');
+    if (statusElement) {
+        statusElement.style.display = 'none';
+        statusElement.innerHTML = '';
+    }
+}
+
+refreshBackupList() {
+    this.loadBackupList();
+}
+
+reloadDashboard() {
+    location.reload();
+}
+
+// Helper methods for counting data
+countTotalProducts(backupData) {
+    let count = 0;
+    if (backupData.userData) {
+        for (const userID in backupData.userData) {
+            count += backupData.userData[userID]?.inventory?.products?.length || 0;
+        }
+    }
+    return count;
+}
+
+countTotalSales(backupData) {
+    let count = 0;
+    if (backupData.userData) {
+        for (const userID in backupData.userData) {
+            count += backupData.userData[userID]?.sales?.transactions?.length || 0;
+        }
+    }
+    return count;
+}
+
+countTotalPurchases(backupData) {
+    let count = 0;
+    if (backupData.userData) {
+        for (const userID in backupData.userData) {
+            count += backupData.userData[userID]?.purchases?.transactions?.length || 0;
+        }
+    }
+    return count;
+}
+
+// Initialize backup list when Backup/Restore form loads
+async initBackupRestore() {
+    await this.loadBackupList();
+    
+    // Also load current user stats
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    if (currentUser) {
+        try {
+            const inventoryData = await api.getUserInventory(currentUser.userID);
+            const productCount = inventoryData.products?.length || 0;
+            
+            // Update the feature list with actual count
+            const featureList = document.querySelector('.feature-list li:nth-child(1)');
+            if (featureList) {
+                featureList.innerHTML = `📦 Inventory data (${productCount} products)`;
+            }
+        } catch (error) {
+            console.error('Error loading inventory stats:', error);
+        }
+    }
+}
+
 
 
 }
