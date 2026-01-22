@@ -4531,7 +4531,7 @@ textarea {
 
 /* Report Pagination Styles */
 .report-container {
-    font-size: 0.7em; /* 30% reduction from base 1em = 0.7em */
+    font-size: 0.9em; 
     line-height: 1.4;
 }
 
@@ -4688,7 +4688,7 @@ textarea {
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .report-container {
-        font-size: 0.65em;
+        font-size: 0.9em;
     }
     
     .pagination-button {
