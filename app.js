@@ -8149,6 +8149,236 @@ async debugUserData() {
     }
 }
 
+async loadAllUsersForWalletAdmin() {
+    try {
+        console.log('Loading all users for wallet admin...');
+        
+        const usersList = document.getElementById('usersList');
+        if (!usersList) {
+            console.error('usersList element not found');
+            return;
+        }
+        
+        // Show loading state
+        usersList.innerHTML = `
+            <div class="loading-state">
+                <span class="spinner"></span>
+                <p>Loading all users from database...</p>
+            </div>
+        `;
+        
+        // Use getAllUsers() instead of searchUsers() for reliability
+        const users = await api.getAllUsers();
+        
+        console.log(`Loaded ${users.length} users for wallet admin`);
+        
+        if (users.length === 0) {
+            usersList.innerHTML = `
+                <div class="empty-state">
+                    <span class="empty-icon">👤</span>
+                    <p>No users found in database</p>
+                    <p class="hint">The users array might be empty or not loaded properly</p>
+                    <button class="btn-small" onclick="app.debugDatabaseStructure()">
+                        Debug Database
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Render users list
+        this.renderUsersListForWalletAdmin(users);
+        
+    } catch (error) {
+        console.error('Error loading users for wallet admin:', error);
+        const usersList = document.getElementById('usersList');
+        if (usersList) {
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <p>Error loading users: ${error.message}</p>
+                    <button class="btn-small" onclick="app.loadAllUsersForWalletAdmin()">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+async debugDatabaseStructure() {
+    try {
+        const data = await api.getData();
+        console.log('Database structure:', {
+            totalKeys: Object.keys(data).length,
+            usersKeyExists: 'users' in data,
+            usersIsArray: Array.isArray(data.users),
+            usersCount: data.users ? data.users.length : 0,
+            sampleUsers: data.users ? data.users.slice(0, 3) : 'No users'
+        });
+        
+        alert(`Database debug info:
+Total keys: ${Object.keys(data).length}
+Has users key: ${'users' in data}
+Users is array: ${Array.isArray(data.users)}
+Users count: ${data.users ? data.users.length : 0}
+
+Check console for details.`);
+    } catch (error) {
+        console.error('Debug error:', error);
+        alert('Debug failed: ' + error.message);
+    }
+}
+
+renderUsersListForWalletAdmin(users) {
+    const usersList = document.getElementById('usersList');
+    if (!usersList) return;
+    
+    // Sort users: admins first, then by userID
+    const sortedUsers = [...users].sort((a, b) => {
+        if (a.userGroup !== b.userGroup) {
+            return (b.userGroup || 0) - (a.userGroup || 0);
+        }
+        return (a.userID || '').localeCompare(b.userID || '');
+    });
+    
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    const currentUserID = currentUser ? currentUser.userID : null;
+    
+    usersList.innerHTML = sortedUsers.map(user => {
+        const isCurrentUser = user.userID === currentUserID;
+        const isSelected = this.selectedUserForWalletAdmin?.userID === user.userID;
+        const userGroupLabel = this.getUserGroupLabel(user.userGroup || 0);
+        const userGroupClass = `group-${user.userGroup || 0}`;
+        
+        return `
+            <div class="user-item ${isSelected ? 'selected' : ''} ${isCurrentUser ? 'current-user' : ''}"
+                 onclick="app.selectUserForWalletAdmin('${user.userID}')">
+                <div class="user-header">
+                    <div class="user-id">${user.userID || 'No ID'}</div>
+                    ${isCurrentUser ? '<span class="current-badge">(You)</span>' : ''}
+                    <span class="user-group-badge ${userGroupClass}">${userGroupLabel}</span>
+                </div>
+                <div class="user-details">
+                    <div class="user-name">${user.fullName || 'No name'}</div>
+                    <div class="user-wallet">
+                        <span class="wallet-label">Wallet:</span>
+                        <span class="wallet-amount">₦${(user.wallet || 0).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div class="user-meta">
+                    ${user.businessName ? `<span class="meta-item">🏢 ${user.businessName}</span>` : ''}
+                    ${user.email ? `<span class="meta-item">📧 ${user.email}</span>` : ''}
+                    ${user.createdAt ? `
+                        <span class="meta-item" title="Created">
+                            📅 ${new Date(user.createdAt).toLocaleDateString()}
+                        </span>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async initWalletAdmin() {
+    try {
+        console.log('Initializing Wallet Admin...');
+        
+        // First, verify we have a logged in user
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            console.error('No user logged in');
+            return;
+        }
+        
+        // Verify user is admin (group 3)
+        if (currentUser.userGroup !== 3) {
+            console.error('User is not admin (group 3)');
+            this.showAccessDenied('Wallet Administration');
+            return;
+        }
+        
+        console.log(`Wallet Admin initialized for: ${currentUser.userID}`);
+        
+        // Load all users using the dedicated method
+        await this.loadAllUsersForWalletAdmin();
+        
+        // Load adjustments list
+        await this.loadAdjustmentsList();
+        
+        // Set up form validation
+        this.setupWalletFormValidation();
+        
+        // Set up search functionality
+        this.setupWalletAdminSearch();
+        
+        // Focus on search input
+        setTimeout(() => {
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                searchInput.focus();
+                // Add event listener for real-time search
+                searchInput.addEventListener('input', (e) => {
+                    this.searchUsersForWalletAdmin(e.target.value);
+                });
+            }
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error initializing wallet admin:', error);
+        this.showWalletAdminError(error.message);
+    }
+}
+
+async searchUsersForWalletAdmin(searchTerm) {
+    try {
+        const users = await api.searchUsers(searchTerm);
+        this.renderUsersListForWalletAdmin(users);
+    } catch (error) {
+        console.error('Error searching users:', error);
+    }
+}
+
+setupWalletAdminSearch() {
+    const searchInput = document.getElementById('userSearch');
+    const searchBtn = document.getElementById('searchUsersBtn');
+    
+    if (searchInput) {
+        // Clear any existing listeners
+        const newInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newInput, searchInput);
+        
+        // Add search on Enter key
+        newInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.searchUsersForWalletAdmin(e.target.value);
+            }
+        });
+        
+        // Add search on input with debounce
+        let searchTimeout;
+        newInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.searchUsersForWalletAdmin(e.target.value);
+            }, 300);
+        });
+    }
+    
+    if (searchBtn) {
+        // Clear any existing listeners
+        const newBtn = searchBtn.cloneNode(true);
+        searchBtn.parentNode.replaceChild(newBtn, searchBtn);
+        
+        newBtn.addEventListener('click', () => {
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                this.searchUsersForWalletAdmin(searchInput.value);
+            }
+        });
+    }
+}
+	
 }
 
 // Global functions for modals (existing functionality)
