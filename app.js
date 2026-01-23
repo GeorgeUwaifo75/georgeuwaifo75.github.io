@@ -7938,138 +7938,61 @@ async initBackupRestore() {
 
 async searchUsers() {
     try {
-        console.log('Starting user search...');
-        
         const searchInput = document.getElementById('userSearch');
         const searchTerm = searchInput ? searchInput.value.trim() : '';
         
         const usersList = document.getElementById('usersList');
-        if (!usersList) {
-            console.error('usersList element not found');
-            return;
-        }
+        if (!usersList) return;
         
-        // Show loading state
         usersList.innerHTML = `
             <div class="loading-state">
-                <div class="spinner"></div>
-                <p>Loading users...</p>
+                <span class="spinner"></span>
+                <p>Searching users...</p>
             </div>
         `;
         
-        // Get current user for comparison
-        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-        if (!currentUser) {
-            usersList.innerHTML = `
-                <div class="error-state">
-                    <span class="error-icon">🔒</span>
-                    <p>Please login to view users</p>
-                </div>
-            `;
-            return;
-        }
+        // Call the API method
+        const users = await api.searchUsers(searchTerm);
         
-        console.log(`Current user: ${currentUser.userID}, Search term: "${searchTerm}"`);
-        
-        // Add small delay to prevent rapid API calls
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // Get users from API
-        let users = [];
-        try {
-            users = await api.searchUsers(searchTerm);
-            console.log(`API returned ${users.length} users`);
-        } catch (apiError) {
-            console.error('API error:', apiError);
-            usersList.innerHTML = `
-                <div class="error-state">
-                    <span class="error-icon">❌</span>
-                    <p>Error connecting to server</p>
-                    <button class="btn-small" onclick="app.searchUsers()">
-                        Retry
-                    </button>
-                </div>
-            `;
-            return;
-        }
-        
-        // Update user counts display
-        const totalUsersCount = document.getElementById('totalUsersCount');
-        const totalWalletValue = document.getElementById('totalWalletValue');
-        
-        if (totalUsersCount) {
-            totalUsersCount.textContent = users.length;
-        }
-        
-        if (totalWalletValue) {
-            const totalValue = users.reduce((sum, user) => sum + (parseFloat(user.wallet) || 0), 0);
-            totalWalletValue.textContent = `₦${totalValue.toFixed(2)}`;
-        }
-        
-        // Handle empty results
         if (users.length === 0) {
             usersList.innerHTML = `
                 <div class="empty-state">
                     <span class="empty-icon">👤</span>
                     <p>No users found</p>
                     ${searchTerm ? `<p class="hint">No results for "${searchTerm}"</p>` : ''}
-                    <button class="btn-small" onclick="app.searchUsers()" style="margin-top: 10px;">
-                        Refresh
-                    </button>
                 </div>
             `;
             return;
         }
         
-        // Sort users: current user first, then admins, then by userID
+        // Sort users: admins first, then by userID
         users.sort((a, b) => {
-            // Current user first
-            if (a.userID === currentUser.userID) return -1;
-            if (b.userID === currentUser.userID) return 1;
-            
-            // Admins first
             if (a.userGroup !== b.userGroup) {
                 return (b.userGroup || 0) - (a.userGroup || 0);
             }
-            
-            // Alphabetical by userID
             return (a.userID || '').localeCompare(b.userID || '');
         });
         
-        console.log(`Rendering ${users.length} users`);
-        
-        // Render users
-        usersList.innerHTML = users.map((user, index) => {
-            const isCurrentUser = user.userID === currentUser.userID;
+        usersList.innerHTML = users.map(user => {
+            const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+            const isCurrentUser = user.userID === currentUser?.userID;
             const isSelected = this.selectedUserForWalletAdmin?.userID === user.userID;
-            const userGroup = parseInt(user.userGroup) || 0;
-            const userGroupLabel = this.getUserGroupLabel(userGroup);
-            const userGroupClass = `group-${userGroup}`;
-            const walletAmount = parseFloat(user.wallet) || 0;
-            
-            // Determine wallet color based on amount
-            let walletColorClass = 'wallet-normal';
-            if (walletAmount === 0) {
-                walletColorClass = 'wallet-zero';
-            } else if (walletAmount > 10000) {
-                walletColorClass = 'wallet-high';
-            }
+            const userGroupLabel = this.getUserGroupLabel(user.userGroup || 0);
+            const userGroupClass = `group-${user.userGroup || 0}`;
             
             return `
-                <div class="user-item ${isSelected ? 'selected' : ''} ${isCurrentUser ? 'current-user' : ''}" 
-                     onclick="app.selectUserForWalletAdmin('${user.userID}')"
-                     data-user-id="${user.userID}"
-                     data-index="${index}">
+                <div class="user-item ${isSelected ? 'selected' : ''} ${isCurrentUser ? 'current-user' : ''}"
+                     onclick="app.selectUserForWalletAdmin('${user.userID}')">
                     <div class="user-header">
                         <div class="user-id">${user.userID}</div>
                         ${isCurrentUser ? '<span class="current-badge">(You)</span>' : ''}
                         <span class="user-group-badge ${userGroupClass}">${userGroupLabel}</span>
                     </div>
                     <div class="user-details">
-                        <div class="user-name">${user.fullName || 'No name provided'}</div>
-                        <div class="user-wallet ${walletColorClass}">
-                            <span class="wallet-label">Balance:</span>
-                            <span class="wallet-amount">₦${walletAmount.toFixed(2)}</span>
+                        <div class="user-name">${user.fullName || 'No name'}</div>
+                        <div class="user-wallet">
+                            <span class="wallet-label">Wallet:</span>
+                            <span class="wallet-amount">₦${(user.wallet || 0).toFixed(2)}</span>
                         </div>
                     </div>
                     <div class="user-meta">
@@ -8080,42 +8003,28 @@ async searchUsers() {
                                 ⏰ ${new Date(user.lastLogin).toLocaleDateString()}
                             </span>
                         ` : ''}
-                        ${user.createdAt ? `
-                            <span class="meta-item" title="Created">
-                                📅 ${new Date(user.createdAt).toLocaleDateString()}
-                            </span>
-                        ` : ''}
                     </div>
                 </div>
             `;
         }).join('');
         
-        console.log('User search completed successfully');
-        
     } catch (error) {
-        console.error('Error in searchUsers:', error);
+        console.error('Error searching users:', error);
         const usersList = document.getElementById('usersList');
         if (usersList) {
             usersList.innerHTML = `
                 <div class="error-state">
                     <span class="error-icon">❌</span>
-                    <div class="error-content">
-                        <p><strong>Error loading users</strong></p>
-                        <p>${error.message || 'Unknown error'}</p>
-                        <p class="hint">Please check your connection and try again.</p>
-                    </div>
-                    <button class="btn-primary" onclick="app.searchUsers()" style="margin-top: 10px;">
-                        🔄 Retry
-                    </button>
-                    <button class="btn-secondary" onclick="app.debugUserData()" style="margin-top: 5px;">
-                        🐛 Debug
+                    <p>Error loading users</p>
+                    <p class="error-details">${error.message}</p>
+                    <button class="btn-small" onclick="app.searchUsers()">
+                        Retry
                     </button>
                 </div>
             `;
         }
     }
 }
-
 // Add a debug method to help troubleshoot
 async debugUserData() {
     try {
