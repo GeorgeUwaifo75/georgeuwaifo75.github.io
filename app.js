@@ -6965,8 +6965,8 @@ getSystemCleanupForm() {
         </div>
     `;
 }
-//onclick="app.loadAllUsersForWalletAdmin()
-getWalletAdminForm() {
+
+	getWalletAdminForm() {
     return `
         <div class="content-page">
             <h2>💰 Wallet Administration</h2>
@@ -6977,7 +6977,7 @@ getWalletAdminForm() {
                 <button class="btn-small" onclick="app.debugDatabaseStructure()">
                     🔍 Debug Database
                 </button>
-                <button class="btn-small" onclick="app.loadUserData()"> 
+                <button class="btn-small" onclick="onclick="app.loadAllUsersForWalletAdmin()"> 
                     🔄 Reload Users
                 </button>
             </div>
