@@ -2130,6 +2130,18 @@ if (confirmBulkCleanup) {
     });
 }
 
+
+  	// In attachContentEventListeners() method, add:
+
+      if (document.getElementById('usersList')) {
+          // Initialize wallet admin when page loads
+          setTimeout(() => {
+              this.initWalletAdmin();
+          }, 100);
+      }
+
+
+
 // User search input
 const userSearch = document.getElementById('userSearch');
 if (userSearch) {
@@ -2268,6 +2280,9 @@ if (walletAction && walletAmount && executeWalletBtn) {
    	 });
     }
     
+  	
+
+  	
   	 
   	 
    	 // Sell Products specific listeners
@@ -6965,17 +6980,23 @@ getWalletAdminForm() {
                         <div class="search-bar">
                             <input type="text" 
                                    id="userSearch" 
-                                   placeholder="Search users..."
+                                   placeholder="Search by User ID, Name, or Email..."
                                    class="search-input">
-                            <button class="btn-small" onclick="app.searchUsers()">
+                            <button class="btn-primary" onclick="app.searchUsers()">
                                 <span class="menu-icon">🔍</span> Search
                             </button>
                         </div>
                         
-                        <div class="users-list" id="usersList">
-                            <div class="loading-state">
-                                <span class="spinner"></span>
-                                <p>Loading users...</p>
+                        <div class="users-list-container">
+                            <div class="users-list-header">
+                                <span>Total Users: <span id="totalUsersCount">0</span></span>
+                                <span>Total Wallet Value: <span id="totalWalletValue">₦0.00</span></span>
+                            </div>
+                            <div class="users-list" id="usersList">
+                                <div class="loading-state">
+                                    <span class="spinner"></span>
+                                    <p>Loading users...</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -6986,74 +7007,93 @@ getWalletAdminForm() {
                     <h3><span class="menu-icon">💰</span> Wallet Management</h3>
                     <div class="utility-card">
                         <div id="selectedUserInfo" style="display: none;">
-                            <h4>Selected User: <span id="selectedUserName"></span></h4>
-                            <div class="user-wallet-info">
-                                <div class="wallet-stat">
-                                    <span class="stat-label">Current Balance:</span>
-                                    <span class="stat-value" id="selectedUserBalance">₦0.00</span>
+                            <h4>Selected User</h4>
+                            <div class="selected-user-card">
+                                <div class="user-identity">
+                                    <div class="user-id-display" id="selectedUserName"></div>
+                                    <div class="user-group-display" id="selectedUserGroup"></div>
                                 </div>
-                                <div class="wallet-stat">
-                                    <span class="stat-label">User Group:</span>
-                                    <span class="stat-value" id="selectedUserGroup">Basic</span>
+                                <div class="user-wallet-display">
+                                    <div class="wallet-label">Current Balance:</div>
+                                    <div class="wallet-amount-large" id="selectedUserBalance">₦0.00</div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="walletAction">Action:</label>
-                            <select id="walletAction" class="wallet-select">
-                                <option value="add">Add Funds</option>
-                                <option value="deduct">Deduct Funds</option>
-                                <option value="set">Set Balance</option>
-                                <option value="reset">Reset to Zero</option>
-                            </select>
+                        <div class="wallet-form">
+                            <div class="form-group">
+                                <label for="walletAction">Action:</label>
+                                <select id="walletAction" class="wallet-select">
+                                    <option value="">Select Action</option>
+                                    <option value="add">➕ Add Funds</option>
+                                    <option value="deduct">➖ Deduct Funds</option>
+                                    <option value="set">🔧 Set Balance</option>
+                                    <option value="reset">🔄 Reset to Zero</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="walletAmount">Amount (₦):</label>
+                                <input type="number" 
+                                       id="walletAmount" 
+                                       min="0" 
+                                       step="0.01"
+                                       placeholder="Enter amount"
+                                       class="wallet-input"
+                                       disabled>
+                                <div class="form-hint">Required for Add, Deduct, and Set actions</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="walletReason">Reason:</label>
+                                <input type="text" 
+                                       id="walletReason" 
+                                       placeholder="e.g., Bonus, Correction, Refund, Adjustment"
+                                       class="reason-input">
+                                <div class="form-hint">Reason for this adjustment (optional but recommended)</div>
+                            </div>
+                            
+                            <div class="utility-actions">
+                                <button class="btn-primary" id="executeWalletAction" disabled onclick="app.executeWalletAction()">
+                                    <span class="menu-icon">✅</span> Execute Action
+                                </button>
+                                <button class="btn-secondary" onclick="app.clearWalletForm()">
+                                    <span class="menu-icon">🗑️</span> Clear Form
+                                </button>
+                            </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="walletAmount">Amount (₦):</label>
-                            <input type="number" 
-                                   id="walletAmount" 
-                                   min="0" 
-                                   step="0.01"
-                                   placeholder="Enter amount"
-                                   class="wallet-input">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="walletReason">Reason:</label>
-                            <input type="text" 
-                                   id="walletReason" 
-                                   placeholder="e.g., Correction, Bonus, Adjustment"
-                                   class="reason-input">
-                        </div>
-                        
-                        <div class="utility-actions">
-                            <button class="btn-primary" id="executeWalletAction" disabled onclick="app.executeWalletAction()">
-                                <span class="menu-icon">✅</span> Execute Action
-                            </button>
-                            <button class="btn-secondary" onclick="app.clearWalletForm()">
-                                <span class="menu-icon">🗑️</span> Clear
-                            </button>
-                        </div>
-                        
-                        <div id="walletActionStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;">
+                        <div id="walletActionStatus" class="wallet-status" style="display: none; margin-top: 15px;">
                         </div>
                     </div>
                 </div>
                 
-                <!-- Transaction History -->
+                <!-- Adjustment History -->
                 <div class="utility-section">
-                    <h3><span class="menu-icon">📋</span> Wallet Adjustments</h3>
+                    <h3><span class="menu-icon">📋</span> Your Adjustment History</h3>
                     <div class="utility-card">
-                        <div class="adjustments-list" id="adjustmentsList">
-                            <div class="empty-state">
-                                <span class="empty-icon">💰</span>
-                                <p>No adjustments made yet</p>
+                        <div class="adjustments-container">
+                            <div class="adjustments-header">
+                                <span>Total Adjustments Made: <span id="totalAdjustmentsCount">0</span></span>
+                                <button class="btn-small" onclick="app.exportAdminAdjustments()">
+                                    📥 Export All
+                                </button>
+                            </div>
+                            <div class="adjustments-list" id="adjustmentsList">
+                                <div class="loading-state">
+                                    <span class="spinner"></span>
+                                    <p>Loading adjustment history...</p>
+                                </div>
+                            </div>
+                            <div class="adjustments-footer">
+                                <button class="btn-secondary" onclick="app.refreshAdjustments()">
+                                    <span class="menu-icon">🔄</span> Refresh List
+                                </button>
+                                <button class="btn-small" onclick="app.printAllAdjustments()">
+                                    🖨️ Print Summary
+                                </button>
                             </div>
                         </div>
-                        <button class="btn-secondary" onclick="app.refreshAdjustments()">
-                            <span class="menu-icon">🔄</span> Refresh
-                        </button>
                     </div>
                 </div>
             </div>
@@ -7885,6 +7925,219 @@ async initBackupRestore() {
 }
 
 
+
+async searchUsers() {
+    try {
+        console.log('Starting user search...');
+        
+        const searchInput = document.getElementById('userSearch');
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
+        
+        const usersList = document.getElementById('usersList');
+        if (!usersList) {
+            console.error('usersList element not found');
+            return;
+        }
+        
+        // Show loading state
+        usersList.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading users...</p>
+            </div>
+        `;
+        
+        // Get current user for comparison
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">🔒</span>
+                    <p>Please login to view users</p>
+                </div>
+            `;
+            return;
+        }
+        
+        console.log(`Current user: ${currentUser.userID}, Search term: "${searchTerm}"`);
+        
+        // Add small delay to prevent rapid API calls
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Get users from API
+        let users = [];
+        try {
+            users = await api.searchUsers(searchTerm);
+            console.log(`API returned ${users.length} users`);
+        } catch (apiError) {
+            console.error('API error:', apiError);
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <p>Error connecting to server</p>
+                    <button class="btn-small" onclick="app.searchUsers()">
+                        Retry
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Update user counts display
+        const totalUsersCount = document.getElementById('totalUsersCount');
+        const totalWalletValue = document.getElementById('totalWalletValue');
+        
+        if (totalUsersCount) {
+            totalUsersCount.textContent = users.length;
+        }
+        
+        if (totalWalletValue) {
+            const totalValue = users.reduce((sum, user) => sum + (parseFloat(user.wallet) || 0), 0);
+            totalWalletValue.textContent = `₦${totalValue.toFixed(2)}`;
+        }
+        
+        // Handle empty results
+        if (users.length === 0) {
+            usersList.innerHTML = `
+                <div class="empty-state">
+                    <span class="empty-icon">👤</span>
+                    <p>No users found</p>
+                    ${searchTerm ? `<p class="hint">No results for "${searchTerm}"</p>` : ''}
+                    <button class="btn-small" onclick="app.searchUsers()" style="margin-top: 10px;">
+                        Refresh
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort users: current user first, then admins, then by userID
+        users.sort((a, b) => {
+            // Current user first
+            if (a.userID === currentUser.userID) return -1;
+            if (b.userID === currentUser.userID) return 1;
+            
+            // Admins first
+            if (a.userGroup !== b.userGroup) {
+                return (b.userGroup || 0) - (a.userGroup || 0);
+            }
+            
+            // Alphabetical by userID
+            return (a.userID || '').localeCompare(b.userID || '');
+        });
+        
+        console.log(`Rendering ${users.length} users`);
+        
+        // Render users
+        usersList.innerHTML = users.map((user, index) => {
+            const isCurrentUser = user.userID === currentUser.userID;
+            const isSelected = this.selectedUserForWalletAdmin?.userID === user.userID;
+            const userGroup = parseInt(user.userGroup) || 0;
+            const userGroupLabel = this.getUserGroupLabel(userGroup);
+            const userGroupClass = `group-${userGroup}`;
+            const walletAmount = parseFloat(user.wallet) || 0;
+            
+            // Determine wallet color based on amount
+            let walletColorClass = 'wallet-normal';
+            if (walletAmount === 0) {
+                walletColorClass = 'wallet-zero';
+            } else if (walletAmount > 10000) {
+                walletColorClass = 'wallet-high';
+            }
+            
+            return `
+                <div class="user-item ${isSelected ? 'selected' : ''} ${isCurrentUser ? 'current-user' : ''}" 
+                     onclick="app.selectUserForWalletAdmin('${user.userID}')"
+                     data-user-id="${user.userID}"
+                     data-index="${index}">
+                    <div class="user-header">
+                        <div class="user-id">${user.userID}</div>
+                        ${isCurrentUser ? '<span class="current-badge">(You)</span>' : ''}
+                        <span class="user-group-badge ${userGroupClass}">${userGroupLabel}</span>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">${user.fullName || 'No name provided'}</div>
+                        <div class="user-wallet ${walletColorClass}">
+                            <span class="wallet-label">Balance:</span>
+                            <span class="wallet-amount">₦${walletAmount.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <div class="user-meta">
+                        ${user.businessName ? `<span class="meta-item">🏢 ${user.businessName}</span>` : ''}
+                        ${user.email ? `<span class="meta-item">📧 ${user.email}</span>` : ''}
+                        ${user.lastLogin ? `
+                            <span class="meta-item" title="Last login">
+                                ⏰ ${new Date(user.lastLogin).toLocaleDateString()}
+                            </span>
+                        ` : ''}
+                        ${user.createdAt ? `
+                            <span class="meta-item" title="Created">
+                                📅 ${new Date(user.createdAt).toLocaleDateString()}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        console.log('User search completed successfully');
+        
+    } catch (error) {
+        console.error('Error in searchUsers:', error);
+        const usersList = document.getElementById('usersList');
+        if (usersList) {
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <div class="error-content">
+                        <p><strong>Error loading users</strong></p>
+                        <p>${error.message || 'Unknown error'}</p>
+                        <p class="hint">Please check your connection and try again.</p>
+                    </div>
+                    <button class="btn-primary" onclick="app.searchUsers()" style="margin-top: 10px;">
+                        🔄 Retry
+                    </button>
+                    <button class="btn-secondary" onclick="app.debugUserData()" style="margin-top: 5px;">
+                        🐛 Debug
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+// Add a debug method to help troubleshoot
+async debugUserData() {
+    try {
+        console.log('=== DEBUG USER DATA ===');
+        
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        console.log('Current user from localStorage:', currentUser);
+        
+        // Test API connectivity
+        console.log('Testing API connectivity...');
+        const testData = await api.getData();
+        console.log('Total users in system:', testData.users?.length || 0);
+        
+        if (testData.users && testData.users.length > 0) {
+            console.log('Sample users:');
+            testData.users.slice(0, 3).forEach((user, i) => {
+                console.log(`  ${i+1}. ${user.userID} - ${user.fullName} (Group: ${user.userGroup})`);
+            });
+        }
+        
+        // Test searchUsers directly
+        console.log('Testing searchUsers API...');
+        const searchResults = await api.searchUsers('');
+        console.log(`searchUsers('') returned: ${searchResults.length} users`);
+        
+        alert(`Debug complete. Check console for details.\n\nTotal users: ${testData.users?.length || 0}\nAPI working: ${searchResults.length >= 0 ? 'Yes' : 'No'}`);
+        
+    } catch (error) {
+        console.error('Debug error:', error);
+        alert(`Debug failed: ${error.message}`);
+    }
+}
 
 }
 
