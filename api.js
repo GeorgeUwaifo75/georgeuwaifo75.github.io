@@ -1281,36 +1281,46 @@ async getAllUsers() {
 async searchUsers(searchTerm = '') {
     try {
         const data = await this.getData();
-        const users = data.users || [];
         
-        console.log(`Found ${users.length} total users in database`);
-        
-        // If no search term, return all users (except system users maybe)
-        if (!searchTerm || searchTerm.trim() === '') {
-            return users.filter(user => user.userID); // Filter out any empty users
-        }
-        
-        const searchLower = searchTerm.toLowerCase().trim();
-        console.log(`Searching for: ${searchLower}`);
-        
-        const filteredUsers = users.filter(user => {
-            if (!user.userID) return false;
-            
-            // Check various fields for matches
-            const userIDMatch = user.userID && user.userID.toLowerCase().includes(searchLower);
-            const nameMatch = user.fullName && user.fullName.toLowerCase().includes(searchLower);
-            const emailMatch = user.email && user.email.toLowerCase().includes(searchLower);
-            const businessMatch = user.businessName && user.businessName.toLowerCase().includes(searchLower);
-            
-            return userIDMatch || nameMatch || emailMatch || businessMatch;
+        // DEBUG: Log the structure of data
+        console.log('Data structure from getData():', {
+            hasUsers: !!data.users,
+            usersType: typeof data.users,
+            usersLength: data.users ? data.users.length : 0,
+            dataKeys: Object.keys(data)
         });
         
-        console.log(`Found ${filteredUsers.length} matching users`);
-        return filteredUsers;
+        // Ensure users array exists
+        const users = Array.isArray(data.users) ? data.users : [];
+        
+        console.log(`Found ${users.length} users in database`);
+        
+        // If no search term, return all valid users
+        if (!searchTerm || searchTerm.trim() === '') {
+            return users.filter(user => 
+                user && 
+                user.userID && 
+                typeof user.userID === 'string'
+            );
+        }
+        
+        // Search logic for non-empty search term
+        const searchLower = searchTerm.toLowerCase().trim();
+        
+        return users.filter(user => {
+            if (!user || !user.userID) return false;
+            
+            return (
+                (user.userID && user.userID.toLowerCase().includes(searchLower)) ||
+                (user.fullName && user.fullName.toLowerCase().includes(searchLower)) ||
+                (user.email && user.email.toLowerCase().includes(searchLower)) ||
+                (user.businessName && user.businessName.toLowerCase().includes(searchLower))
+            );
+        });
         
     } catch (error) {
-        console.error('Error searching users:', error);
-        // Return empty array instead of throwing
+        console.error('Error in searchUsers:', error);
+        // Return empty array to prevent UI errors
         return [];
     }
 }
