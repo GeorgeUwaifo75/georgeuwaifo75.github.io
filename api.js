@@ -290,7 +290,7 @@ async getData() {
             headers: {
                 'X-Master-Key': this.apiKey
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 10000
         });
 
         if (!response.ok) {
@@ -299,8 +299,22 @@ async getData() {
         }
 
         const data = await response.json();
-        console.log('Data fetched successfully from JSONBin');
-        return data.record || { users: [] };
+        const record = data.record || {};
+        
+        // Ensure users array exists
+        if (!record.users || !Array.isArray(record.users)) {
+            console.warn('Users array missing or invalid, initializing...');
+            record.users = [];
+            // Optionally initialize with demo user
+            if (record.users.length === 0) {
+                await this.initializeData();
+                // Fetch again after initialization
+                return await this.getData();
+            }
+        }
+        
+        console.log(`Data loaded: ${record.users.length} users found`);
+        return record;
         
     } catch (error) {
         console.error('Error fetching data from JSONBin:', error);
@@ -308,12 +322,14 @@ async getData() {
         
         // Fallback to localStorage
         const localData = this.getLocalData();
-        console.log('Local data retrieved:', localData ? 'Yes' : 'No');
-        return localData || { users: [] };
+        if (!localData.users || !Array.isArray(localData.users)) {
+            console.warn('Local storage users array invalid, reinitializing...');
+            return this.initializeLocalData();
+        }
+        
+        return localData;
     }
 }
-
-
     // Update data
     async updateData(newData) {
         try {
