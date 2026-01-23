@@ -260,6 +260,7 @@ async initializeData() {
     }
 
     // Get all data
+    /*
     async getData() {
         try {
             const response = await fetch(`${this.baseURL}/${this.mainBinId}/latest`, {
@@ -280,6 +281,38 @@ async initializeData() {
             return this.getLocalData();
         }
     }
+*/
+
+async getData() {
+    try {
+        console.log('Fetching data from JSONBin...');
+        const response = await fetch(`${this.baseURL}/${this.mainBinId}/latest`, {
+            headers: {
+                'X-Master-Key': this.apiKey
+            },
+            timeout: 10000 // 10 second timeout
+        });
+
+        if (!response.ok) {
+            console.warn('JSONBin fetch failed, trying localStorage');
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Data fetched successfully from JSONBin');
+        return data.record || { users: [] };
+        
+    } catch (error) {
+        console.error('Error fetching data from JSONBin:', error);
+        console.log('Falling back to localStorage...');
+        
+        // Fallback to localStorage
+        const localData = this.getLocalData();
+        console.log('Local data retrieved:', localData ? 'Yes' : 'No');
+        return localData || { users: [] };
+    }
+}
+
 
     // Update data
     async updateData(newData) {
@@ -1231,6 +1264,1112 @@ async downloadBackupFile(backupBinId) {
         throw error;
     }
 }  
+
+
+// Wallet Administration Methods
+async getAllUsers() {
+    try {
+        const data = await this.getData();
+        return data.users || [];
+    } catch (error) {
+        console.error('Error fetching all users:', error);
+        return [];
+    }
+}
+
+// In JSONBinAPI class, update the searchUsers method:
+async searchUsers(searchTerm = '') {
+    try {
+        const data = await this.getData();
+        const users = data.users || [];
+        
+        console.log(`Found ${users.length} total users in database`);
+        
+        // If no search term, return all users (except system users maybe)
+        if (!searchTerm || searchTerm.trim() === '') {
+            return users.filter(user => user.userID); // Filter out any empty users
+        }
+        
+        const searchLower = searchTerm.toLowerCase().trim();
+        console.log(`Searching for: ${searchLower}`);
+        
+        const filteredUsers = users.filter(user => {
+            if (!user.userID) return false;
+            
+            // Check various fields for matches
+            const userIDMatch = user.userID && user.userID.toLowerCase().includes(searchLower);
+            const nameMatch = user.fullName && user.fullName.toLowerCase().includes(searchLower);
+            const emailMatch = user.email && user.email.toLowerCase().includes(searchLower);
+            const businessMatch = user.businessName && user.businessName.toLowerCase().includes(searchLower);
+            
+            return userIDMatch || nameMatch || emailMatch || businessMatch;
+        });
+        
+        console.log(`Found ${filteredUsers.length} matching users`);
+        return filteredUsers;
+        
+    } catch (error) {
+        console.error('Error searching users:', error);
+        // Return empty array instead of throwing
+        return [];
+    }
+}
+
+async adjustUserWallet(userID, adjustmentData) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user) {
+            throw new Error(`User ${userID} not found`);
+        }
+        
+        const currentBalance = parseFloat(user.wallet) || 0;
+        let newBalance = currentBalance;
+        const action = adjustmentData.action;
+        const amount = parseFloat(adjustmentData.amount) || 0;
+        
+        // Perform wallet adjustment based on action
+        switch(action) {
+            case 'add':
+                newBalance = currentBalance + amount;
+                break;
+                
+            case 'deduct':
+                if (currentBalance < amount) {
+                    throw new Error(`Insufficient balance. Current: ₦${currentBalance.toFixed(2)}, Attempted: ₦${amount.toFixed(2)}`);
+                }
+                newBalance = currentBalance - amount;
+                break;
+                
+            case 'set':
+                newBalance = amount;
+                break;
+                
+            case 'reset':
+                newBalance = 0;
+                break;
+                
+            default:
+                throw new Error(`Invalid action: ${action}`);
+        }
+        
+        // Record the adjustment
+        const adjustmentRecord = {
+            id: `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            userID: userID,
+            action: action,
+            amount: amount,
+            previousBalance: currentBalance,
+            newBalance: newBalance,
+            reason: adjustmentData.reason || '',
+            performedBy: adjustmentData.performedBy,
+            timestamp: new Date().toISOString(),
+            notes: adjustmentData.notes || ''
+        };
+        
+        // Update user wallet
+        await this.updateUser(userID, { 
+            wallet: newBalance,
+            walletAdjustments: user.walletAdjustments ? [...user.walletAdjustments, adjustmentRecord] : [adjustmentRecord],
+            lastWalletAdjustment: new Date().toISOString(),
+            lastWalletAdjustmentBy: adjustmentData.performedBy
+        });
+        
+        // Also log in admin's adjustment history
+        if (adjustmentData.performedBy && adjustmentData.performedBy !== userID) {
+            await this.logAdminAdjustment(adjustmentData.performedBy, adjustmentRecord);
+        }
+        
+        return {
+            success: true,
+            userID: userID,
+            action: action,
+            previousBalance: currentBalance,
+            newBalance: newBalance,
+            adjustmentRecord: adjustmentRecord,
+            message: `Wallet ${action} successful. New balance: ₦${newBalance.toFixed(2)}`
+        };
+        
+    } catch (error) {
+        console.error('Error adjusting user wallet:', error);
+        throw error;
+    }
+}
+
+async logAdminAdjustment(adminUserID, adjustmentRecord) {
+    try {
+        const adminUser = await this.getUser(adminUserID);
+        if (!adminUser) return;
+        
+        const adminAdjustment = {
+            ...adjustmentRecord,
+            isAdminAction: true,
+            adminUserID: adminUserID
+        };
+        
+        await this.updateUser(adminUserID, {
+            adminWalletAdjustments: adminUser.adminWalletAdjustments ? 
+                [...adminUser.adminWalletAdjustments, adminAdjustment] : [adminAdjustment],
+            lastAdminAction: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error logging admin adjustment:', error);
+        // Don't throw - this is secondary logging
+    }
+}
+
+async getWalletAdjustments(userID, adminView = false) {
+    try {
+        const user = await this.getUser(userID);
+        if (!user) return [];
+        
+        if (adminView) {
+            // Return admin's adjustment history (adjustments they made to others)
+            return user.adminWalletAdjustments || [];
+        } else {
+            // Return adjustments made to this user
+            return user.walletAdjustments || [];
+        }
+    } catch (error) {
+        console.error('Error fetching wallet adjustments:', error);
+        return [];
+    }
+}
+
+async batchAdjustWallets(adjustments) {
+    try {
+        const results = [];
+        const errors = [];
+        
+        for (const adjustment of adjustments) {
+            try {
+                const result = await this.adjustUserWallet(adjustment.userID, adjustment);
+                results.push(result);
+            } catch (error) {
+                errors.push({
+                    userID: adjustment.userID,
+                    error: error.message
+                });
+            }
+        }
+        
+        return {
+            success: errors.length === 0,
+            results: results,
+            errors: errors,
+            totalProcessed: adjustments.length,
+            successful: results.length,
+            failed: errors.length
+        };
+        
+    } catch (error) {
+        console.error('Error in batch wallet adjustment:', error);
+        throw error;
+    }
+}
+
+async exportWalletHistory(userID, format = 'csv') {
+    try {
+        const user = await this.getUser(userID);
+        if (!user) {
+            throw new Error('User not found');
+        }
+        
+        const adjustments = user.walletAdjustments || [];
+        
+        if (format === 'csv') {
+            return this.generateWalletCSV(adjustments, user);
+        } else if (format === 'excel') {
+            return this.generateWalletExcel(adjustments, user);
+        } else {
+            throw new Error(`Unsupported format: ${format}`);
+        }
+        
+    } catch (error) {
+        console.error('Error exporting wallet history:', error);
+        throw error;
+    }
+}
+
+async generateWalletCSV(adjustments, user) {
+    let csvContent = "Date,Time,Action,Amount (₦),Previous Balance (₦),New Balance (₦),Reason,Performed By,Notes\n";
+    
+    adjustments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    adjustments.forEach(adj => {
+        const date = new Date(adj.timestamp);
+        const row = [
+            date.toISOString().split('T')[0],
+            date.toLocaleTimeString(),
+            adj.action.toUpperCase(),
+            adj.amount.toFixed(2),
+            adj.previousBalance.toFixed(2),
+            adj.newBalance.toFixed(2),
+            `"${adj.reason || ''}"`,
+            adj.performedBy || 'System',
+            `"${adj.notes || ''}"`
+        ];
+        csvContent += row.join(',') + '\n';
+    });
+    
+    return csvContent;
+}
+
+async generateWalletExcel(adjustments, user) {
+    // HTML format that Excel can open
+    let htmlContent = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+              xmlns:x="urn:schemas-microsoft-com:office:excel" 
+              xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <title>Wallet History - ${user.userID}</title>
+            <style>
+                table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+                th { background: #2c3e50; color: white; padding: 12px; text-align: left; }
+                td { padding: 8px; border: 1px solid #ddd; }
+                .positive { color: #27ae60; font-weight: bold; }
+                .negative { color: #e74c3c; font-weight: bold; }
+                .header { font-size: 18px; margin-bottom: 10px; color: #2c3e50; }
+                .summary { margin: 20px 0; padding: 15px; background: #f8f9fa; }
+            </style>
+        </head>
+        <body>
+            <div class="header">Wallet History - ${user.userID}</div>
+            <div>User: ${user.fullName || user.userID}</div>
+            <div>Current Balance: ₦${user.wallet ? parseFloat(user.wallet).toFixed(2) : '0.00'}</div>
+            <div>Report Generated: ${new Date().toLocaleString()}</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Action</th>
+                        <th>Amount (₦)</th>
+                        <th>Previous Balance (₦)</th>
+                        <th>New Balance (₦)</th>
+                        <th>Reason</th>
+                        <th>Performed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    adjustments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    adjustments.forEach(adj => {
+        const date = new Date(adj.timestamp);
+        const amountClass = adj.action === 'add' ? 'positive' : 
+                           adj.action === 'deduct' ? 'negative' : '';
+        
+        htmlContent += `
+            <tr>
+                <td>${date.toISOString().split('T')[0]}</td>
+                <td>${date.toLocaleTimeString()}</td>
+                <td>${adj.action.toUpperCase()}</td>
+                <td class="${amountClass}">${adj.amount.toFixed(2)}</td>
+                <td>${adj.previousBalance.toFixed(2)}</td>
+                <td>${adj.newBalance.toFixed(2)}</td>
+                <td>${adj.reason || ''}</td>
+                <td>${adj.performedBy || 'System'}</td>
+            </tr>
+        `;
+    });
+    
+    // Calculate totals
+    const totalAdditions = adjustments
+        .filter(adj => adj.action === 'add')
+        .reduce((sum, adj) => sum + adj.amount, 0);
+    
+    const totalDeductions = adjustments
+        .filter(adj => adj.action === 'deduct')
+        .reduce((sum, adj) => sum + adj.amount, 0);
+    
+    htmlContent += `
+                </tbody>
+            </table>
+            
+            <div class="summary">
+                <strong>Summary:</strong><br>
+                Total Additions: ₦${totalAdditions.toFixed(2)}<br>
+                Total Deductions: ₦${totalDeductions.toFixed(2)}<br>
+                Net Change: ₦${(totalAdditions - totalDeductions).toFixed(2)}<br>
+                Total Adjustments: ${adjustments.length}
+            </div>
+        </body>
+        </html>
+    `;
+    
+    return htmlContent;
+}  
+  
+  
+// Wallet Administration Methods
+selectedUserForWalletAdmin = null;
+
+async searchUsers() {
+    try {
+        const searchInput = document.getElementById('userSearch');
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
+        
+        const usersList = document.getElementById('usersList');
+        if (!usersList) return;
+        
+        usersList.innerHTML = `
+            <div class="loading-state">
+                <span class="spinner"></span>
+                <p>Searching users...</p>
+            </div>
+        `;
+        
+        const users = await api.searchUsers(searchTerm);
+        
+        if (users.length === 0) {
+            usersList.innerHTML = `
+                <div class="empty-state">
+                    <span class="empty-icon">👤</span>
+                    <p>No users found</p>
+                    ${searchTerm ? `<p class="hint">No results for "${searchTerm}"</p>` : ''}
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort users: admins first, then by userID
+        users.sort((a, b) => {
+            if (a.userGroup !== b.userGroup) {
+                return (b.userGroup || 0) - (a.userGroup || 0); // Higher group first
+            }
+            return (a.userID || '').localeCompare(b.userID || '');
+        });
+        
+        usersList.innerHTML = users.map(user => {
+            const isCurrentUser = user.userID === JSON.parse(localStorage.getItem('webstarng_user'))?.userID;
+            const isSelected = this.selectedUserForWalletAdmin?.userID === user.userID;
+            const userGroupLabel = this.getUserGroupLabel(user.userGroup || 0);
+            const userGroupClass = `group-${user.userGroup || 0}`;
+            
+            return `
+                <div class="user-item ${isSelected ? 'selected' : ''} ${isCurrentUser ? 'current-user' : ''}" 
+                     onclick="app.selectUserForWalletAdmin('${user.userID}')">
+                    <div class="user-header">
+                        <div class="user-id">${user.userID}</div>
+                        ${isCurrentUser ? '<span class="current-badge">(You)</span>' : ''}
+                        <span class="user-group-badge ${userGroupClass}">${userGroupLabel}</span>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">${user.fullName || 'No name'}</div>
+                        <div class="user-wallet">
+                            <span class="wallet-label">Wallet:</span>
+                            <span class="wallet-amount">₦${(user.wallet || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <div class="user-meta">
+                        ${user.businessName ? `<span class="meta-item">🏢 ${user.businessName}</span>` : ''}
+                        ${user.email ? `<span class="meta-item">📧 ${user.email}</span>` : ''}
+                        ${user.lastLogin ? `
+                            <span class="meta-item" title="Last login">
+                                ⏰ ${new Date(user.lastLogin).toLocaleDateString()}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Error searching users:', error);
+        const usersList = document.getElementById('usersList');
+        if (usersList) {
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <p>Error loading users</p>
+                    <button class="btn-small" onclick="app.searchUsers()">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+async selectUserForWalletAdmin(userID) {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        const user = await api.getUser(userID);
+        if (!user) {
+            alert(`User ${userID} not found`);
+            return;
+        }
+        
+        this.selectedUserForWalletAdmin = user;
+        
+        // Update UI
+        const selectedUserInfo = document.getElementById('selectedUserInfo');
+        const selectedUserName = document.getElementById('selectedUserName');
+        const selectedUserBalance = document.getElementById('selectedUserBalance');
+        const selectedUserGroup = document.getElementById('selectedUserGroup');
+        const executeWalletBtn = document.getElementById('executeWalletAction');
+        
+        if (selectedUserInfo) selectedUserInfo.style.display = 'block';
+        if (selectedUserName) selectedUserName.textContent = `${user.userID} (${user.fullName || 'No name'})`;
+        if (selectedUserBalance) selectedUserBalance.textContent = `₦${(user.wallet || 0).toFixed(2)}`;
+        if (selectedUserGroup) {
+            selectedUserGroup.textContent = this.getUserGroupLabel(user.userGroup || 0);
+            selectedUserGroup.className = `user-group-badge group-${user.userGroup || 0}`;
+        }
+        
+        // Enable execute button if form is valid
+        if (executeWalletBtn) {
+            this.validateWalletForm();
+        }
+        
+        // Update selected state in users list
+        document.querySelectorAll('.user-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        
+        const selectedItem = document.querySelector(`.user-item[onclick*="${userID}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('selected');
+        }
+        
+        // Load user's adjustment history
+        this.loadUserAdjustments(userID);
+        
+    } catch (error) {
+        console.error('Error selecting user:', error);
+        alert(`Error loading user: ${error.message}`);
+    }
+}
+
+validateWalletForm() {
+    const walletAction = document.getElementById('walletAction');
+    const walletAmount = document.getElementById('walletAmount');
+    const executeWalletBtn = document.getElementById('executeWalletAction');
+    
+    if (!walletAction || !walletAmount || !executeWalletBtn) return;
+    
+    const action = walletAction.value;
+    const amount = parseFloat(walletAmount.value);
+    const isValid = this.selectedUserForWalletAdmin && (
+        action === 'reset' || 
+        (!isNaN(amount) && amount >= 0 && (action === 'add' || action === 'deduct' || action === 'set'))
+    );
+    
+    executeWalletBtn.disabled = !isValid;
+    return isValid;
+}
+
+async executeWalletAction() {
+    if (!this.selectedUserForWalletAdmin) {
+        alert('Please select a user first');
+        return;
+    }
+    
+    const walletAction = document.getElementById('walletAction');
+    const walletAmount = document.getElementById('walletAmount');
+    const walletReason = document.getElementById('walletReason');
+    
+    if (!walletAction) return;
+    
+    const action = walletAction.value;
+    const amount = action !== 'reset' ? parseFloat(walletAmount.value) : 0;
+    const reason = walletReason ? walletReason.value.trim() : '';
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    
+    // Validate
+    if (action !== 'reset' && (isNaN(amount) || amount < 0)) {
+        alert('Please enter a valid amount');
+        return;
+    }
+    
+    // Show confirmation
+    let confirmMessage = '';
+    const userName = this.selectedUserForWalletAdmin.userID;
+    const currentBalance = parseFloat(this.selectedUserForWalletAdmin.wallet) || 0;
+    
+    switch(action) {
+        case 'add':
+            confirmMessage = `
+                💰 ADD FUNDS CONFIRMATION
+                
+                User: ${userName}
+                Current Balance: ₦${currentBalance.toFixed(2)}
+                Amount to Add: ₦${amount.toFixed(2)}
+                New Balance: ₦${(currentBalance + amount).toFixed(2)}
+                
+                Reason: ${reason || 'No reason provided'}
+                
+                Type "ADD" to confirm:
+            `;
+            break;
+            
+        case 'deduct':
+            if (currentBalance < amount) {
+                alert(`Insufficient balance. Current: ₦${currentBalance.toFixed(2)}`);
+                return;
+            }
+            confirmMessage = `
+                💸 DEDUCT FUNDS CONFIRMATION
+                
+                User: ${userName}
+                Current Balance: ₦${currentBalance.toFixed(2)}
+                Amount to Deduct: ₦${amount.toFixed(2)}
+                New Balance: ₦${(currentBalance - amount).toFixed(2)}
+                
+                Reason: ${reason || 'No reason provided'}
+                
+                Type "DEDUCT" to confirm:
+            `;
+            break;
+            
+        case 'set':
+            confirmMessage = `
+                🔄 SET BALANCE CONFIRMATION
+                
+                User: ${userName}
+                Current Balance: ₦${currentBalance.toFixed(2)}
+                Set to: ₦${amount.toFixed(2)}
+                Change: ₦${(amount - currentBalance).toFixed(2)}
+                
+                Reason: ${reason || 'No reason provided'}
+                
+                Type "SET" to confirm:
+            `;
+            break;
+            
+        case 'reset':
+            confirmMessage = `
+                🚨 RESET TO ZERO CONFIRMATION
+                
+                User: ${userName}
+                Current Balance: ₦${currentBalance.toFixed(2)}
+                Will be set to: ₦0.00
+                
+                Reason: ${reason || 'No reason provided'}
+                
+                Type "RESET" to confirm:
+            `;
+            break;
+    }
+    
+    const userConfirmation = prompt(confirmMessage);
+    const expectedConfirmation = action.toUpperCase();
+    
+    if (userConfirmation !== expectedConfirmation) {
+        alert('Action cancelled');
+        return;
+    }
+    
+    try {
+        // Disable button during processing
+        const executeBtn = document.getElementById('executeWalletAction');
+        if (executeBtn) {
+            executeBtn.disabled = true;
+            executeBtn.innerHTML = '<span class="spinner"></span> Processing...';
+        }
+        
+        // Perform wallet adjustment
+        const result = await api.adjustUserWallet(this.selectedUserForWalletAdmin.userID, {
+            action: action,
+            amount: amount,
+            reason: reason,
+            performedBy: currentUser.userID,
+            notes: `Admin action by ${currentUser.userID}`
+        });
+        
+        if (result.success) {
+            // Show success message
+            this.showWalletActionStatus(`
+                <div class="success-message">
+                    <div class="success-icon">✅</div>
+                    <div class="success-content">
+                        <h4>Wallet Action Successful!</h4>
+                        <div class="adjustment-details">
+                            <p><strong>User:</strong> ${this.selectedUserForWalletAdmin.userID}</p>
+                            <p><strong>Action:</strong> ${action.toUpperCase()}</p>
+                            <p><strong>Amount:</strong> ₦${amount.toFixed(2)}</p>
+                            <p><strong>Previous Balance:</strong> ₦${result.previousBalance.toFixed(2)}</p>
+                            <p><strong>New Balance:</strong> ₦${result.newBalance.toFixed(2)}</p>
+                            ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                        </div>
+                        <div class="action-actions">
+                            <button class="btn-small" onclick="app.printReceiptForAdjustment(${JSON.stringify(result.adjustmentRecord).replace(/"/g, '&quot;')})">
+                                🖨️ Print Receipt
+                            </button>
+                            <button class="btn-small" onclick="app.downloadAdjustmentReceipt(${JSON.stringify(result.adjustmentRecord).replace(/"/g, '&quot;')})">
+                                📥 Download
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `, 'success');
+            
+            // Refresh user selection with new balance
+            await this.selectUserForWalletAdmin(this.selectedUserForWalletAdmin.userID);
+            
+            // Refresh adjustments list
+            this.loadAdjustmentsList();
+            
+            // Clear form
+            this.clearWalletForm();
+            
+        } else {
+            throw new Error(result.message || 'Action failed');
+        }
+        
+    } catch (error) {
+        console.error('Error executing wallet action:', error);
+        this.showWalletActionStatus(`
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <div class="error-content">
+                    <h4>Action Failed</h4>
+                    <p>${error.message}</p>
+                </div>
+            </div>
+        `, 'error');
+    } finally {
+        // Re-enable button
+        const executeBtn = document.getElementById('executeWalletAction');
+        if (executeBtn) {
+            executeBtn.disabled = false;
+            executeBtn.innerHTML = '<span class="menu-icon">✅</span> Execute Action';
+        }
+    }
+}
+
+showWalletActionStatus(message, type = 'info') {
+    const statusElement = document.getElementById('walletActionStatus');
+    if (!statusElement) return;
+    
+    statusElement.innerHTML = message;
+    statusElement.style.display = 'block';
+    statusElement.className = `wallet-status ${type}`;
+}
+
+clearWalletForm() {
+    const walletAmount = document.getElementById('walletAmount');
+    const walletReason = document.getElementById('walletReason');
+    const statusElement = document.getElementById('walletActionStatus');
+    
+    if (walletAmount) walletAmount.value = '';
+    if (walletReason) walletReason.value = '';
+    if (statusElement) {
+        statusElement.style.display = 'none';
+        statusElement.innerHTML = '';
+    }
+    
+    // Reset validation
+    this.validateWalletForm();
+}
+
+async loadAdjustmentsList() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        const adjustmentsList = document.getElementById('adjustmentsList');
+        if (!adjustmentsList) return;
+        
+        // Get admin's adjustment history
+        const adjustments = await api.getWalletAdjustments(currentUser.userID, true);
+        
+        if (adjustments.length === 0) {
+            adjustmentsList.innerHTML = `
+                <div class="empty-state">
+                    <span class="empty-icon">💰</span>
+                    <p>No adjustments made yet</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort by timestamp (newest first)
+        adjustments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        adjustmentsList.innerHTML = `
+            <div class="adjustments-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Amount (₦)</th>
+                            <th>Previous (₦)</th>
+                            <th>New (₦)</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${adjustments.map(adj => {
+                            const date = new Date(adj.timestamp);
+                            const isAdd = adj.action === 'add';
+                            const isDeduct = adj.action === 'deduct';
+                            const amountClass = isAdd ? 'positive' : isDeduct ? 'negative' : '';
+                            
+                            return `
+                                <tr class="adjustment-item" data-adj-id="${adj.id}">
+                                    <td>
+                                        <div class="adjustment-date">${date.toLocaleDateString()}</div>
+                                        <div class="adjustment-time">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    </td>
+                                    <td>
+                                        <div class="adjustment-user">${adj.userID}</div>
+                                        ${adj.userName ? `<div class="adjustment-user-name">${adj.userName}</div>` : ''}
+                                    </td>
+                                    <td>
+                                        <span class="action-badge ${adj.action}">${adj.action.toUpperCase()}</span>
+                                    </td>
+                                    <td class="${amountClass}">
+                                        ${adj.amount ? `₦${adj.amount.toFixed(2)}` : '-'}
+                                    </td>
+                                    <td>₦${adj.previousBalance ? adj.previousBalance.toFixed(2) : '0.00'}</td>
+                                    <td>₦${adj.newBalance ? adj.newBalance.toFixed(2) : '0.00'}</td>
+                                    <td>
+                                        <div class="adjustment-reason">${adj.reason || 'No reason'}</div>
+                                        ${adj.notes ? `<div class="adjustment-notes">${adj.notes}</div>` : ''}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="adjustments-summary">
+                Total Admin Adjustments: ${adjustments.length}
+                <button class="btn-small" onclick="app.exportAdminAdjustments()">
+                    📥 Export
+                </button>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading adjustments:', error);
+        const adjustmentsList = document.getElementById('adjustmentsList');
+        if (adjustmentsList) {
+            adjustmentsList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">❌</span>
+                    <p>Error loading adjustments</p>
+                    <button class="btn-small" onclick="app.loadAdjustmentsList()">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+async loadUserAdjustments(userID) {
+    try {
+        const adjustments = await api.getWalletAdjustments(userID, false);
+        
+        // You could display this in a separate section if needed
+        console.log(`Loaded ${adjustments.length} adjustments for ${userID}`);
+        
+    } catch (error) {
+        console.error('Error loading user adjustments:', error);
+    }
+}
+
+refreshAdjustments() {
+    this.loadAdjustmentsList();
+}
+
+printReceiptForAdjustment(adjustmentRecord) {
+    try {
+        const receiptContent = this.generateAdjustmentReceipt(adjustmentRecord);
+        
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Wallet Adjustment Receipt</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .receipt { max-width: 400px; margin: 0 auto; }
+                    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                    .details { margin: 15px 0; }
+                    .detail-row { display: flex; justify-content: space-between; margin: 5px 0; }
+                    .footer { margin-top: 30px; padding-top: 10px; border-top: 1px dashed #000; text-align: center; font-size: 12px; }
+                    .amount { font-size: 18px; font-weight: bold; }
+                    .positive { color: #27ae60; }
+                    .negative { color: #e74c3c; }
+                </style>
+            </head>
+            <body>
+                ${receiptContent}
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        
+    } catch (error) {
+        console.error('Error printing receipt:', error);
+        alert('Error printing receipt. Please try downloading instead.');
+    }
+}
+
+generateAdjustmentReceipt(adjustment) {
+    const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+    const businessName = currentUser?.businessName || 'WebStarNg';
+    
+    return `
+        <div class="receipt">
+            <div class="header">
+                <h2>${businessName}</h2>
+                <h3>Wallet Adjustment Receipt</h3>
+                <p>Receipt ID: ${adjustment.id}</p>
+            </div>
+            
+            <div class="details">
+                <div class="detail-row">
+                    <span>Date:</span>
+                    <span>${new Date(adjustment.timestamp).toLocaleString()}</span>
+                </div>
+                <div class="detail-row">
+                    <span>User ID:</span>
+                    <span>${adjustment.userID}</span>
+                </div>
+                <div class="detail-row">
+                    <span>Action:</span>
+                    <span><strong>${adjustment.action.toUpperCase()}</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span>Amount:</span>
+                    <span class="amount ${adjustment.action === 'add' ? 'positive' : 'negative'}">
+                        ₦${adjustment.amount ? adjustment.amount.toFixed(2) : '0.00'}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span>Previous Balance:</span>
+                    <span>₦${adjustment.previousBalance ? adjustment.previousBalance.toFixed(2) : '0.00'}</span>
+                </div>
+                <div class="detail-row">
+                    <span>New Balance:</span>
+                    <span><strong>₦${adjustment.newBalance ? adjustment.newBalance.toFixed(2) : '0.00'}</strong></span>
+                </div>
+                ${adjustment.reason ? `
+                <div class="detail-row">
+                    <span>Reason:</span>
+                    <span>${adjustment.reason}</span>
+                </div>
+                ` : ''}
+                <div class="detail-row">
+                    <span>Processed By:</span>
+                    <span>${adjustment.performedBy || 'System'}</span>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>This is an official record of wallet adjustment</p>
+                <p>Generated by WebStarNg System</p>
+                <p>${new Date().toLocaleString()}</p>
+            </div>
+        </div>
+    `;
+}
+
+downloadAdjustmentReceipt(adjustmentRecord) {
+    try {
+        const receiptContent = this.generateAdjustmentReceipt(adjustmentRecord);
+        const blob = new Blob([receiptContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `wallet_adjustment_${adjustmentRecord.id}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+    } catch (error) {
+        console.error('Error downloading receipt:', error);
+        alert('Error downloading receipt. Please try printing instead.');
+    }
+}
+
+async exportAdminAdjustments() {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return;
+        
+        // Get admin's adjustments
+        const adjustments = await api.getWalletAdjustments(currentUser.userID, true);
+        
+        if (adjustments.length === 0) {
+            alert('No adjustments to export');
+            return;
+        }
+        
+        // Create CSV content
+        let csvContent = "Date,Time,User ID,User Name,Action,Amount (₦),Previous Balance (₦),New Balance (₦),Reason,Notes\n";
+        
+        adjustments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        adjustments.forEach(adj => {
+            const date = new Date(adj.timestamp);
+            const row = [
+                date.toISOString().split('T')[0],
+                date.toLocaleTimeString(),
+                `"${adj.userID}"`,
+                `"${adj.userName || ''}"`,
+                adj.action.toUpperCase(),
+                adj.amount ? adj.amount.toFixed(2) : '0.00',
+                adj.previousBalance ? adj.previousBalance.toFixed(2) : '0.00',
+                adj.newBalance ? adj.newBalance.toFixed(2) : '0.00',
+                `"${adj.reason || ''}"`,
+                `"${adj.notes || ''}"`
+            ];
+            csvContent += row.join(',') + '\n';
+        });
+        
+        // Download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `admin_wallet_adjustments_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        alert(`✅ Admin adjustments exported! ${adjustments.length} records downloaded.`);
+        
+    } catch (error) {
+        console.error('Error exporting admin adjustments:', error);
+        alert('Error exporting adjustments: ' + error.message);
+    }
+}
+
+// Initialize wallet admin when page loads
+/*
+ initWalletAdmin() {
+    // Load users list
+    await this.searchUsers();
+    
+    // Load adjustments list
+    await this.loadAdjustmentsList();
+    
+    // Set up form validation
+    this.setupWalletFormValidation();
+}
+*/
+
+async initWalletAdmin() {
+    try {
+        console.log('Initializing Wallet Admin...');
+        
+        // First, verify we have a logged in user
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) {
+            console.error('No user logged in');
+            return;
+        }
+        
+        // Verify user is admin (group 3)
+        if (currentUser.userGroup !== 3) {
+            console.error('User is not admin (group 3)');
+            this.showAccessDenied('Wallet Administration');
+            return;
+        }
+        
+        console.log(`Wallet Admin initialized for: ${currentUser.userID}`);
+        
+        // Load users list with empty search (all users)
+        await this.searchUsers();
+        
+        // Load adjustments list
+        await this.loadAdjustmentsList();
+        
+        // Set up form validation
+        this.setupWalletFormValidation();
+        
+        // Focus on search input
+        setTimeout(() => {
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                searchInput.focus();
+            }
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error initializing wallet admin:', error);
+        
+        // Show error in UI
+        const usersList = document.getElementById('usersList');
+        if (usersList) {
+            usersList.innerHTML = `
+                <div class="error-state">
+                    <span class="error-icon">⚠️</span>
+                    <p>Initialization failed</p>
+                    <p class="hint">${error.message || 'Unknown error'}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+setupWalletFormValidation() {
+    const walletAction = document.getElementById('walletAction');
+    const walletAmount = document.getElementById('walletAmount');
+    
+    if (walletAction && walletAmount) {
+        walletAction.addEventListener('change', () => {
+            const action = walletAction.value;
+            walletAmount.disabled = action === 'reset';
+            walletAmount.required = action !== 'reset';
+            
+            if (action === 'reset') {
+                walletAmount.value = '';
+            }
+            
+            this.validateWalletForm();
+        });
+        
+        walletAmount.addEventListener('input', () => {
+            this.validateWalletForm();
+        });
+    }
+}
+
+/*
+getUserGroupLabel(userGroup) {
+    switch(parseInt(userGroup)) {
+        case 0: return 'Basic';
+        case 1: return 'Standard';
+        case 2: return 'Manager';
+        case 3: return 'Admin';
+        default: return 'Unknown';
+    }
+}  */
+
+getUserGroupLabel(userGroup) {
+    const group = parseInt(userGroup) || 0;
+    switch(group) {
+        case 0: return 'Basic';
+        case 1: return 'Standard';
+        case 2: return 'Manager';
+        case 3: return 'Admin';
+        default: return `Group ${group}`;
+    }
+}
   
    
 }
