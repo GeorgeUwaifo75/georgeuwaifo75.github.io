@@ -6971,7 +6971,17 @@ getWalletAdminForm() {
         <div class="content-page">
             <h2>💰 Wallet Administration</h2>
             <p class="admin-text">👑 Admin Only: Manage all user wallet balances</p>
-            
+           
+			<!-- Debug Controls -->
+            <div class="debug-controls" style="margin-bottom: 20px;">
+                <button class="btn-small" onclick="app.debugDatabaseStructure()">
+                    🔍 Debug Database
+                </button>
+                <button class="btn-small" onclick="app.loadAllUsersForWalletAdmin()">
+                    🔄 Reload Users
+                </button>
+            </div>
+			
             <div class="utilities-container">
                 <!-- User List -->
                 <div class="utility-section">
