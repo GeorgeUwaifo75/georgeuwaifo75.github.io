@@ -1294,6 +1294,7 @@ async getAllUsers() {
 }
 
 // In JSONBinAPI class, update the searchUsers method:
+// In api.js, update the searchUsers method:
 async searchUsers(searchTerm = '') {
     try {
         const data = await this.getData();
@@ -1306,16 +1307,23 @@ async searchUsers(searchTerm = '') {
             dataKeys: Object.keys(data)
         });
         
-        // Ensure users array exists
-        const users = Array.isArray(data.users) ? data.users : [];
+        // Ensure users array exists - FIXED: Use data.record if needed
+        let users = [];
+        if (data.users && Array.isArray(data.users)) {
+            users = data.users;
+        } else if (data.record && data.record.users) {
+            users = data.record.users;
+        } else {
+            users = [];
+        }
         
         console.log(`Found ${users.length} users in database`);
         
         // If no search term, return all valid users
         if (!searchTerm || searchTerm.trim() === '') {
-            return users.filter(user => 
-                user && 
-                user.userID && 
+            return users.filter(user =>
+                user &&
+                user.userID &&
                 typeof user.userID === 'string'
             );
         }
@@ -1340,8 +1348,9 @@ async searchUsers(searchTerm = '') {
         return [];
     }
 }
-
-async adjustUserWallet(userID, adjustmentData) {
+ 
+ 
+ async adjustUserWallet(userID, adjustmentData) {
     try {
         const user = await this.getUser(userID);
         if (!user) {
