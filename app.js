@@ -6966,144 +6966,137 @@ getSystemCleanupForm() {
     `;
 }
 
-	getWalletAdminForm() {
+	// In app.js, update getWalletAdminForm() method:
+getWalletAdminForm() {
     return `
-        <div class="content-page">
+        <div class="content-page wallet-admin-container">
             <h2>💰 Wallet Administration</h2>
-            <p class="admin-text">👑 Admin Only: Manage all user wallet balances</p>
-           
-			<!-- Debug Controls -->
-            <div class="debug-controls" style="margin-bottom: 20px;">
-                <button class="btn-small" onclick="app.debugDatabaseStructure()">
-                    🔍 Debug Database
-                </button>
-                <button class="btn-small" onclick="onclick="app.loadAllUsersForWalletAdmin()"> 
-                    🔄 Reload Users
-                </button>
+            <p>Manage user wallet balances and adjustments</p>
+            
+            <!-- User Search Section -->
+            <div class="search-section">
+                <h3><span class="menu-icon">🔍</span> Find User</h3>
+                <div class="search-input-group">
+                    <input type="text" 
+                           id="userSearch" 
+                           placeholder="Search by User ID, Name, Email, or Business Name..."
+                           autocomplete="off">
+                    <button onclick="app.searchUsers()" class="btn-primary">
+                        Search
+                    </button>
+                    <button onclick="app.searchUsers('')" class="btn-secondary">
+                        Show All
+                    </button>
+                </div>
+                <div class="form-hint">
+                    💡 Enter search term or leave empty to see all users
+                </div>
             </div>
-			
-            <div class="utilities-container">
-                <!-- User List -->
-                <div class="utility-section">
-                    <h3><span class="menu-icon">👥</span> All Users</h3>
-                    <div class="utility-card">
-                        <div class="search-bar">
-                            <input type="text" 
-                                   id="userSearch" 
-                                   placeholder="Search by User ID, Name, or Email..."
-                                   class="search-input">
-                            <button class="btn-primary" onclick="app.searchUsers()">
-                                <span class="menu-icon">🔍</span> Search
-                            </button>
-                        </div>
-                        
-                        <div class="users-list-container">
-                            <div class="users-list-header">
-                                <span>Total Users: <span id="totalUsersCount">0</span></span>
-                                <span>Total Wallet Value: <span id="totalWalletValue">₦0.00</span></span>
-                            </div>
-                            <div class="users-list" id="usersList">
-                                <div class="loading-state">
-                                    <span class="spinner"></span>
-                                    <p>Loading users...</p>
-                                </div>
-                            </div>
-                        </div>
+            
+            <!-- Users List -->
+            <div class="users-list-section">
+                <h3><span class="menu-icon">👥</span> Registered Users</h3>
+                <div class="users-list-container" id="usersList">
+                    <div class="loading-state">
+                        <span class="spinner"></span>
+                        <p>Loading users...</p>
                     </div>
                 </div>
-                
-                <!-- Wallet Management -->
-                <div class="utility-section">
-                    <h3><span class="menu-icon">💰</span> Wallet Management</h3>
-                    <div class="utility-card">
-                        <div id="selectedUserInfo" style="display: none;">
-                            <h4>Selected User</h4>
-                            <div class="selected-user-card">
-                                <div class="user-identity">
-                                    <div class="user-id-display" id="selectedUserName"></div>
-                                    <div class="user-group-display" id="selectedUserGroup"></div>
-                                </div>
-                                <div class="user-wallet-display">
-                                    <div class="wallet-label">Current Balance:</div>
-                                    <div class="wallet-amount-large" id="selectedUserBalance">₦0.00</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="wallet-form">
-                            <div class="form-group">
-                                <label for="walletAction">Action:</label>
-                                <select id="walletAction" class="wallet-select">
-                                    <option value="">Select Action</option>
-                                    <option value="add">➕ Add Funds</option>
-                                    <option value="deduct">➖ Deduct Funds</option>
-                                    <option value="set">🔧 Set Balance</option>
-                                    <option value="reset">🔄 Reset to Zero</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="walletAmount">Amount (₦):</label>
-                                <input type="number" 
-                                       id="walletAmount" 
-                                       min="0" 
-                                       step="0.01"
-                                       placeholder="Enter amount"
-                                       class="wallet-input"
-                                       disabled>
-                                <div class="form-hint">Required for Add, Deduct, and Set actions</div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="walletReason">Reason:</label>
-                                <input type="text" 
-                                       id="walletReason" 
-                                       placeholder="e.g., Bonus, Correction, Refund, Adjustment"
-                                       class="reason-input">
-                                <div class="form-hint">Reason for this adjustment (optional but recommended)</div>
-                            </div>
-                            
-                            <div class="utility-actions">
-                                <button class="btn-primary" id="executeWalletAction" disabled onclick="app.executeWalletAction()">
-                                    <span class="menu-icon">✅</span> Execute Action
-                                </button>
-                                <button class="btn-secondary" onclick="app.clearWalletForm()">
-                                    <span class="menu-icon">🗑️</span> Clear Form
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="walletActionStatus" class="wallet-status" style="display: none; margin-top: 15px;">
-                        </div>
+            </div>
+            
+            <!-- Selected User Info -->
+            <div id="selectedUserInfo" style="display: none; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px solid #3498db;">
+                <h3><span class="menu-icon">👤</span> Selected User</h3>
+                <div class="selected-user-details">
+                    <div class="detail-row">
+                        <span class="detail-label">User ID:</span>
+                        <span class="detail-value" id="selectedUserName">Loading...</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Current Balance:</span>
+                        <span class="detail-value amount" id="selectedUserBalance">₦0.00</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">User Group:</span>
+                        <span class="detail-value" id="selectedUserGroup">Loading...</span>
                     </div>
                 </div>
-                
-                <!-- Adjustment History -->
-                <div class="utility-section">
-                    <h3><span class="menu-icon">📋</span> Your Adjustment History</h3>
-                    <div class="utility-card">
-                        <div class="adjustments-container">
-                            <div class="adjustments-header">
-                                <span>Total Adjustments Made: <span id="totalAdjustmentsCount">0</span></span>
-                                <button class="btn-small" onclick="app.exportAdminAdjustments()">
-                                    📥 Export All
-                                </button>
-                            </div>
-                            <div class="adjustments-list" id="adjustmentsList">
-                                <div class="loading-state">
-                                    <span class="spinner"></span>
-                                    <p>Loading adjustment history...</p>
-                                </div>
-                            </div>
-                            <div class="adjustments-footer">
-                                <button class="btn-secondary" onclick="app.refreshAdjustments()">
-                                    <span class="menu-icon">🔄</span> Refresh List
-                                </button>
-                                <button class="btn-small" onclick="app.printAllAdjustments()">
-                                    🖨️ Print Summary
-                                </button>
-                            </div>
+            </div>
+            
+            <!-- Wallet Adjustment Form -->
+            <div class="adjustment-form-section">
+                <h3><span class="menu-icon">⚙️</span> Wallet Adjustment</h3>
+                <form id="walletAdjustmentForm" class="content-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="walletAction">Action Type *</label>
+                            <select id="walletAction" name="walletAction" required>
+                                <option value="">Select Action</option>
+                                <option value="add">➕ Add Funds</option>
+                                <option value="deduct">➖ Deduct Funds</option>
+                                <option value="set">🔧 Set Balance</option>
+                                <option value="reset">🔄 Reset to Zero</option>
+                            </select>
                         </div>
+                        
+                        <div class="form-group">
+                            <label for="walletAmount">Amount (₦) *</label>
+                            <input type="number" 
+                                   id="walletAmount" 
+                                   name="walletAmount" 
+                                   min="0" 
+                                   step="0.01" 
+                                   placeholder="Enter amount"
+                                   disabled>
+                            <div class="form-hint">Required for Add, Deduct, and Set actions</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="walletReason">Reason for Adjustment *</label>
+                        <input type="text" 
+                               id="walletReason" 
+                               name="walletReason" 
+                               required
+                               placeholder="Enter reason for this adjustment">
+                        <div class="form-hint">e.g., "Salary payment", "Expense deduction", "Balance correction"</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="walletNotes">Additional Notes</label>
+                        <textarea id="walletNotes" 
+                                  name="walletNotes" 
+                                  rows="3"
+                                  placeholder="Any additional notes or details..."></textarea>
+                    </div>
+                    
+                    <div class="form-actions-content">
+                        <button type="button" 
+                                class="btn-primary" 
+                                id="executeWalletAction"
+                                onclick="app.executeWalletAction()"
+                                disabled>
+                            <span class="menu-icon">✅</span> Execute Action
+                        </button>
+                        <button type="button" 
+                                class="btn-secondary"
+                                onclick="app.clearWalletForm()">
+                            <span class="menu-icon">🗑️</span> Clear Form
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Action Status Display -->
+                <div id="walletActionStatus" style="display: none; margin-top: 20px;"></div>
+            </div>
+            
+            <!-- Recent Adjustments History -->
+            <div class="adjustments-history-section">
+                <h3><span class="menu-icon">📋</span> Recent Adjustments</h3>
+                <div id="adjustmentsList">
+                    <div class="loading-state">
+                        <span class="spinner"></span>
+                        <p>Loading adjustment history...</p>
                     </div>
                 </div>
             </div>
