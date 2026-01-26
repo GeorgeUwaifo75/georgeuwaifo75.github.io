@@ -260,76 +260,48 @@ async initializeData() {
     }
 
     // Get all data
-    /*
-    async getData() {
-        try {
-            const response = await fetch(`${this.baseURL}/${this.mainBinId}/latest`, {
-                headers: {
-                    'X-Master-Key': this.apiKey
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch data');
-            }
-
-            const data = await response.json();
-            return data.record;
-        } catch (error) {
-            console.error('Error fetching data:', error);
-            // Fallback to localStorage
-            return this.getLocalData();
-        }
-    }
-*/
-
+   
+// In api.js, update getData() method to be simpler:
 async getData() {
     try {
-        console.log('Fetching data from JSONBin...');
+        console.log('[API] getData: Fetching from JSONBin...');
         const response = await fetch(`${this.baseURL}/${this.mainBinId}/latest`, {
             headers: {
                 'X-Master-Key': this.apiKey
-            },
-            timeout: 10000
+            }
         });
 
         if (!response.ok) {
-            console.warn('JSONBin fetch failed, trying localStorage');
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
-        const record = data.record || {};
+        const jsonData = await response.json();
+        console.log('[API] getData: Raw JSON response received');
         
-        // Ensure users array exists
+        // JSONBin returns {record: {...}, metadata: {...}}
+        // The record contains our users array
+        const record = jsonData.record || {};
+        
+        // Make sure users array exists
         if (!record.users || !Array.isArray(record.users)) {
-            console.warn('Users array missing or invalid, initializing...');
+            console.warn('[API] getData: Users array missing, initializing...');
             record.users = [];
-            // Optionally initialize with demo user
-            if (record.users.length === 0) {
-                await this.initializeData();
-                // Fetch again after initialization
-                return await this.getData();
-            }
         }
         
-        console.log(`Data loaded: ${record.users.length} users found`);
+        console.log(`[API] getData: Returning ${record.users.length} users`);
         return record;
         
     } catch (error) {
-        console.error('Error fetching data from JSONBin:', error);
-        console.log('Falling back to localStorage...');
+        console.error('[API] getData error:', error);
         
         // Fallback to localStorage
+        console.log('[API] getData: Falling back to localStorage');
         const localData = this.getLocalData();
-        if (!localData.users || !Array.isArray(localData.users)) {
-            console.warn('Local storage users array invalid, reinitializing...');
-            return this.initializeLocalData();
-        }
-        
         return localData;
     }
 }
+
+
     // Update data
     async updateData(newData) {
         try {
@@ -724,6 +696,7 @@ async addPurchaseTransaction(userID, transactionData) {
 }
 
     // User methods
+   /* 
    async getUser(userID) {
     const data = await this.getData();
     const user = data.users.find(user => user.userID === userID);
@@ -746,6 +719,21 @@ async addPurchaseTransaction(userID, transactionData) {
     }
     
     return user;
+}*/
+
+async getUser(userID) {
+    try {
+        const users = await this.getUsersData();
+        return users.find(user => user.userID === userID) || null;
+    } catch (error) {
+        console.error('Error getting user:', error);
+        return null;
+    }
+}
+
+// Add a method to get all users for admin (without filtering):
+async getAllUsers() {
+    return await this.getUsersData();
 }
 
     // Check if user exists
@@ -1294,48 +1282,23 @@ async getAllUsers() {
 }
 
 // In JSONBinAPI class, update the searchUsers method:
-// In api.js, update the searchUsers method:
+// In api.js, replace the searchUsers() method with this working version:
 async searchUsers(searchTerm = '') {
     try {
-        const data = await this.getData();
+        const users = await this.getUsersData();
         
-        // DEBUG: Log the structure of data
-        console.log('Data structure from getData():', {
-            hasUsers: !!data.users,
-            usersType: typeof data.users,
-            usersLength: data.users ? data.users.length : 0,
-            dataKeys: Object.keys(data)
-        });
-        
-        // Ensure users array exists - FIXED: Use data.record if needed
-        let users = [];
-        if (data.users && Array.isArray(data.users)) {
-            users = data.users;
-        } else if (data.record && data.record.users) {
-            users = data.record.users;
-        } else {
-            users = [];
-        }
-        
-        console.log(`Found ${users.length} users in database`);
-        
-        // If no search term, return all valid users
         if (!searchTerm || searchTerm.trim() === '') {
-            return users.filter(user =>
-                user &&
-                user.userID &&
-                typeof user.userID === 'string'
-            );
+            return users; // Return all users for empty search
         }
         
-        // Search logic for non-empty search term
         const searchLower = searchTerm.toLowerCase().trim();
         
         return users.filter(user => {
             if (!user || !user.userID) return false;
             
+            // Check all searchable fields
             return (
-                (user.userID && user.userID.toLowerCase().includes(searchLower)) ||
+                user.userID.toLowerCase().includes(searchLower) ||
                 (user.fullName && user.fullName.toLowerCase().includes(searchLower)) ||
                 (user.email && user.email.toLowerCase().includes(searchLower)) ||
                 (user.businessName && user.businessName.toLowerCase().includes(searchLower))
@@ -1344,11 +1307,10 @@ async searchUsers(searchTerm = '') {
         
     } catch (error) {
         console.error('Error in searchUsers:', error);
-        // Return empty array to prevent UI errors
         return [];
     }
 }
- 
+
  
  async adjustUserWallet(userID, adjustmentData) {
     try {
@@ -2293,19 +2255,7 @@ async exportAdminAdjustments() {
     }
 }
 
-// Initialize wallet admin when page loads
-/*
- initWalletAdmin() {
-    // Load users list
-    await this.searchUsers();
-    
-    // Load adjustments list
-    await this.loadAdjustmentsList();
-    
-    // Set up form validation
-    this.setupWalletFormValidation();
-}
-*/
+
 
 async initWalletAdmin() {
     try {
@@ -2384,16 +2334,6 @@ setupWalletFormValidation() {
     }
 }
 
-/*
-getUserGroupLabel(userGroup) {
-    switch(parseInt(userGroup)) {
-        case 0: return 'Basic';
-        case 1: return 'Standard';
-        case 2: return 'Manager';
-        case 3: return 'Admin';
-        default: return 'Unknown';
-    }
-}  */
 
 getUserGroupLabel(userGroup) {
     const group = parseInt(userGroup) || 0;
@@ -2405,7 +2345,29 @@ getUserGroupLabel(userGroup) {
         default: return `Group ${group}`;
     }
 }
-  
+
+
+async getUsersData() {
+    try {
+        const data = await this.getData();
+        
+        // Handle different possible data structures
+        if (Array.isArray(data.users)) {
+            return data.users;
+        } else if (data.record && Array.isArray(data.record.users)) {
+            return data.record.users;
+        } else if (Array.isArray(data)) {
+            return data; // Data is users array
+        } else {
+            // Fallback to localStorage
+            const localData = this.getLocalData();
+            return localData.users || [];
+        }
+    } catch (error) {
+        console.error('Error getting users data:', error);
+        return [];
+    }
+}  
    
 }
 
