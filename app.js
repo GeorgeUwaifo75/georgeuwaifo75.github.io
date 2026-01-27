@@ -4557,43 +4557,114 @@ printPurchaseReport() {
 
 // Update getInventoryReport() for pagination
 async getInventoryReport() {
-	try {
-    	const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
-    	if (!currentUser) {
-        	return '<div class="error-message">Please login to view inventory report</div>';
-    	}
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('webstarng_user'));
+        if (!currentUser) return '<div class="error-message">Please login to view report</div>';
 
-    	// Get inventory data
-    	const inventoryData = await api.getUserInventory(currentUser.userID);
-    	const products = inventoryData.products || [];
-   	 
-    	// Create pagination instance for inventory
-    	this.inventoryReportPagination = new ReportPagination(products, 10);
-   	 
-    	// Store for rendering
-    	this.currentInventoryData = {
-        	products,
-        	inventoryData,
-        	currentUser,
-        	totalProducts: products.length
-    	};
-   	 
-    	return this.renderInventoryReport();
-   	 
-	} catch (error) {
-    	console.error('Error generating inventory report:', error);
-    	return `
-        	<div class="content-page">
-            	<div class="error-message">
-                	<h3>Error Loading Inventory Report</h3>
-                	<p>Unable to load inventory data. Please try again.</p>
-                	<button class="btn-primary" onclick="app.handleMenuAction('inventory-report')">
-                    	🔄 Retry
-                	</button>
-            	</div>
-        	</div>
-    	`;
-	}
+        // Fetch latest inventory data
+        const inventoryData = await api.getUserInventory(currentUser.userID);
+        const products = inventoryData.products || [];
+
+        if (products.length === 0) {
+            return `
+                <div class="content-page report-container">
+                    <div class="no-data-state">
+                        <span class="icon">📦</span>
+                        <h3>No Inventory Data</h3>
+                        <p>You haven't added any products to your inventory yet.</p>
+                        <button class="btn-primary" onclick="app.handleMenuAction('new-product')">Add First Product</button>
+                    </div>
+                </div>`;
+        }
+
+        // Calculate Summary Stats
+        const totalItems = products.reduce((sum, p) => sum + (parseInt(p.quantity) || 0), 0);
+        const totalValue = products.reduce((sum, p) => sum + ((parseInt(p.quantity) || 0) * (parseFloat(p.sellingPrice) || 0)), 0);
+        const lowStockItems = products.filter(p => (parseInt(p.quantity) || 0) <= 5 && (parseInt(p.quantity) || 0) > 0).length;
+        const outOfStockItems = products.filter(p => (parseInt(p.quantity) || 0) <= 0).length;
+
+        return `
+            <div class="content-page report-container">
+                <div class="report-header">
+                    <div>
+                        <h2>Inventory Status Report</h2>
+                        <p class="report-date">Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
+                    </div>
+                    <div class="export-actions">
+                        <button class="export-btn excel-btn" onclick="app.exportInventoryToExcel()">📊 Export Excel</button>
+                    </div>
+                </div>
+
+                <div class="inventory-summary-grid">
+                    <div class="summary-card">
+                        <span class="label">Total Products</span>
+                        <span class="value">${products.length}</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="label">Items in Stock</span>
+                        <span class="value">${totalItems}</span>
+                    </div>
+                    <div class="summary-card warning">
+                        <span class="label">Low Stock</span>
+                        <span class="value">${lowStockItems}</span>
+                    </div>
+                    <div class="summary-card danger">
+                        <span class="label">Out of Stock</span>
+                        <span class="value">${outOfStockItems}</span>
+                    </div>
+                    <div class="summary-card highlight">
+                        <span class="label">Total Stock Value</span>
+                        <span class="value">₦${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Product Name</th>
+                                <th>Barcode</th>
+                                <th>Category</th>
+                                <th>Quantity</th>
+                                <th>Selling Price</th>
+                                <th>Stock Value</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${products.map(p => {
+                                const qty = parseInt(p.quantity) || 0;
+                                let statusClass = 'status-in-stock';
+                                let statusText = 'In Stock';
+                                
+                                if (qty <= 0) {
+                                    statusClass = 'status-out-of-stock';
+                                    statusText = 'Out of Stock';
+                                } else if (qty <= 5) {
+                                    statusClass = 'status-low-stock';
+                                    statusText = 'Low Stock';
+                                }
+
+                                return `
+                                    <tr>
+                                        <td><strong>${p.name}</strong></td>
+                                        <td><code>${p.barcode}</code></td>
+                                        <td>${p.category || 'General'}</td>
+                                        <td class="text-center">${qty}</td>
+                                        <td class="text-right">₦${parseFloat(p.sellingPrice || 0).toFixed(2)}</td>
+                                        <td class="text-right">₦${(qty * parseFloat(p.sellingPrice || 0)).toFixed(2)}</td>
+                                        <td><span class="stock-badge ${statusClass}">${statusText}</span></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+    } catch (error) {
+        console.error('Inventory Report Error:', error);
+        return '<div class="error-message">Failed to load inventory report.</div>';
+    }
 }
 
 // Add renderInventoryReport() method
