@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Sketches</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <style>
+    body { font-family: system-ui; background: var(--tg-theme-bg-color); color: var(--tg-theme-text-color); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; padding: 16px; }
+    .sketch { position: relative; cursor: pointer; }
+    .thumb { width: 100%; border-radius: 12px; filter: blur(8px); transition: filter 0.3s; }
+    .unlocked .thumb { filter: none; }
+    .price { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; padding: 4px 10px; border-radius: 999px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="ton-connect"></div>
+  <button id="connect-btn" style="display:none;">Connect Wallet</button>
+
+  <div class="grid" id="gallery"></div>
+
+  <script>
+    // === CONFIG ===
+    const YOUR_WALLET = "EQ...your_address_here...";   // ← CHANGE THIS
+    const sketches = [
+      { id: 1, title: "Sketch #1", thumb: "thumbs/1.jpg", full: "full/1.jpg", price: "50000000" }, // 0.05 TON in nanotons
+      // add the rest of your sketches here
+    ];
+
+    // === TELEGRAM INIT ===
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // === TON CONNECT ===
+    let tonConnectUI;
+    const unlocked = JSON.parse(localStorage.getItem('unlocked') || '[]');
+
+    async function initTON() {
+      tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://your-app.com/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect'
+      });
+
+      tonConnectUI.onStatusChange(wallet => {
+        document.getElementById('connect-btn').style.display = wallet ? 'none' : 'block';
+        renderGallery();
+      });
+
+      // manual connect button (optional)
+      document.getElementById('connect-btn').onclick = () => tonConnectUI.connectWallet();
+    }
+
+    // === GALLERY ===
+    function renderGallery() {
+      const container = document.getElementById('gallery');
+      container.innerHTML = '';
+
+      sketches.forEach(sketch => {
+        const isUnlocked = unlocked.includes(sketch.id);
+        const div = document.createElement('div');
+        div.className = `sketch ${isUnlocked ? 'unlocked' : ''}`;
+        div.innerHTML = `
+          <img class="thumb" src="${sketch.thumb}" alt="${sketch.title}">
+          <div class="price">${(parseInt(sketch.price) / 1e9).toFixed(4)} TON</div>
+        `;
+
+        div.onclick = () => openSketch(sketch, isUnlocked);
+        container.appendChild(div);
+      });
+    }
+
+    async function openSketch(sketch, isUnlocked) {
+      if (isUnlocked) {
+        showFull(sketch);
+        return;
+      }
+
+      if (!tonConnectUI.account) {
+        alert("Connect wallet first");
+        return;
+      }
+
+      try {
+        await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 300,
+          messages: [{
+            address: YOUR_WALLET,
+            amount: sketch.price
+          }]
+        });
+
+        // success → unlock
+        unlocked.push(sketch.id);
+        localStorage.setItem('unlocked', JSON.stringify(unlocked));
+        renderGallery();
+        showFull(sketch);
+      } catch (e) {
+        console.error(e);
+        // user cancelled or error
+      }
+    }
+
+    function showFull(sketch) {
+      // open in new tab or modal
+      window.open(sketch.full, '_blank');
+      // or create a nice modal with the full image
+    }
+
+    // === START ===
+    initTON();
+    renderGallery();
+  </script>
+</body>
+</html>
