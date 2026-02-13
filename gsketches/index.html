@@ -288,47 +288,41 @@
       { id: 10, title: "Miriam Makeba", thumb: "thumbs/10.jpg", full: "full/10.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 11, title: "Peter Obi", thumb: "thumbs/11.jpg", full: "full/11.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 19, title: "Fela Anikulapo Kuti", thumb: "thumbs/19.jpg", full: "full/19.jpg", price: "50000000", category: "nigerians-africans" },
+      { id: 28, title: "Olusegun Obasanjo", thumb: "thumbs/28.jpg", full: "full/28.jpg", price: "50000000", category: "nigerians-africans" },
       
       // Scientists
       { id: 15, title: "Neil DeGrasse Tyson", thumb: "thumbs/15.jpg", full: "full/15.jpg", price: "50000000", category: "scientists" },
+      { id: 26, title: "Bill Gates", thumb: "thumbs/26.jpg", full: "full/26.jpg", price: "50000000", category: "scientists" },
+      { id: 29, title: "Isaac Asimov", thumb: "thumbs/29.jpg", full: "full/29.jpg", price: "50000000", category: "scientists" },
+      { id: 30, title: "Albert Einstein", thumb: "thumbs/30.jpg", full: "full/30.jpg", price: "50000000", category: "scientists" },
       
       // Artists & Entertainers
       { id: 1, title: "Ray Charles", thumb: "thumbs/1.jpg", full: "full/1.jpg", price: "50000000", category: "artists-entertainers" },
       { id: 6, title: "Fred Sanford", thumb: "thumbs/6.jpg", full: "full/6.jpg", price: "50000000", category: "artists-entertainers" },
       { id: 12, title: "Bill Cosby", thumb: "thumbs/12.jpg", full: "full/12.jpg", price: "50000000", category: "artists-entertainers" },
       { id: 17, title: "Snoop Dogg", thumb: "thumbs/17.jpg", full: "full/17.jpg", price: "50000000", category: "artists-entertainers" },
+      { id: 21, title: "Bob Marley", thumb: "thumbs/21.jpg", full: "full/21.jpg", price: "50000000", category: "artists-entertainers" },
+      { id: 23, title: "Morgan Freeman", thumb: "thumbs/23.jpg", full: "full/23.jpg", price: "50000000", category: "artists-entertainers" },
       
       // Freedom Fighters
       { id: 18, title: "Nelson Mandela", thumb: "thumbs/18.jpg", full: "full/18.jpg", price: "50000000", category: "freedom-fighters" },
+      { id: 24, title: "Mahatma Gandhi", thumb: "thumbs/24.jpg", full: "full/24.jpg", price: "50000000", category: "freedom-fighters" },
       
       // Sports Greats
       { id: 7, title: "Hulk Hogan", thumb: "thumbs/7.jpg", full: "full/7.jpg", price: "50000000", category: "sports-greats" },
       { id: 13, title: "Dwayne Johnson", thumb: "thumbs/13.jpg", full: "full/13.jpg", price: "50000000", category: "sports-greats" },
       { id: 16, title: "Diego Maradona", thumb: "thumbs/16.jpg", full: "full/16.jpg", price: "50000000", category: "sports-greats" },
+      { id: 22, title: "Muhammad Ali", thumb: "thumbs/22.jpg", full: "full/22.jpg", price: "50000000", category: "sports-greats" },
       
       // World Leaders
       { id: 20, title: "Dalai Lama", thumb: "thumbs/20.jpg", full: "full/20.jpg", price: "50000000", category: "world-leaders" },
+      { id: 25, title: "Donald Trump", thumb: "thumbs/25.jpg", full: "full/25.jpg", price: "50000000", category: "world-leaders" },
       
       // Legends
       { id: 3, title: "E.T.", thumb: "thumbs/3.jpg", full: "full/3.jpg", price: "50000000", category: "legends" },
       { id: 8, title: "Danny DeVito", thumb: "thumbs/8.jpg", full: "full/8.jpg", price: "50000000", category: "legends" },
       { id: 14, title: "Jackie Chan", thumb: "thumbs/14.jpg", full: "full/14.jpg", price: "50000000", category: "legends" },
-
-      //New pix
-
-      { id: 21, title: "Bob Marley", thumb: "thumbs/21.jpg", full: "full/21.jpg", price: "50000000", category: "legends" },
-      { id: 22, title: "Muhammed Ali", thumb: "thumbs/22.jpg", full: "full/22.jpg", price: "50000000", category: "legends" },
-      { id: 23, title: "Morgan Freeman", thumb: "thumbs/23.jpg", full: "full/23.jpg", price: "50000000", category: "legends" },
-      { id: 24, title: "Mahatma Ghandi", thumb: "thumbs/24.jpg", full: "full/24.jpg", price: "50000000", category: "legends" },
-      { id: 25, title: "Donald Trump", thumb: "thumbs/25.jpg", full: "full/25.jpg", price: "50000000", category: "legends" },
-      { id: 26, title: "Bill Gates", thumb: "thumbs/26.jpg", full: "full/26.jpg", price: "50000000", category: "legends" },
-      { id: 27, title: "Bernie Marc", thumb: "thumbs/27.jpg", full: "full/27.jpg", price: "50000000", category: "legends" },
-      { id: 28, title: "Olusegun Obasanjo", thumb: "thumbs/28.jpg", full: "full/28.jpg", price: "50000000", category: "legends" },
-      { id: 29, title: "Isaac Asimov", thumb: "thumbs/29.jpg", full: "full/29.jpg", price: "50000000", category: "legends" },
-      { id: 30, title: "Albert Einstein", thumb: "thumbs/30.jpg", full: "full/30.jpg", price: "50000000", category: "legends" },
-
-
-      
+      { id: 27, title: "Bernie Mac", thumb: "thumbs/27.jpg", full: "full/27.jpg", price: "50000000", category: "legends" }
     ];
 
     // === TELEGRAM INIT ===
@@ -426,6 +420,9 @@
         // Create grid for this category
         const grid = document.createElement('div');
         grid.className = 'grid';
+        
+        // Sort sketches by ID for consistent ordering
+        categorySketches.sort((a, b) => a.id - b.id);
         
         // Add sketches to grid
         categorySketches.forEach(sketch => {
