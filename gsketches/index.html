@@ -3,20 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Sketches</title>
+  <title>My Sketches - Categorized Gallery</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
   <style>
     body { 
-      font-family: system-ui; 
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
       background: var(--tg-theme-bg-color); 
       color: var(--tg-theme-text-color); 
       margin: 0;
       padding: 0;
     }
     
+    /* Category Navigation */
+    .category-nav {
+      display: flex;
+      overflow-x: auto;
+      padding: 12px 16px;
+      gap: 8px;
+      background: var(--tg-theme-secondary-bg-color);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      border-bottom: 1px solid var(--tg-theme-hint-color);
+    }
+    
+    .category-nav::-webkit-scrollbar {
+      display: none;
+    }
+    
+    .category-chip {
+      padding: 8px 16px;
+      background: var(--tg-theme-bg-color);
+      border: 1px solid var(--tg-theme-hint-color);
+      border-radius: 20px;
+      font-size: 14px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--tg-theme-text-color);
+      opacity: 0.8;
+    }
+    
+    .category-chip.active {
+      background: var(--tg-theme-button-color);
+      color: var(--tg-theme-button-text-color);
+      border-color: var(--tg-theme-button-color);
+      opacity: 1;
+    }
+    
     .category-section {
       margin-bottom: 24px;
+      scroll-margin-top: 70px;
     }
     
     .category-title {
@@ -25,13 +65,25 @@
       padding: 16px 16px 8px 16px;
       margin: 0;
       color: var(--tg-theme-text-color);
-      border-bottom: 2px solid var(--tg-theme-hint-color);
+      border-bottom: 2px solid var(--tg-theme-button-color);
       opacity: 0.9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .category-count {
+      background: var(--tg-theme-button-color);
+      color: var(--tg-theme-button-text-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-left: 8px;
     }
     
     .grid { 
       display: grid; 
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
       gap: 12px; 
       padding: 16px; 
     }
@@ -39,11 +91,24 @@
     .sketch { 
       position: relative; 
       cursor: pointer; 
+      transition: transform 0.2s;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--tg-theme-secondary-bg-color);
+    }
+    
+    .sketch:hover {
+      transform: scale(1.02);
+    }
+    
+    .sketch img { 
+      width: 100%; 
+      aspect-ratio: 1/1;
+      object-fit: cover;
+      display: block;
     }
     
     .thumb { 
-      width: 100%; 
-      border-radius: 12px; 
       filter: blur(8px); 
       transition: filter 0.3s; 
     }
@@ -52,22 +117,134 @@
       filter: none; 
     }
     
+    .sketch-info {
+      padding: 8px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      transform: translateY(100%);
+      transition: transform 0.2s;
+    }
+    
+    .sketch:hover .sketch-info {
+      transform: translateY(0);
+    }
+    
+    .sketch-title {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
     .price { 
       position: absolute; 
-      bottom: 8px; 
+      top: 8px; 
       right: 8px; 
-      background: rgba(0,0,0,0.7); 
+      background: rgba(0,0,0,0.8); 
       color: white; 
       padding: 4px 10px; 
       border-radius: 999px; 
       font-size: 12px; 
+      font-weight: bold;
+      z-index: 2;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .unlocked .price {
+      background: rgba(76, 175, 80, 0.9);
+    }
+    
+    .lock-icon {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      z-index: 2;
+      backdrop-filter: blur(4px);
     }
     
     .no-items {
-      padding: 20px;
+      padding: 40px 20px;
       text-align: center;
       color: var(--tg-theme-hint-color);
       font-style: italic;
+      grid-column: 1 / -1;
+    }
+    
+    /* Modal for full image */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    
+    .modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      font-size: 30px;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.5);
+      border-radius: 50%;
+    }
+    
+    /* Loading state */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--tg-theme-hint-color);
+    }
+    
+    #connect-btn {
+      margin: 16px;
+      padding: 12px 24px;
+      background: var(--tg-theme-button-color);
+      color: var(--tg-theme-button-text-color);
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      width: calc(100% - 32px);
+    }
+    
+    #ton-connect {
+      margin: 16px;
     }
   </style>
 </head>
@@ -75,28 +252,38 @@
   <div id="ton-connect"></div>
   <button id="connect-btn" style="display:none;">Connect Wallet</button>
 
+  <!-- Category Navigation -->
+  <div class="category-nav" id="categoryNav"></div>
+
+  <!-- Gallery Container -->
   <div id="gallery"></div>
+
+  <!-- Full Image Modal -->
+  <div class="modal" id="imageModal" onclick="event.target === this && closeModal()">
+    <span class="modal-close" onclick="closeModal()">&times;</span>
+    <img id="modalImage" src="" alt="Full size sketch">
+  </div>
 
   <script>
     // === CONFIG ===
     const YOUR_WALLET = "UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX";   // ← CHANGE THIS
     
-    // Categories definition with display order
+    // Categories definition with display order and emojis
     const CATEGORIES = [
-      { id: "nigerians-africans", name: "🇳🇬 Nigerians & Africans" },
-      { id: "scientists", name: "🔬 Scientists" },
-      { id: "artists-entertainers", name: "🎭 Artists & Entertainers" },
-      { id: "freedom-fighters", name: "✊ Freedom Fighters" },
-      { id: "sports-greats", name: "🏆 Sports Greats" },
-      { id: "world-leaders", name: "🌍 World Leaders" },
-      { id: "legends", name: "⭐ Legends" }
+      { id: "nigerians-africans", name: "Nigerians & Africans", emoji: "🇳🇬", count: 0 },
+      { id: "scientists", name: "Scientists", emoji: "🔬", count: 0 },
+      { id: "artists-entertainers", name: "Artists & Entertainers", emoji: "🎭", count: 0 },
+      { id: "freedom-fighters", name: "Freedom Fighters", emoji: "✊", count: 0 },
+      { id: "sports-greats", name: "Sports Greats", emoji: "🏆", count: 0 },
+      { id: "world-leaders", name: "World Leaders", emoji: "🌍", count: 0 },
+      { id: "legends", name: "Legends", emoji: "⭐", count: 0 }
     ];
 
     const sketches = [
       // Nigerians & Africans
       { id: 2, title: "Ngozi Okonjo Iweala", thumb: "thumbs/2.jpg", full: "full/2.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 4, title: "Chief Obafemi Awolowo", thumb: "thumbs/4.jpg", full: "full/4.jpg", price: "50000000", category: "nigerians-africans" },
-      { id: 5, title: "Robert Mugabe #1", thumb: "thumbs/5.jpg", full: "full/5.jpg", price: "50000000", category: "nigerians-africans" },
+      { id: 5, title: "Robert Mugabe", thumb: "thumbs/5.jpg", full: "full/5.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 9, title: "Kofi Annan", thumb: "thumbs/9.jpg", full: "full/9.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 10, title: "Miriam Makeba", thumb: "thumbs/10.jpg", full: "full/10.jpg", price: "50000000", category: "nigerians-africans" },
       { id: 11, title: "Peter Obi", thumb: "thumbs/11.jpg", full: "full/11.jpg", price: "50000000", category: "nigerians-africans" },
@@ -107,7 +294,7 @@
       
       // Artists & Entertainers
       { id: 1, title: "Ray Charles", thumb: "thumbs/1.jpg", full: "full/1.jpg", price: "50000000", category: "artists-entertainers" },
-      { id: 6, title: "Fred Sanford (Redd Foxx)", thumb: "thumbs/6.jpg", full: "full/6.jpg", price: "50000000", category: "artists-entertainers" },
+      { id: 6, title: "Fred Sanford", thumb: "thumbs/6.jpg", full: "full/6.jpg", price: "50000000", category: "artists-entertainers" },
       { id: 12, title: "Bill Cosby", thumb: "thumbs/12.jpg", full: "full/12.jpg", price: "50000000", category: "artists-entertainers" },
       { id: 17, title: "Snoop Dogg", thumb: "thumbs/17.jpg", full: "full/17.jpg", price: "50000000", category: "artists-entertainers" },
       
@@ -116,11 +303,11 @@
       
       // Sports Greats
       { id: 7, title: "Hulk Hogan", thumb: "thumbs/7.jpg", full: "full/7.jpg", price: "50000000", category: "sports-greats" },
-      { id: 13, title: "Dwayne 'The Rock' Johnson", thumb: "thumbs/13.jpg", full: "full/13.jpg", price: "50000000", category: "sports-greats" },
+      { id: 13, title: "Dwayne Johnson", thumb: "thumbs/13.jpg", full: "full/13.jpg", price: "50000000", category: "sports-greats" },
       { id: 16, title: "Diego Maradona", thumb: "thumbs/16.jpg", full: "full/16.jpg", price: "50000000", category: "sports-greats" },
       
       // World Leaders
-      { id: 20, title: "Dilalama", thumb: "thumbs/20.jpg", full: "full/20.jpg", price: "50000000", category: "world-leaders" },
+      { id: 20, title: "Dalai Lama", thumb: "thumbs/20.jpg", full: "full/20.jpg", price: "50000000", category: "world-leaders" },
       
       // Legends
       { id: 3, title: "E.T.", thumb: "thumbs/3.jpg", full: "full/3.jpg", price: "50000000", category: "legends" },
@@ -137,6 +324,26 @@
     let tonConnectUI;
     const unlocked = JSON.parse(localStorage.getItem('unlocked') || '[]');
 
+    // Modal functions
+    function showFull(sketch) {
+      const modal = document.getElementById('imageModal');
+      const modalImg = document.getElementById('modalImage');
+      modalImg.src = sketch.full;
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('imageModal').classList.remove('active');
+    }
+
+    // Category navigation scroll
+    function scrollToCategory(categoryId) {
+      const element = document.getElementById(`category-${categoryId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
     async function initTON() {
       tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
         manifestUrl: 'https://georgeuwaifo75.github.io/gsketches/tonconnect-manifest.json',
@@ -148,36 +355,56 @@
         renderGallery();
       });
 
-      // manual connect button (optional)
       document.getElementById('connect-btn').onclick = () => tonConnectUI.connectWallet();
     }
 
     // === GALLERY ===
     function renderGallery() {
       const container = document.getElementById('gallery');
+      const navContainer = document.getElementById('categoryNav');
       container.innerHTML = '';
+
+      // Calculate category counts
+      CATEGORIES.forEach(cat => {
+        cat.count = sketches.filter(s => s.category === cat.id).length;
+      });
+
+      // Render category navigation
+      navContainer.innerHTML = '';
+      CATEGORIES.forEach(category => {
+        if (category.count > 0) {
+          const chip = document.createElement('span');
+          chip.className = 'category-chip';
+          chip.innerHTML = `${category.emoji} ${category.name} (${category.count})`;
+          chip.onclick = () => scrollToCategory(category.id);
+          navContainer.appendChild(chip);
+        }
+      });
 
       // Group sketches by category
       const sketchesByCategory = {};
-      CATEGORIES.forEach(cat => {
-        sketchesByCategory[cat.id] = sketches.filter(sketch => sketch.category === cat.id);
+      sketches.forEach(sketch => {
+        if (!sketchesByCategory[sketch.category]) {
+          sketchesByCategory[sketch.category] = [];
+        }
+        sketchesByCategory[sketch.category].push(sketch);
       });
 
       // Render each category section
       CATEGORIES.forEach(category => {
-        const categorySketches = sketchesByCategory[category.id];
+        const categorySketches = sketchesByCategory[category.id] || [];
         
-        // Skip empty categories if you want, or show them with a message
         if (categorySketches.length === 0) return;
 
         // Create category section
         const section = document.createElement('div');
         section.className = 'category-section';
+        section.id = `category-${category.id}`;
         
-        // Add category title
+        // Add category title with count
         const title = document.createElement('h2');
         title.className = 'category-title';
-        title.textContent = category.name;
+        title.innerHTML = `${category.emoji} ${category.name} <span class="category-count">${categorySketches.length}</span>`;
         section.appendChild(title);
         
         // Create grid for this category
@@ -189,9 +416,17 @@
           const isUnlocked = unlocked.includes(sketch.id);
           const div = document.createElement('div');
           div.className = `sketch ${isUnlocked ? 'unlocked' : ''}`;
+          
+          // Format price from nanotons to TON
+          const priceInTON = (parseInt(sketch.price) / 1e9).toFixed(2);
+          
           div.innerHTML = `
             <img class="thumb" src="${sketch.thumb}" alt="${sketch.title}" loading="lazy">
-            <div class="price">${(parseInt(sketch.price) / 1e9).toFixed(4)} TON</div>
+            <div class="price">${priceInTON} TON</div>
+            ${!isUnlocked ? '<div class="lock-icon">🔒</div>' : ''}
+            <div class="sketch-info">
+              <div class="sketch-title">${sketch.title}</div>
+            </div>
           `;
 
           div.onclick = () => openSketch(sketch, isUnlocked);
@@ -210,7 +445,7 @@
       }
 
       if (!tonConnectUI.account) {
-        alert("Connect wallet first");
+        tg.showAlert("Please connect your wallet first");
         return;
       }
 
@@ -230,15 +465,16 @@
         showFull(sketch);
       } catch (e) {
         console.error(e);
-        // user cancelled or error
+        tg.showAlert("Transaction failed or was cancelled");
       }
     }
 
-    function showFull(sketch) {
-      // open in new tab or modal
-      window.open(sketch.full, '_blank');
-      // or create a nice modal with the full image
-    }
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
 
     // === START ===
     initTON();
