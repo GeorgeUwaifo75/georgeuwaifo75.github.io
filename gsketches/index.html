@@ -70,6 +70,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
     }
     
     .category-count {
@@ -87,7 +88,6 @@
       padding: 4px 8px;
       border-radius: 12px;
       font-size: 12px;
-      margin-left: 12px;
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -112,10 +112,15 @@
       border-radius: 12px;
       overflow: hidden;
       background: var(--tg-theme-secondary-bg-color);
+      border: 2px solid transparent;
     }
     
     .sketch:hover {
       transform: scale(1.02);
+    }
+    
+    .sketch:active {
+      transform: scale(0.98);
     }
     
     .sketch img { 
@@ -123,6 +128,7 @@
       aspect-ratio: 1/1;
       object-fit: cover;
       display: block;
+      pointer-events: none; /* Prevents image from capturing click events */
     }
     
     .thumb { 
@@ -136,7 +142,7 @@
     
     .sketch-info {
       padding: 8px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       color: white;
       position: absolute;
       bottom: 0;
@@ -144,6 +150,7 @@
       right: 0;
       transform: translateY(100%);
       transition: transform 0.2s;
+      backdrop-filter: blur(4px);
     }
     
     .sketch:hover .sketch-info {
@@ -223,7 +230,7 @@
       grid-column: 1 / -1;
     }
     
-    /* Modal for full image */
+    /* Modal for full image - FIXED */
     .modal {
       display: none;
       position: fixed;
@@ -231,38 +238,75 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.95);
-      z-index: 1000;
+      background: rgba(0,0,0,0.98);
+      z-index: 10000;
       justify-content: center;
       align-items: center;
       padding: 20px;
+      backdrop-filter: blur(10px);
     }
     
     .modal.active {
       display: flex;
     }
     
+    .modal-content {
+      position: relative;
+      max-width: 100%;
+      max-height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
     .modal img {
       max-width: 100%;
       max-height: 90vh;
+      width: auto;
+      height: auto;
       object-fit: contain;
       border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
     }
     
     .modal-close {
       position: absolute;
-      top: 20px;
-      right: 20px;
+      top: -40px;
+      right: 0;
       color: white;
-      font-size: 30px;
+      font-size: 40px;
       cursor: pointer;
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(0,0,0,0.5);
+      background: rgba(255,255,255,0.2);
       border-radius: 50%;
+      transition: background 0.2s;
+      z-index: 10001;
+    }
+    
+    .modal-close:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    
+    .modal-close:active {
+      transform: scale(0.95);
+    }
+    
+    /* Modal title */
+    .modal-title {
+      position: absolute;
+      bottom: -40px;
+      left: 0;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 16px;
+      border-radius: 20px;
+      backdrop-filter: blur(4px);
     }
     
     /* Loading state */
@@ -288,6 +332,13 @@
     #ton-connect {
       margin: 16px;
     }
+    
+    /* Error message for images */
+    .error-message {
+      text-align: center;
+      padding: 40px;
+      color: #ff6b6b;
+    }
   </style>
 </head>
 <body>
@@ -300,15 +351,21 @@
   <!-- Gallery Container -->
   <div id="gallery"></div>
 
-  <!-- Full Image Modal -->
-  <div class="modal" id="imageModal" onclick="event.target === this && closeModal()">
-    <span class="modal-close" onclick="closeModal()">&times;</span>
-    <img id="modalImage" src="" alt="Full size sketch">
+  <!-- Full Image Modal - FIXED -->
+  <div class="modal" id="imageModal" onclick="if(event.target === this) closeModal()">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal()">&times;</span>
+      <img id="modalImage" src="" alt="Full size sketch" onerror="this.src='https://via.placeholder.com/400?text=Image+Not+Found'">
+      <div class="modal-title" id="modalTitle"></div>
+    </div>
   </div>
 
   <script>
     // === CONFIG ===
     const YOUR_WALLET = "UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX";   // ← CHANGE THIS
+    
+    // Base URL for images - UPDATE THIS TO YOUR ACTUAL BASE URL
+    const BASE_URL = ''; // Leave empty if using relative paths
     
     // Categories definition with display order and emojis
     const CATEGORIES = [
@@ -399,38 +456,64 @@
     // Track free views used (store in localStorage)
     const freeViewsUsed = JSON.parse(localStorage.getItem('freeViewsUsed') || '{}');
 
-    // Modal functions
+    // Modal functions - FIXED
     function showFull(sketch) {
       const modal = document.getElementById('imageModal');
       const modalImg = document.getElementById('modalImage');
-      modalImg.src = sketch.full;
+      const modalTitle = document.getElementById('modalTitle');
+      
+      // Construct full image URL with base path
+      const fullImageUrl = BASE_URL + sketch.full;
+      
+      // Set image source and title
+      modalImg.src = fullImageUrl;
+      modalTitle.textContent = sketch.title;
+      
+      // Add error handling
+      modalImg.onerror = function() {
+        console.error('Failed to load image:', fullImageUrl);
+        this.src = 'https://via.placeholder.com/400?text=Image+Not+Found';
+      };
+      
+      // Show modal
       modal.classList.add('active');
+      
+      // Prevent body scrolling when modal is open
+      document.body.style.overflow = 'hidden';
     }
 
     function closeModal() {
-      document.getElementById('imageModal').classList.remove('active');
+      const modal = document.getElementById('imageModal');
+      modal.classList.remove('active');
+      
+      // Re-enable body scrolling
+      document.body.style.overflow = '';
     }
 
     // Category navigation scroll
     function scrollToCategory(categoryId) {
       const element = document.getElementById(`category-${categoryId}`);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
 
     async function initTON() {
-      tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-        manifestUrl: 'https://georgeuwaifo75.github.io/gsketches/tonconnect-manifest.json',
-        buttonRootId: 'ton-connect'
-      });
+      try {
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+          manifestUrl: 'https://georgeuwaifo75.github.io/gsketches/tonconnect-manifest.json',
+          buttonRootId: 'ton-connect'
+        });
 
-      tonConnectUI.onStatusChange(wallet => {
-        document.getElementById('connect-btn').style.display = wallet ? 'none' : 'block';
-        renderGallery();
-      });
+        tonConnectUI.onStatusChange(wallet => {
+          document.getElementById('connect-btn').style.display = wallet ? 'none' : 'block';
+          renderGallery();
+        });
 
-      document.getElementById('connect-btn').onclick = () => tonConnectUI.connectWallet();
+        document.getElementById('connect-btn').onclick = () => tonConnectUI.connectWallet();
+      } catch (error) {
+        console.error('Failed to initialize TON Connect:', error);
+      }
     }
 
     // Function to select random free art for each category
@@ -469,6 +552,9 @@
     function renderGallery() {
       const container = document.getElementById('gallery');
       const navContainer = document.getElementById('categoryNav');
+      
+      if (!container || !navContainer) return;
+      
       container.innerHTML = '';
 
       // Calculate category counts
@@ -511,7 +597,15 @@
         // Add category title with count and free badge
         const title = document.createElement('h2');
         title.className = 'category-title';
-        title.innerHTML = `${category.emoji} ${category.name} <span class="category-count">${categorySketches.length}</span> <span class="free-badge">Free View Available</span>`;
+        
+        const freeArtId = freeArts[category.id];
+        const hasFreeView = freeArtId && !freeViewsUsed[category.id];
+        
+        title.innerHTML = `
+          ${category.emoji} ${category.name} 
+          <span class="category-count">${categorySketches.length}</span>
+          ${hasFreeView ? '<span class="free-badge">Free View Available</span>' : ''}
+        `;
         section.appendChild(title);
         
         // Create grid for this category
@@ -538,7 +632,7 @@
           
           let priceHtml = '';
           if (isFreeViewable) {
-            priceHtml = `<div class="price">FREE</div>`;
+            priceHtml = `<div class="price">🎁 FREE</div>`;
           } else {
             priceHtml = `<div class="price">${priceInTON} TON</div>`;
           }
@@ -550,8 +644,11 @@
             tagHtml = `<div class="lock-icon">🔒</div>`;
           }
           
+          // Construct thumbnail URL with base path
+          const thumbUrl = BASE_URL + sketch.thumb;
+          
           div.innerHTML = `
-            <img class="thumb" src="${sketch.thumb}" alt="${sketch.title}" loading="lazy">
+            <img class="thumb" src="${thumbUrl}" alt="${sketch.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/160?text=Error'">
             ${priceHtml}
             ${tagHtml}
             <div class="sketch-info">
@@ -559,7 +656,13 @@
             </div>
           `;
 
-          div.onclick = () => openSketch(sketch, isUnlocked, isFreeViewable, category.id);
+          // Add click handler directly to the div
+          div.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openSketch(sketch, isUnlocked, isFreeViewable, category.id);
+          });
+          
           grid.appendChild(div);
         });
         
@@ -590,7 +693,7 @@
       }
 
       // Otherwise, require wallet connection and payment
-      if (!tonConnectUI.account) {
+      if (!tonConnectUI || !tonConnectUI.account) {
         tg.showAlert("Please connect your wallet first");
         return;
       }
@@ -622,9 +725,26 @@
       }
     });
 
+    // Close modal on back button (mobile)
+    window.addEventListener('popstate', () => {
+      closeModal();
+    });
+
+    // Handle touch events for mobile
+    document.addEventListener('touchstart', (e) => {
+      // Prevent accidental touches on modal background
+      const modal = document.getElementById('imageModal');
+      if (modal.classList.contains('active') && e.target === modal) {
+        closeModal();
+      }
+    });
+
     // === START ===
-    initTON();
-    renderGallery();
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', () => {
+      initTON();
+      renderGallery();
+    });
   </script>
 </body>
 </html>
