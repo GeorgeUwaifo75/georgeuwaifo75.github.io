@@ -81,6 +81,23 @@
       margin-left: 8px;
     }
     
+    .free-badge {
+      background: #4CAF50;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-left: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .free-badge::before {
+      content: "🎁";
+      font-size: 14px;
+    }
+    
     .grid { 
       display: grid; 
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
@@ -113,7 +130,7 @@
       transition: filter 0.3s; 
     }
     
-    .unlocked .thumb { 
+    .unlocked .thumb, .free-view .thumb { 
       filter: none; 
     }
     
@@ -158,6 +175,31 @@
     
     .unlocked .price {
       background: rgba(76, 175, 80, 0.9);
+    }
+    
+    .free-view .price {
+      background: rgba(255, 193, 7, 0.9);
+    }
+    
+    .free-tag {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: #4CAF50;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .free-tag::before {
+      content: "🎁";
+      font-size: 14px;
     }
     
     .lock-icon {
@@ -353,6 +395,9 @@
     // === TON CONNECT ===
     let tonConnectUI;
     const unlocked = JSON.parse(localStorage.getItem('unlocked') || '[]');
+    
+    // Track free views used (store in localStorage)
+    const freeViewsUsed = JSON.parse(localStorage.getItem('freeViewsUsed') || '{}');
 
     // Modal functions
     function showFull(sketch) {
@@ -386,6 +431,38 @@
       });
 
       document.getElementById('connect-btn').onclick = () => tonConnectUI.connectWallet();
+    }
+
+    // Function to select random free art for each category
+    function selectFreeArts() {
+      const freeArts = {};
+      
+      // Group sketches by category
+      const sketchesByCategory = {};
+      sketches.forEach(sketch => {
+        if (!sketchesByCategory[sketch.category]) {
+          sketchesByCategory[sketch.category] = [];
+        }
+        sketchesByCategory[sketch.category].push(sketch);
+      });
+
+      // Select one random sketch from each category
+      CATEGORIES.forEach(category => {
+        const categorySketches = sketchesByCategory[category.id] || [];
+        if (categorySketches.length > 0) {
+          const randomIndex = Math.floor(Math.random() * categorySketches.length);
+          freeArts[category.id] = categorySketches[randomIndex].id;
+        }
+      });
+
+      return freeArts;
+    }
+
+    // Get or generate free arts (persist across sessions)
+    let freeArts = JSON.parse(localStorage.getItem('freeArts') || 'null');
+    if (!freeArts) {
+      freeArts = selectFreeArts();
+      localStorage.setItem('freeArts', JSON.stringify(freeArts));
     }
 
     // === GALLERY ===
@@ -431,10 +508,10 @@
         section.className = 'category-section';
         section.id = `category-${category.id}`;
         
-        // Add category title with count
+        // Add category title with count and free badge
         const title = document.createElement('h2');
         title.className = 'category-title';
-        title.innerHTML = `${category.emoji} ${category.name} <span class="category-count">${categorySketches.length}</span>`;
+        title.innerHTML = `${category.emoji} ${category.name} <span class="category-count">${categorySketches.length}</span> <span class="free-badge">Free View Available</span>`;
         section.appendChild(title);
         
         // Create grid for this category
@@ -447,22 +524,42 @@
         // Add sketches to grid
         categorySketches.forEach(sketch => {
           const isUnlocked = unlocked.includes(sketch.id);
+          const isFreeArt = freeArts[category.id] === sketch.id;
+          const hasUsedFreeView = freeViewsUsed[category.id] === true;
+          
+          // Determine if this sketch should be viewable for free
+          const isFreeViewable = isFreeArt && !hasUsedFreeView;
+          
           const div = document.createElement('div');
-          div.className = `sketch ${isUnlocked ? 'unlocked' : ''}`;
+          div.className = `sketch ${isUnlocked ? 'unlocked' : ''} ${isFreeViewable ? 'free-view' : ''}`;
           
           // Format price from nanotons to TON
           const priceInTON = (parseInt(sketch.price) / 1e9).toFixed(2);
           
+          let priceHtml = '';
+          if (isFreeViewable) {
+            priceHtml = `<div class="price">FREE</div>`;
+          } else {
+            priceHtml = `<div class="price">${priceInTON} TON</div>`;
+          }
+          
+          let tagHtml = '';
+          if (isFreeViewable) {
+            tagHtml = `<div class="free-tag">Free View</div>`;
+          } else if (!isUnlocked && !isFreeViewable) {
+            tagHtml = `<div class="lock-icon">🔒</div>`;
+          }
+          
           div.innerHTML = `
             <img class="thumb" src="${sketch.thumb}" alt="${sketch.title}" loading="lazy">
-            <div class="price">${priceInTON} TON</div>
-            ${!isUnlocked ? '<div class="lock-icon">🔒</div>' : ''}
+            ${priceHtml}
+            ${tagHtml}
             <div class="sketch-info">
               <div class="sketch-title">${sketch.title}</div>
             </div>
           `;
 
-          div.onclick = () => openSketch(sketch, isUnlocked);
+          div.onclick = () => openSketch(sketch, isUnlocked, isFreeViewable, category.id);
           grid.appendChild(div);
         });
         
@@ -471,12 +568,28 @@
       });
     }
 
-    async function openSketch(sketch, isUnlocked) {
+    async function openSketch(sketch, isUnlocked, isFreeViewable, categoryId) {
+      // If it's a free view and hasn't been used
+      if (isFreeViewable) {
+        // Mark this free view as used
+        freeViewsUsed[categoryId] = true;
+        localStorage.setItem('freeViewsUsed', JSON.stringify(freeViewsUsed));
+        
+        // Show the full image
+        showFull(sketch);
+        
+        // Re-render gallery to update the UI
+        renderGallery();
+        return;
+      }
+
+      // If already unlocked, show full image
       if (isUnlocked) {
         showFull(sketch);
         return;
       }
 
+      // Otherwise, require wallet connection and payment
       if (!tonConnectUI.account) {
         tg.showAlert("Please connect your wallet first");
         return;
