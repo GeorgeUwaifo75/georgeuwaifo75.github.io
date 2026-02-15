@@ -1,5 +1,13 @@
-PRIVACY AGREEMENT
-1. Note that this App does not collect any personal data from user's engagement.
-2. This App dores not sent any personal information to any 3rd parties.
-3. Every data is used within your local device.
-Thank you dearly.
+PRIVACY POLICY
+
+This application respects your privacy:
+
+1. We only store your wallet address temporarily for transaction purposes.
+2. No personal information is collected or stored on our servers.
+3. Unlocked artwork data is stored locally in your browser.
+4. We do not track or analyze user behavior.
+5. Your wallet connection is handled securely through TON Connect.
+
+For questions, contact: [your-email]
+
+Last updated: 2024
