@@ -1,3 +1,20 @@
-Terms of Usage
-This app is for everyone. It for every age group and does not take charge of customers personal information.
-Copy Right (c) 2026
+Terms of Service for Word JigiJaga Game
+
+1. Acceptance of Terms
+By accessing and playing Word JigiJaga, you agree to be bound by these Terms of Service.
+
+2. Game Rules
+- Players must be of legal age to use TON wallet
+- Each game costs 0.05 TON
+- Payments are non-refundable
+- The game is for entertainment purposes only
+
+3. Wallet Integration
+- Players must connect their own TON wallet
+- All transactions are processed on the TON blockchain
+- We are not responsible for any transaction errors
+
+4. Privacy
+- We collect minimal game data
+- No personal information is stored
+- Wallet addresses are only used for transactions
