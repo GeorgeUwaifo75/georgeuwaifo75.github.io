@@ -1,3 +1,19 @@
-Policy
-The policy is simple. The Application belongs to George Uwaifo, who is the creator and author of this system.
-(c) All Rights Reserved, 2026
+Privacy Policy for Word JigiJaga Game
+
+1. Information Collection
+We collect only the minimum information needed to run the game:
+- Game scores and progress
+- Wallet address (for transactions only)
+
+2. Data Usage
+- Game data is used to improve user experience
+- Transaction data is processed on the TON blockchain
+- No personal information is shared with third parties
+
+3. Data Storage
+- Game progress is stored locally
+- No personal data is stored on our servers
+- Blockchain transactions are public by nature
+
+4. Contact
+For any privacy concerns, please contact us through our GitHub repository.
