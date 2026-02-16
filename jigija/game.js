@@ -19,7 +19,7 @@ class WordJigiJaga {
         this.wallet = null;
         
         // Your dedicated TON wallet address for receiving payments
-        this.YOUR_WALLET_ADDRESS = 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N'; // Replace with your actual TON wallet address
+        this.YOUR_WALLET_ADDRESS = 'UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX'; // Replace with your actual TON wallet address
         
         // Words database
         this.words = {
