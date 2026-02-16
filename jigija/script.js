@@ -6,7 +6,7 @@ tg.ready();
 // === TON CONNECT ===
 let tonConnectUI;
 let isConnected = false;
-const RECEIVING_WALLET = "YOUR_RECEIVING_WALLET_ADDRESS_HERE"; // ← CHANGE THIS
+const RECEIVING_WALLET = "UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX"; // ← CHANGE THIS
 
 function initTonConnect() {
   tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
