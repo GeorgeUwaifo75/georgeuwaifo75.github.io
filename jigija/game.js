@@ -17,6 +17,7 @@ class WordJigiJaga {
         this.walletBalance = 0;
         this.connector = null;
         this.wallet = null;
+        this.isDemoMode = true; // Set to false for production with real TON Connect
         
         // Your dedicated TON wallet address for receiving payments
         this.YOUR_WALLET_ADDRESS = 'UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX'; // Replace with your actual TON wallet address
@@ -44,8 +45,18 @@ class WordJigiJaga {
         
         this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
         
-        // Initialize TON Connect
-        this.initializeTonConnect();
+        // Set canvas dimensions
+        this.canvas.width = 700;
+        this.canvas.height = 350;
+        
+        // Initialize TON Connect (only if not in demo mode)
+        if (!this.isDemoMode) {
+            this.initializeTonConnect();
+        } else {
+            console.log('Running in demo mode - TON Connect disabled');
+            // In demo mode, we'll just update the UI to show it's ready
+            this.updateWalletUI();
+        }
         
         // Load initial state
         this.showScreen('start-screen');
@@ -53,12 +64,17 @@ class WordJigiJaga {
     
     async initializeTonConnect() {
         try {
+            // Check if TonConnect is available
+            if (typeof TonConnect === 'undefined') {
+                console.error('TON Connect library not loaded');
+                this.showNotification('TON Connect library not loaded. Using demo mode.', 'info');
+                this.isDemoMode = true;
+                return;
+            }
+            
             // Initialize TON Connect with your project configuration
             this.connector = new TonConnect.Connector({
-                manifestUrl: 'https://georgeuwaifo75.github.io/jigija/tonconnect-manifest.json', // Replace with your actual manifest URL
-                actionsConfiguration: {
-                    tonProof: 'your-ton-proof' // Optional: for TON Proof
-                }
+                manifestUrl: 'https://georgeuwaifo75.github.io/jigija/tonconnect-manifest.json'
             });
             
             // Subscribe to connection changes
@@ -66,40 +82,69 @@ class WordJigiJaga {
                 if (wallet) {
                     this.wallet = wallet;
                     this.walletConnected = true;
+                    // Get actual balance if available, otherwise use mock
+                    this.walletBalance = 10; // You'd get this from the wallet info
                     this.updateWalletUI();
+                    this.showNotification('Wallet connected successfully!', 'success');
                 } else {
                     this.walletConnected = false;
                     this.updateWalletUI();
                 }
             });
             
+            // Restore connection if exists
+            if (this.connector.restoreConnection()) {
+                console.log('Restored previous connection');
+            }
+            
         } catch (error) {
             console.error('TON Connect initialization failed:', error);
+            this.showNotification('TON Connect initialization failed. Using demo mode.', 'info');
+            this.isDemoMode = true;
         }
     }
     
     async connectWallet() {
         try {
-            // Available wallets list
-            const walletsList = await this.connector.getWallets();
-            
-            // For demo/development - simulate wallet connection
-            // In production, you would show a modal with wallet options
-            if (window.confirm('Connect to TON Wallet? (Demo mode)')) {
-                this.walletConnected = true;
-                this.walletBalance = 10; // Mock balance
-                this.updateWalletUI();
-                
-                // Simulate successful connection
-                alert('Wallet connected successfully! (Demo Mode)');
+            if (this.isDemoMode) {
+                // Demo mode: simple confirmation
+                if (confirm('Connect to TON Wallet? (Demo Mode)')) {
+                    this.walletConnected = true;
+                    this.walletBalance = 10; // Mock balance
+                    this.updateWalletUI();
+                    this.showNotification('Wallet connected successfully! (Demo Mode)', 'success');
+                }
+                return;
             }
             
-            // Real implementation would be:
-            // await this.connector.connect(walletsList[0].bridgeUrl);
+            // Real TON Connect implementation
+            if (!this.connector) {
+                await this.initializeTonConnect();
+            }
+            
+            // Get available wallets
+            const walletsList = await this.connector.getWallets();
+            
+            if (walletsList && walletsList.length > 0) {
+                // You might want to show a modal with wallet options here
+                // For now, we'll use the first available wallet
+                await this.connector.connect(walletsList[0].bridgeUrl);
+            } else {
+                throw new Error('No wallets available');
+            }
             
         } catch (error) {
             console.error('Wallet connection failed:', error);
-            alert('Failed to connect wallet. Please try again.');
+            this.showNotification('Failed to connect wallet. Using demo mode.', 'error');
+            
+            // Fallback to demo mode
+            this.isDemoMode = true;
+            if (confirm('Switch to Demo Mode? You can play without real TON payments.')) {
+                this.walletConnected = true;
+                this.walletBalance = 10;
+                this.updateWalletUI();
+                this.showNotification('Demo Mode activated!', 'info');
+            }
         }
     }
     
@@ -111,36 +156,38 @@ class WordJigiJaga {
         const amount = '0.05'; // TON amount
         
         try {
-            // In production with real TON Connect:
-            /*
-            const transaction = {
-                validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes from now
-                messages: [
-                    {
-                        address: this.YOUR_WALLET_ADDRESS,
-                        amount: (parseFloat(amount) * 1e9).toString() // Convert TON to nanoTON
-                    }
-                ]
-            };
-            
-            const result = await this.connector.sendTransaction(transaction);
-            console.log('Transaction sent:', result);
-            */
-            
-            // For demo/development - simulate payment
-            console.log(`Simulating payment of ${amount} TON to ${this.YOUR_WALLET_ADDRESS}`);
-            
-            // Mock balance deduction
-            if (this.walletBalance >= parseFloat(amount)) {
-                this.walletBalance -= parseFloat(amount);
-                this.updateWalletUI();
+            if (this.isDemoMode) {
+                // Demo mode: simulate payment
+                console.log(`[DEMO] Simulating payment of ${amount} TON to ${this.YOUR_WALLET_ADDRESS}`);
                 
-                // Show success message
+                if (this.walletBalance >= parseFloat(amount)) {
+                    this.walletBalance -= parseFloat(amount);
+                    this.updateWalletUI();
+                    this.showNotification(`[DEMO] Payment of ${amount} TON simulated!`, 'success');
+                    return true;
+                } else {
+                    throw new Error('Insufficient balance');
+                }
+            } else {
+                // Real TON Connect transaction
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes from now
+                    messages: [
+                        {
+                            address: this.YOUR_WALLET_ADDRESS,
+                            amount: (parseFloat(amount) * 1e9).toString() // Convert TON to nanoTON
+                        }
+                    ]
+                };
+                
+                const result = await this.connector.sendTransaction(transaction);
+                console.log('Transaction sent:', result);
+                
+                // Update balance (you'd typically query this from the wallet)
+                // For now, we'll just show success
                 this.showNotification(`Payment of ${amount} TON sent successfully!`, 'success');
                 
                 return true;
-            } else {
-                throw new Error('Insufficient balance');
             }
             
         } catch (error) {
@@ -150,11 +197,21 @@ class WordJigiJaga {
     }
     
     showNotification(message, type = 'info') {
+        // Remove any existing notifications
+        const existingNotifications = document.querySelectorAll('.notification');
+        existingNotifications.forEach(n => n.remove());
+        
         // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
+        
+        let icon = 'ℹ️';
+        if (type === 'success') icon = '✅';
+        if (type === 'error') icon = '❌';
+        if (type === 'info') icon = 'ℹ️';
+        
         notification.innerHTML = `
-            <span class="notification-icon">${type === 'success' ? '✅' : '❌'}</span>
+            <span class="notification-icon">${icon}</span>
             <span class="notification-message">${message}</span>
         `;
         
@@ -172,9 +229,14 @@ class WordJigiJaga {
         
         if (this.walletConnected) {
             balanceElement.textContent = `${this.walletBalance.toFixed(2)} TON`;
-            connectButton.innerHTML = '<span class="btn-icon">✅</span> Wallet Connected';
+            if (this.isDemoMode) {
+                connectButton.innerHTML = '<span class="btn-icon">🎮</span> Demo Mode';
+                connectButton.style.background = '#f39c12';
+            } else {
+                connectButton.innerHTML = '<span class="btn-icon">✅</span> Wallet Connected';
+                connectButton.style.background = '#27ae60';
+            }
             connectButton.disabled = true;
-            connectButton.style.background = '#27ae60';
         } else {
             balanceElement.textContent = '0.00 TON';
             connectButton.innerHTML = '<span class="btn-icon">🔌</span> Connect Wallet';
@@ -281,6 +343,12 @@ class WordJigiJaga {
         const finalScoreElement = document.getElementById('final-score');
         if (finalScoreElement) {
             finalScoreElement.textContent = this.score;
+        }
+        
+        // Update total score if on congratulations screen
+        const totalScoreElement = document.getElementById('total-score');
+        if (totalScoreElement) {
+            totalScoreElement.textContent = this.score;
         }
     }
     
@@ -493,8 +561,15 @@ class WordJigiJaga {
             const accuracy = (this.correctLetters.length / this.currentLetters.length) * 100;
             
             // Update level stats
-            document.getElementById('level-score').textContent = this.score;
-            document.getElementById('level-accuracy').textContent = Math.round(accuracy) + '%';
+            const levelScoreElement = document.getElementById('level-score');
+            const levelAccuracyElement = document.getElementById('level-accuracy');
+            
+            if (levelScoreElement) {
+                levelScoreElement.textContent = this.score;
+            }
+            if (levelAccuracyElement) {
+                levelAccuracyElement.textContent = Math.round(accuracy) + '%';
+            }
             
             if (accuracy === 100) {
                 this.showCongratulations();
@@ -511,13 +586,19 @@ class WordJigiJaga {
     }
     
     showCongratulations() {
-        document.getElementById('total-score').textContent = this.score;
+        const totalScoreElement = document.getElementById('total-score');
+        if (totalScoreElement) {
+            totalScoreElement.textContent = this.score;
+        }
         this.showScreen('congratulations-screen');
         this.createBalloons('balloons-falling');
     }
     
     showLevelComplete(message, withBalloons) {
-        document.getElementById('level-complete-message').textContent = message;
+        const messageElement = document.getElementById('level-complete-message');
+        if (messageElement) {
+            messageElement.textContent = message;
+        }
         this.showScreen('level-complete-screen');
         
         if (withBalloons) {
@@ -538,8 +619,10 @@ class WordJigiJaga {
     
     gameOver() {
         this.showScreen('game-over-screen');
-        document.getElementById('final-message').textContent = 
-            `Final Score: ${this.score}`;
+        const finalMessageElement = document.getElementById('final-message');
+        if (finalMessageElement) {
+            finalMessageElement.textContent = `Final Score: ${this.score}`;
+        }
     }
     
     nextLevel() {
@@ -555,6 +638,8 @@ class WordJigiJaga {
     
     createBalloons(containerId) {
         const container = document.getElementById(containerId);
+        if (!container) return;
+        
         container.innerHTML = '';
         
         for (let i = 0; i < 20; i++) {
@@ -576,5 +661,10 @@ class WordJigiJaga {
 
 // Initialize game when page loads
 window.addEventListener('load', () => {
+    // Check if TON Connect library is loaded
+    if (typeof TonConnect === 'undefined') {
+        console.warn('TON Connect library not loaded. Running in demo mode.');
+    }
+    
     new WordJigiJaga();
 });
