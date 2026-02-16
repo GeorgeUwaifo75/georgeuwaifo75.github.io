@@ -1,166 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word JigiJaga - TON Game</title>
-    <link rel="stylesheet" href="styles.css">
-
-  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Word JigiJaga</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@2.0.0/dist/tonconnect-ui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-    <div class="game-container">
-        <!-- Top Bar with Wallet and Game Info -->
-        <div class="top-bar">
-            <!-- Wallet Section - Left Side -->
-            <div class="wallet-section">
-                <div class="wallet-card">
-                    <span class="wallet-label">TON Balance</span>
-                    <span class="wallet-value" id="wallet-balance">0.00 TON</span>
-                </div>
-                <button id="connect-wallet" class="wallet-btn">
-                    <span class="btn-icon">🔌</span>
-                    Connect Wallet
-                </button>
-            </div>
-
-            <!-- Game Stats - Right Side -->
-            <div class="game-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Score</span>
-                    <span class="stat-value" id="score">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Level</span>
-                    <span class="stat-value level-badge" id="level">1</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Attempts</span>
-                    <span class="stat-value" id="attempts">1</span>
-                    <span class="stat-small">/3</span>
-                </div>
-                <div class="stat-item timer-item">
-                    <span class="stat-label">Time</span>
-                    <span class="stat-value timer" id="timer">60</span>
-                    <span class="stat-small">s</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Game Area -->
-        <div class="game-area">
-            <!-- Game Start Screen -->
-            <div id="start-screen" class="screen active">
-                <div class="game-title">WORD JIGIJAGA</div>
-                <div class="game-description">
-                    <p>Welcome to Word JigiJaga! Test your memory and spelling skills.</p>
-                    <div class="game-cost">
-                        <span class="cost-icon">💰</span>
-                        <span class="cost-text">Each game costs 0.05 TON</span>
-                    </div>
-                    <p class="game-instruction">Touch circles with letters in the correct order to spell the word!</p>
-                </div>
-                <button id="start-game" class="game-btn primary-btn">
-                    <span class="btn-icon">🎮</span>
-                    Start Game (0.05 TON)
-                </button>
-            </div>
-
-            <!-- Game Play Screen -->
-            <div id="game-screen" class="screen">
-                <div class="word-display-area">
-                    <div id="target-word" class="target-word"></div>
-                    <div id="current-progress" class="current-progress"></div>
-                </div>
-                <div class="canvas-container">
-                    <canvas id="game-canvas"></canvas>
-                </div>
-                <div class="game-hint">
-                    <span class="hint-icon">💡</span>
-                    <span class="hint-text">Touch the circles in the correct order!</span>
-                </div>
-            </div>
-
-            <!-- Game Over Screen -->
-            <div id="game-over-screen" class="screen">
-                <div class="overlay-content">
-                    <h2 class="game-over-title">GAME OVER</h2>
-                    <div class="final-score-card">
-                        <span class="final-score-label">Final Score</span>
-                        <span class="final-score-value" id="final-score">0</span>
-                    </div>
-                    <div id="final-message" class="final-message"></div>
-                    <div class="game-over-buttons">
-                        <button id="play-again" class="game-btn secondary-btn">
-                            <span class="btn-icon">🔄</span>
-                            Play Again
-                        </button>
-                        <button id="exit-game" class="game-btn secondary-btn">
-                            <span class="btn-icon">🚪</span>
-                            Exit
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Level Complete Screen -->
-            <div id="level-complete-screen" class="screen">
-                <div class="overlay-content">
-                    <h2 id="level-complete-message" class="level-complete-title"></h2>
-                    <div class="level-stats">
-                        <div class="level-stat-item">
-                            <span class="stat-label">Score</span>
-                            <span class="stat-value" id="level-score">0</span>
-                        </div>
-                        <div class="level-stat-item">
-                            <span class="stat-label">Accuracy</span>
-                            <span class="stat-value" id="level-accuracy">0%</span>
-                        </div>
-                    </div>
-                    <div id="balloons-container" class="balloons-container"></div>
-                    <button id="next-level" class="game-btn primary-btn">
-                        <span class="btn-icon">⬆️</span>
-                        Next Level
-                    </button>
-                </div>
-            </div>
-
-            <!-- Congratulations Screen -->
-            <div id="congratulations-screen" class="screen">
-                <div class="overlay-content">
-                    <h2 class="congrats-title">🎉 CONGRATULATIONS! 🎉</h2>
-                    <p class="congrats-message">You've completed all levels!</p>
-                    <div class="final-stats">
-                        <div class="final-stat-item">
-                            <span class="stat-label">Total Score</span>
-                            <span class="stat-value" id="total-score">0</span>
-                        </div>
-                    </div>
-                    <div class="balloons-falling" id="balloons-falling"></div>
-                    <button id="play-again-final" class="game-btn primary-btn">
-                        <span class="btn-icon">🎮</span>
-                        Play Again
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Level Indicator (Bottom) -->
-        <div class="level-indicator">
-            <div class="level-progress">
-                <div class="level-dot active" data-level="1">1</div>
-                <div class="level-dot" data-level="2">2</div>
-                <div class="level-dot" data-level="3">3</div>
-            </div>
-            <div class="level-name" id="level-name">Easy Peasy</div>
-        </div>
+  <div id="container">
+    <!-- Start / Payment screen -->
+    <div id="start-screen" class="screen active">
+      <h1>Word JigiJaga</h1>
+      <p>Remember the word.<br>Tap the letters in the correct order before they disappear!</p>
+      <button id="start-btn">Play – 0.05 TON</button>
+      <div id="wallet-status" style="margin-top:20px;font-size:14px;"></div>
     </div>
 
-    <!-- TON Blockchain Integration -->
-    <script src="https://unpkg.com/ton@13.11.0/dist/ton.min.js"></script>
-    <script src="https://unpkg.com/tonconnect-ui@0.0.6/dist/index.js"></script>
+    <!-- Intro message -->
+    <div id="intro-screen" class="screen">
+      <h2>Touch the circles in the exact order of the word!</h2>
+      <button id="begin-btn">Got it!</button>
+    </div>
 
-  
-    <script src="game.js"></script>
+    <!-- Game screen -->
+    <div id="game-screen" class="screen">
+      <div class="header">
+        <div>Level <span id="level">1</span></div>
+        <div>Score: <span id="score">0</span></div>
+        <div>Time: <span id="timer">60</span></div>
+      </div>
+      
+      <div id="word-display" class="word-display"></div>
+      
+      <div id="game-area"></div>
+      
+      <div id="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Level result -->
+    <div id="result-screen" class="screen">
+      <div id="result-message"></div>
+      <div id="result-score"></div>
+      <button id="next-btn">Next Level</button>
+      <button id="retry-btn">Try Again</button>
+      <button id="restart-btn">New Game</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="gameover-screen" class="screen">
+      <h2>Game Over</h2>
+      <p>Total score: <span id="final-score"></span></p>
+      <button id="play-again-btn">Play Again (0.05 TON)</button>
+      <button id="exit-btn">Exit</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
