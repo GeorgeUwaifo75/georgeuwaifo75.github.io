@@ -10,10 +10,12 @@ const RECEIVING_WALLET = "UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX"; // 
 
 function initTonConnect() {
   tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: location.origin + "/tonconnect-manifest.json",
+   // manifestUrl: location.origin + "/tonconnect-manifest.json",
+     manifestUrl: 'https://georgeuwaifo75.github.io/jigija/tonconnect-manifest.json',
     buttonRootId: "wallet-status"
   });
 
+  
   tonConnectUI.onStatusChange(wallet => {
     isConnected = !!wallet;
     document.getElementById("wallet-status").innerHTML = wallet 
