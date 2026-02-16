@@ -55,7 +55,7 @@ class WordJigiJaga {
         try {
             // Initialize TON Connect with your project configuration
             this.connector = new TonConnect.Connector({
-                manifestUrl: 'https://your-domain.com/tonconnect-manifest.json', // Replace with your actual manifest URL
+                manifestUrl: 'https://georgeuwaifo75.github.io/jigija/tonconnect-manifest.json', // Replace with your actual manifest URL
                 actionsConfiguration: {
                     tonProof: 'your-ton-proof' // Optional: for TON Proof
                 }
