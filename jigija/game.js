@@ -17,7 +17,7 @@ class WordJigiJaga {
         this.walletBalance = 0;
         this.connector = null;
         this.wallet = null;
-        this.isDemoMode = true; // Set to false for production with real TON Connect
+        this.isDemoMode = false; // Set to false for production with real TON Connect
         this.activeCircles = []; // Track active circles with their disappearance timers
         
         // Your dedicated TON wallet address for receiving payments
