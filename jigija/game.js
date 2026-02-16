@@ -17,7 +17,7 @@ class WordJigiJaga {
         this.walletBalance = 0;
         this.connector = null;
         this.wallet = null;
-        this.isDemoMode = true; // Set to false for production with real TON Connect
+        this.isDemoMode = false; // Set to false for production with real TON Connect
         
         // Your dedicated TON wallet address for receiving payments
         this.YOUR_WALLET_ADDRESS = 'UQB8IVBFuiPlBBqvtIYfv-rfmn4Zh6d-NnDS6wbh1DTysPBX'; // Replace with your actual TON wallet address
