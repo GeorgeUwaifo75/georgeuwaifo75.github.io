@@ -35,10 +35,10 @@ let currentWord = "";
 let currentIndex = 0;
 let activeCircles = [];
 let levelWords = {
-  1: ["APPLE","HOUSE","BIRD","CAKE","DANCE","LIGHT","MUSIC","RIVER"],
-  2: ["BANANA","ELEPHANT","GIRAFFE","HORIZON","JUNGLE","KANGAROO","MOUNTAIN"],
-  3: ["ADVENTURE","BEAUTIFUL","CELEBRATE","DISCOVER","EXCELLENT","FANTASTIC","GIGANTIC","HAPPINESS"],
-  4: ["RESPONSIBILITY","INTERNATIONAL","ENTERTAINMENT","EXTRAORDINARY","REVOLUTIONARY","CONSTITUTIONAL","PHILOSOPHICAL","ARCHITECTURAL"]
+  1: ["GO", "AT", "DOG", "CAT", "BIRD", "CAKE", "FROG", "HOUSE", "LIGHT", "MUSIC", "RIVER", "APPLE", "DANCE", "EAGLE"],
+  2: ["BANANA", "CHERRY", "DONKEY", "ELEPHANT", "GIRAFFE", "HORIZON", "JUNGLE", "KANGAROO", "LEMON", "MOUNTAIN"],
+  3: ["BANANA", "CHERRY", "DONKEY", "ELEPHANT", "GIRAFFE", "HORIZON", "JUNGLE", "KANGAROO", "LEMON", "MOUNTAIN"],
+  4: ["ADVENTURE", "BEAUTIFUL", "CELEBRATE", "DISCOVERY", "EXCELLENT", "FANTASTIC", "GIGANTIC", "HAPPINESS", "INCREDIBLE", "JUBILANT"]
 };
 
 const gameArea = document.getElementById("game-area");
@@ -144,7 +144,10 @@ function handleTap(circle, letter) {
       endLevel(true);
     }
   } else {
-    // wrong – visual feedback
+    // wrong
+    score = Math.max(0, score - 5);
+    scoreEl.textContent = score;
+    // visual feedback
     circle.style.transform = "rotate(20deg)";
     setTimeout(() => circle.style.transform = "rotate(-20deg)", 80);
     setTimeout(() => circle.style.transform = "", 200);
@@ -168,12 +171,28 @@ function updateProgress() {
 // === SPAWN LOGIC ===
 function startSpawning() {
   const rates = {1: 2000, 2: 1000, 3: 1000, 4: 1000};
-  const minMax = {1: [2,4], 2: [2,5], 3: [1,6], 4: [3,6]};
+  const minMax = {1: [2,4], 2: [2,5], 3: [2,6], 4: [3,6]};
+  const initialMins = {1:2, 2:4, 3:4, 4:5};
   
-  const spawnBatch = () => {
-    const [min, max] = minMax[currentLevel];
+  const [min, max] = minMax[currentLevel];
+  const rate = rates[currentLevel];
+
+  // Initial spawn with at least initialMin
+  const initialMin = initialMins[currentLevel];
+  const initialCount = Math.floor(Math.random() * (max - initialMin + 1)) + initialMin;
+  for (let i = 0; i < initialCount; i++) {
+    let letter;
+    if (Math.random() < 0.65) {
+      letter = currentWord[Math.floor(Math.random() * currentWord.length)];
+    } else {
+      letter = randomLetter();
+    }
+    createCircle(letter);
+  }
+
+  // Subsequent spawns
+  spawnInterval = setInterval(() => {
     const count = Math.floor(Math.random() * (max - min + 1)) + min;
-    
     for (let i = 0; i < count; i++) {
       let letter;
       if (Math.random() < 0.65) {
@@ -183,13 +202,7 @@ function startSpawning() {
       }
       createCircle(letter);
     }
-  };
-  
-  // Initial spawn
-  spawnBatch();
-  
-  // Then every interval
-  spawnInterval = setInterval(spawnBatch, rates[currentLevel]);
+  }, rate);
 }
 
 // === LEVEL ===
