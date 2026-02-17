@@ -52,6 +52,45 @@ function randomLetter() {
   return String.fromCharCode(65 + Math.floor(Math.random()*26));
 }
 
+function getNonOverlappingPosition() {
+  const circleSize = 70;
+  const radius = circleSize / 2;
+  const buffer = 20; // extra space between circles
+  const minDist = (radius * 2) + buffer;
+  const maxX = gameArea.clientWidth - circleSize;
+  const maxY = gameArea.clientHeight - circleSize;
+  let attempts = 0;
+  const maxAttempts = 100; // increased to allow more tries on crowded screens
+
+  while (attempts < maxAttempts) {
+    const x = Math.random() * maxX;
+    const y = Math.random() * maxY;
+    let overlaps = false;
+
+    for (let circ of activeCircles) {
+      const cx = parseFloat(circ.style.left);
+      const cy = parseFloat(circ.style.top);
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < minDist) {
+        overlaps = true;
+        break;
+      }
+    }
+
+    if (!overlaps) {
+      return {x, y};
+    }
+
+    attempts++;
+  }
+
+  // Fallback to random if no non-overlapping position found after max attempts
+  console.warn("Could not find non-overlapping position after " + maxAttempts + " attempts. Placing randomly.");
+  return {x: Math.random() * maxX, y: Math.random() * maxY};
+}
+
 function createCircle(letter) {
   const circle = document.createElement("div");
   circle.className = "circle";
@@ -60,11 +99,10 @@ function createCircle(letter) {
   const hue = Math.random()*360;
   circle.style.background = `hsl(${hue}, 80%, 55%)`;
   
-  // random position (avoid edges)
-  const maxX = gameArea.clientWidth - 80;
-  const maxY = gameArea.clientHeight - 80;
-  circle.style.left = Math.random() * maxX + "px";
-  circle.style.top = Math.random() * maxY + "px";
+  // Get non-overlapping position
+  const pos = getNonOverlappingPosition();
+  circle.style.left = pos.x + "px";
+  circle.style.top = pos.y + "px";
   
   circle.onclick = () => handleTap(circle, letter);
   
