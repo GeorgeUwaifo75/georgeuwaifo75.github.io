@@ -34,6 +34,7 @@ let spawnInterval = null;
 let currentWord = "";
 let currentIndex = 0;
 let activeCircles = [];
+let totalTimeSpent = 0;
 let levelWords = {
   1: ["GO", "AT", "DOG", "CAT", "BIRD", "CAKE", "FROG", "HOUSE", "LIGHT", "MUSIC", "RIVER", "APPLE", "DANCE", "EAGLE"],
   2: ["BANANA", "CHERRY", "DONKEY", "ELEPHANT", "GIRAFFE", "HORIZON", "JUNGLE", "KANGAROO", "LEMON", "MOUNTAIN"],
@@ -244,6 +245,15 @@ function endLevel(completed) {
   clearInterval(timerInterval);
   clearInterval(spawnInterval);
   
+  const timeSpentThisLevel = 60 - timer;
+  totalTimeSpent += timeSpentThisLevel;
+  
+  if (totalTimeSpent > 220) {
+    document.getElementById("game-screen").classList.remove("active");
+    showGameOver();
+    return;
+  }
+  
   const percent = Math.round((currentIndex / currentWord.length) * 100);
   
   const resultScreen = document.getElementById("result-screen");
@@ -331,6 +341,7 @@ async function payAndStart() {
     document.getElementById("intro-screen").classList.add("active");
     
     document.getElementById("begin-btn").onclick = () => {
+      totalTimeSpent = 0;
       document.getElementById("intro-screen").classList.remove("active");
       startLevel();
     };
@@ -347,6 +358,7 @@ document.getElementById("play-again-btn").onclick = () => {
   document.getElementById("gameover-screen").classList.remove("active");
   score = 0;
   currentLevel = 1;
+  totalTimeSpent = 0;
   document.getElementById("start-screen").classList.add("active");
 };
 document.getElementById("exit-btn").onclick = () => tg.close();
