@@ -36,8 +36,9 @@ let currentIndex = 0;
 let activeCircles = [];
 let levelWords = {
   1: ["APPLE","HOUSE","BIRD","CAKE","DANCE","LIGHT","MUSIC","RIVER"],
-  2: ["BANANA","CHOCOLATE","ELEPHANT","GIRAFFE","HORIZON","JUNGLE","KANGAROO","MOUNTAIN"],
-  3: ["ADVENTURE","BEAUTIFUL","CELEBRATE","DISCOVER","EXCELLENT","FANTASTIC","GIGANTIC","HAPPINESS"]
+  2: ["BANANA","ELEPHANT","GIRAFFE","HORIZON","JUNGLE","KANGAROO","MOUNTAIN"],
+  3: ["ADVENTURE","BEAUTIFUL","CELEBRATE","DISCOVER","EXCELLENT","FANTASTIC","GIGANTIC","HAPPINESS"],
+  4: ["RESPONSIBILITY","INTERNATIONAL","ENTERTAINMENT","EXTRAORDINARY","REVOLUTIONARY","CONSTITUTIONAL","PHILOSOPHICAL","ARCHITECTURAL"]
 };
 
 const gameArea = document.getElementById("game-area");
@@ -166,10 +167,10 @@ function updateProgress() {
 
 // === SPAWN LOGIC ===
 function startSpawning() {
-  const rates = {1: 2000, 2: 2000, 3: 1000};
-  const minMax = {1: [2,4], 2: [2,5], 3: [1,6]};
+  const rates = {1: 2000, 2: 1000, 3: 1000, 4: 1000};
+  const minMax = {1: [2,4], 2: [2,5], 3: [1,6], 4: [3,6]};
   
-  spawnInterval = setInterval(() => {
+  const spawnBatch = () => {
     const [min, max] = minMax[currentLevel];
     const count = Math.floor(Math.random() * (max - min + 1)) + min;
     
@@ -182,7 +183,13 @@ function startSpawning() {
       }
       createCircle(letter);
     }
-  }, rates[currentLevel]);
+  };
+  
+  // Initial spawn
+  spawnBatch();
+  
+  // Then every interval
+  spawnInterval = setInterval(spawnBatch, rates[currentLevel]);
 }
 
 // === LEVEL ===
@@ -258,7 +265,7 @@ function endLevel(completed) {
   // next level button
   document.getElementById("next-btn").onclick = () => {
     currentLevel++;
-    if (currentLevel > 3) {
+    if (currentLevel > 4) {
       showGameOver(true);
     } else {
       resultScreen.classList.remove("active");
