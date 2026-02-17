@@ -166,8 +166,8 @@ function updateProgress() {
 
 // === SPAWN LOGIC ===
 function startSpawning() {
-  const rates = {1: 3000, 2: 2000, 3: 1000};
-  const minMax = {1: [1,3], 2: [2,5], 3: [3,7]};
+  const rates = {1: 2000, 2: 2000, 3: 1000};
+  const minMax = {1: [2,4], 2: [2,5], 3: [1,6]};
   
   spawnInterval = setInterval(() => {
     const [min, max] = minMax[currentLevel];
