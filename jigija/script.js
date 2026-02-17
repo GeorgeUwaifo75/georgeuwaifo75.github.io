@@ -147,6 +147,8 @@ function handleTap(circle, letter) {
     // wrong
     score = Math.max(0, score - 5);
     scoreEl.textContent = score;
+    // error beep
+    playBeep(400, 100);
     // visual feedback
     circle.style.transform = "rotate(20deg)";
     setTimeout(() => circle.style.transform = "rotate(-20deg)", 80);
