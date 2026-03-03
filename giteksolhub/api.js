@@ -3,7 +3,7 @@ class ApiService {
     
     constructor() {
         this.apiKey = CONFIG.JSONBIN_API_KEY;
-        this.baseUrl = 'https://api.jsonbin.io/v3/b';
+        this.baseUrl = 'https://api.jsonbin.io/v3';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
     } 
  /*
