@@ -1,18 +1,18 @@
 // api.js - COMPLETE FIX based on original requirements
 class ApiService {
-    /*
+    
     constructor() {
         this.apiKey = CONFIG.JSONBIN_API_KEY;
-      
-        this.baseUrl = 'https://api.jsonbin.io/v3';
+        this.baseUrl = 'https://api.jsonbin.io/v3/b';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
-    } */
- constructor() {
+    } 
+ /*
+    constructor() {
         // Use config from window object
         this.apiKey = window.APP_CONFIG.JSONBIN_API_KEY;
         this.mainBinId = window.APP_CONFIG.JSONBIN_MAIN_BIN_ID;
         this.baseURL = 'https://api.jsonbin.io/v3/b';
-    }
+    }*/
 
     
     async getBin(binName) {
@@ -21,8 +21,8 @@ class ApiService {
             // const response = await fetch(`${this.proxyUrl}${this.baseUrl}/b/${this.mainBinId}/latest`, {
        
                 headers: {
-                    //'X-Master-Key': this.apiKey
-                    'X-Access-Key': this.apiKey
+                    'X-Master-Key': this.apiKey
+                    //'X-Access-Key': this.apiKey
                 }
             });
             
@@ -45,8 +45,8 @@ class ApiService {
        
             const response = await fetch(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
                 headers: {
-                    //'X-Master-Key': this.apiKey
-                    'X-Access-Key': this.apiKey
+                    'X-Master-Key': this.apiKey
+                    //'X-Access-Key': this.apiKey
                 }
             });
             
@@ -67,8 +67,8 @@ class ApiService {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    //'X-Master-Key': this.apiKey
-                    'X-Access-Key': this.apiKey
+                    'X-Master-Key': this.apiKey
+                    //'X-Access-Key': this.apiKey
                 },
                 body: JSON.stringify(currentData.record)
             });
