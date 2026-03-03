@@ -21,8 +21,8 @@ class ApiService {
             // const response = await fetch(`${this.proxyUrl}${this.baseUrl}/b/${this.mainBinId}/latest`, {
        
                 headers: {
-                    'X-Master-Key': this.apiKey
-                    //'X-Access-Key': this.apiKey
+                    //'X-Master-Key': this.apiKey
+                    'X-Access-Key': this.apiKey
                 }
             });
             
@@ -45,8 +45,8 @@ class ApiService {
        
             const response = await fetch(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
                 headers: {
-                    'X-Master-Key': this.apiKey
-                    //'X-Access-Key': this.apiKey
+                    //'X-Master-Key': this.apiKey
+                    'X-Access-Key': this.apiKey
                 }
             });
             
@@ -67,8 +67,8 @@ class ApiService {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey
-                    //'X-Access-Key': this.apiKey
+                    //'X-Master-Key': this.apiKey
+                    'X-Access-Key': this.apiKey
                 },
                 body: JSON.stringify(currentData.record)
             });
