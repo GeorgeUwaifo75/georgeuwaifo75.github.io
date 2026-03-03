@@ -1,12 +1,20 @@
 // api.js - COMPLETE FIX based on original requirements
 class ApiService {
+    /*
     constructor() {
         this.apiKey = CONFIG.JSONBIN_API_KEY;
       
         this.baseUrl = 'https://api.jsonbin.io/v3';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
+    } */
+ constructor() {
+        // Use config from window object
+        this.apiKey = window.APP_CONFIG.JSONBIN_API_KEY;
+        this.mainBinId = window.APP_CONFIG.JSONBIN_MAIN_BIN_ID;
+        this.baseURL = 'https://api.jsonbin.io/v3/b';
     }
 
+    
     async getBin(binName) {
         try {
             const response = await fetch(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
