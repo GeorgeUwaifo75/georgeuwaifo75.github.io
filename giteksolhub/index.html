@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>GiTeksol Market Hub</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo-section">
+                <div class="round-logo">
+                    <span>G</span>
+                </div>
+                <div class="title-section">
+                    <h1>GiTeksol Market Hub</h1>
+                    <p class="vision">We give you the right visibility and facilitate smooth sales and purchases.</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <button class="hamburger" id="hamburger">
+                <i class="fas fa-bars"></i>
+            </button>
+            <ul class="nav-menu" id="navMenu">
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link">Categories <i class="fas fa-chevron-down"></i></a>
+                    <ul class="dropdown-menu" id="categoriesDropdown"></ul>
+                </li>
+                <li class="nav-item"><a href="#" class="nav-link" id="aboutLink">About</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" id="signinLink">Sign In</a></li>
+                <li class="nav-item"><a href="#" class="nav-link" id="signupLink">Sign Up</a></li>
+            </ul>
+            <div class="user-info" id="userInfo" style="display: none;">
+                <span id="displayName"></span>
+                <button id="logoutBtn" class="btn-small">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main id="mainContent">
+        <section id="categoriesSection" class="section active">
+            <h2>Browse Categories</h2>
+            <div class="categories-grid" id="categoriesGrid"></div>
+        </section>
+
+        <section id="productsSection" class="section">
+            <div class="section-header">
+                <button id="backToCategories" class="btn-back"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 id="currentCategoryTitle"></h2>
+            </div>
+            <div class="products-grid" id="productsGrid"></div>
+        </section>
+
+        <section id="productDetailSection" class="section">
+            <div class="section-header">
+                <button id="backToProducts" class="btn-back"><i class="fas fa-arrow-left"></i> Back</button>
+            </div>
+            <div id="productDetail"></div>
+        </section>
+
+        <section id="authSection" class="section">
+            <div id="authContainer"></div>
+        </section>
+
+        <section id="userDashboardSection" class="section">
+            <div class="dashboard-container">
+                <div class="dashboard-sidebar">
+                    <h3>Dashboard</h3>
+                    <ul class="dashboard-menu">
+                        <li class="active" data-view="products">My Products</li>
+                        <li data-view="add-product">Add Product</li>
+                        <li data-view="payments">Payments</li>
+                        <li data-view="profile">Profile</li>
+                    </ul>
+                </div>
+                <div class="dashboard-content" id="dashboardContent"></div>
+            </div>
+        </section>
+
+        <section id="adminDashboardSection" class="section">
+            <div class="dashboard-container">
+                <div class="dashboard-sidebar">
+                    <h3>Admin Dashboard</h3>
+                    <ul class="dashboard-menu">
+                        <li class="active" data-view="users">Users</li>
+                        <li data-view="all-products">All Products</li>
+                        <li data-view="payments-report">Payments Report</li>
+                        <li data-view="settings">Settings</li>
+                    </ul>
+                </div>
+                <div class="dashboard-content" id="adminContent"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>&copy; 2026 GiTeksol Solutions Limited. All rights reserved.</p>
+            <p><i class="fas fa-envelope"></i> geocorpsys@gmail.com</p>
+            <p><i class="fas fa-phone"></i> 090 38 1975 86</p>
+        </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script src="products.js"></script>
+    <script src="payments.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
