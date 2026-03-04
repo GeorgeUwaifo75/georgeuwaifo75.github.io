@@ -1,87 +1,271 @@
-// api.js - COMPLETE FIX based on original requirements
+// api.js - Updated with working pattern from sampleprog.txt
 class ApiService {
-    
     constructor() {
         this.apiKey = CONFIG.JSONBIN_API_KEY;
         this.baseUrl = 'https://api.jsonbin.io/v3';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
-    } 
- /*
-    constructor() {
-        // Use config from window object
-        this.apiKey = window.APP_CONFIG.JSONBIN_API_KEY;
-        this.mainBinId = window.APP_CONFIG.JSONBIN_MAIN_BIN_ID;
-        this.baseURL = 'https://api.jsonbin.io/v3/b';
-    }*/
+        
+        // State management
+        this.localCache = {
+            allusers: null,
+            allproducts: null,
+            allpayments: null
+        };
+        this.lastFetchTime = {
+            allusers: 0,
+            allproducts: 0,
+            allpayments: 0
+        };
+        this.CACHE_DURATION = 30000; // 30 seconds cache
+        
+        // Queue for offline operations
+        this.requestQueue = [];
+        this.isProcessingQueue = false;
+        
+        // Rate limit tracking
+        this.rateLimitRemaining = 10;
+        this.rateLimitReset = Date.now() + 60000;
+        this.retryCount = 0;
+        this.MAX_RETRIES = 3;
+        this.RETRY_DELAY = 2000; // 2 seconds
+    }
 
-    
-    async getBin(binName) {
+    // Headers for JSONBin.io requests
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'X-Master-Key': this.apiKey
+        };
+    }
+
+    // Main fetch method with retry logic
+    async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
         try {
-            const response = await fetch(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
-            // const response = await fetch(`${this.proxyUrl}${this.baseUrl}/b/${this.mainBinId}/latest`, {
-       
-                headers: {
-                    'X-Master-Key': this.apiKey
-                   // 'X-Access-Key': this.apiKey
-                }
+            const response = await fetch(url, {
+                ...options,
+                headers: this.getHeaders()
             });
             
+            // Check rate limit headers
+            const remaining = response.headers.get('X-RateLimit-Remaining');
+            const reset = response.headers.get('X-RateLimit-Reset');
+            
+            if (remaining) {
+                this.rateLimitRemaining = parseInt(remaining);
+                if (reset) {
+                    this.rateLimitReset = parseInt(reset) * 1000;
+                }
+                this.saveRateLimitInfo();
+            }
+            
             if (!response.ok) {
+                if (response.status === 429 && retries > 0) {
+                    // Rate limit exceeded
+                    const retryAfter = response.headers.get('Retry-After') || this.RETRY_DELAY / 1000;
+                    console.log(`⏳ Rate limit reached. Waiting ${retryAfter} seconds...`);
+                    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                    return this.fetchWithRetry(url, options, retries - 1);
+                }
+                if (response.status === 404 && retries > 0) {
+                    // Bin not found - might need creation
+                    return response;
+                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const data = await response.json();
-            return data.record[binName] || [];
+            return response;
         } catch (error) {
-            console.error('Error fetching bin:', error);
-            return []; // Return empty array to prevent app from crashing
+            if (retries > 0) {
+                console.log(`🔄 Retrying... (${retries} attempts left)`);
+                await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+                return this.fetchWithRetry(url, options, retries - 1);
+            }
+            throw error;
         }
     }
 
-    async updateBin(binName, data) {
+    // Get bin data with caching
+    async getBin(binName) {
+        // Return cached data if available and not expired
+        if (this.localCache[binName] && 
+            (Date.now() - this.lastFetchTime[binName]) < this.CACHE_DURATION) {
+            console.log(`📦 Using cached ${binName} data`);
+            return this.localCache[binName];
+        }
+
         try {
-            // First get current bin
-             //const response = await fetch(`${this.proxyUrl}${this.baseUrl}/b/${this.mainBinId}/latest`, {
-       
-            const response = await fetch(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
-                headers: {
-                    'X-Master-Key': this.apiKey
-                    //'X-Access-Key': this.apiKey
-                }
-            });
+            console.log(`📡 Fetching ${binName} from server...`);
+            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
             
             if (!response.ok) {
-                throw new Error(`Failed to fetch bin: ${response.status}`);
+                if (response.status === 404) {
+                    // Bin doesn't exist, create it
+                    await this.createInitialBin();
+                    return this.localCache[binName] || [];
+                }
+                throw new Error(`Failed to fetch: ${response.status}`);
             }
             
-            const currentData = await response.json();
+            const data = await response.json();
+            const binData = data.record[binName] || [];
+            
+            // Update cache
+            this.localCache[binName] = binData;
+            this.lastFetchTime[binName] = Date.now();
+            
+            return binData;
+        } catch (error) {
+            console.error(`Error fetching ${binName}:`, error);
+            // Return cached data if available, even if expired
+            if (this.localCache[binName]) {
+                console.log(`⚠️ Using cached ${binName} data due to error`);
+                return this.localCache[binName];
+            }
+            return [];
+        }
+    }
+
+    // Update bin data
+    async updateBin(binName, data) {
+        // Update cache immediately
+        this.localCache[binName] = data;
+        
+        try {
+            // First get current bin to preserve structure
+            const getResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
+            
+            if (!getResponse.ok) {
+                throw new Error(`Failed to fetch current bin: ${getResponse.status}`);
+            }
+            
+            const currentData = await getResponse.json();
             
             // Update the specific bin
             currentData.record[binName] = data;
             
             // Save back to jsonbin
-            const updateResponse = await fetch(`${this.baseUrl}/b/${this.mainBinId}`, {
-           //const updateResponse = await fetch(`${this.proxyUrl}${this.baseUrl}/b/${this.mainBinId}`, {
-           
-              
+            const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey
-                    //'X-Access-Key': this.apiKey
-                },
                 body: JSON.stringify(currentData.record)
             });
             
-            if (!updateResponse.ok) {
-                throw new Error(`Failed to update bin: ${updateResponse.status}`);
+            if (updateResponse.ok) {
+                this.lastFetchTime[binName] = Date.now();
+                console.log(`✅ Successfully updated ${binName}`);
+                return true;
             }
             
-            console.log(`✅ Successfully updated ${binName}`);
-            return await updateResponse.json();
+            return false;
         } catch (error) {
-            console.error('Error updating bin:', error);
-            throw error;
+            console.error(`Error updating ${binName}:`, error);
+            // Queue the operation for later
+            this.queueOperation(binName, data);
+            return true; // Return true to indicate local save succeeded
+        }
+    }
+
+    // Create initial bin if it doesn't exist
+    async createInitialBin() {
+        const initialData = {
+            allusers: [],
+            allproducts: [],
+            allpayments: []
+        };
+        
+        try {
+            const response = await fetch(`${this.baseUrl}/b`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(initialData)
+            });
+            
+            if (response.ok) {
+                const newBin = await response.json();
+                this.mainBinId = newBin.metadata.id;
+                console.log('✅ Created new bin with ID:', this.mainBinId);
+                // Update config with new bin ID
+                CONFIG.JSONBIN_MAIN_BIN_ID = this.mainBinId;
+                return true;
+            }
+        } catch (error) {
+            console.error('Error creating bin:', error);
+        }
+        return false;
+    }
+
+    // Queue offline operations
+    queueOperation(binName, data) {
+        this.requestQueue.push({
+            binName,
+            data: [...data], // Copy array
+            timestamp: Date.now()
+        });
+        
+        if (!this.isProcessingQueue) {
+            this.processQueue();
+        }
+    }
+
+    // Process queued operations
+    async processQueue() {
+        if (this.requestQueue.length === 0) {
+            this.isProcessingQueue = false;
+            return;
+        }
+        
+        this.isProcessingQueue = true;
+        
+        while (this.requestQueue.length > 0) {
+            const operation = this.requestQueue.shift();
+            
+            try {
+                const getResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
+                
+                if (getResponse.ok) {
+                    const currentData = await getResponse.json();
+                    currentData.record[operation.binName] = operation.data;
+                    
+                    const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(currentData.record)
+                    });
+                    
+                    if (updateResponse.ok) {
+                        console.log(`✅ Synced ${operation.binName} from queue`);
+                        this.lastFetchTime[operation.binName] = Date.now();
+                    } else {
+                        // Put back in queue
+                        this.requestQueue.unshift(operation);
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error('Queue processing error:', error);
+                this.requestQueue.unshift(operation);
+                break;
+            }
+            
+            // Wait between operations
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        this.isProcessingQueue = false;
+        
+        if (this.requestQueue.length > 0) {
+            // Try again in 30 seconds
+            setTimeout(() => this.processQueue(), 30000);
+        }
+    }
+
+    // Save rate limit info to localStorage
+    saveRateLimitInfo() {
+        try {
+            localStorage.setItem('rateLimitInfo', JSON.stringify({
+                remaining: this.rateLimitRemaining,
+                reset: this.rateLimitReset
+            }));
+        } catch (e) {
+            console.error('Error saving rate limit info:', e);
         }
     }
 
@@ -103,7 +287,6 @@ class ApiService {
     async createUser(userData) {
         const users = await this.getAllUsers();
         
-        // Check if user already exists
         const existingUser = users.find(u => u.email === userData.email || u.userId === userData.userId);
         if (existingUser) {
             throw new Error('User already exists');
@@ -131,7 +314,7 @@ class ApiService {
         await this.updateBin(CONFIG.BINS.ALLUSERS, filtered);
     }
 
-    // Product methods - FIXED based on original requirements
+    // Product methods
     async getAllProducts() {
         return await this.getBin(CONFIG.BINS.ALLPRODUCTS);
     }
@@ -141,14 +324,11 @@ class ApiService {
         const now = new Date();
         
         return products.filter(p => {
-            // Only show active products as per original requirement
             if (p.activityStatus !== 'Active') return false;
             
-            // Check if product has expired
             if (p.endDate) {
                 const endDate = new Date(p.endDate);
                 if (endDate < now) {
-                    // Auto-update expired products to inactive
                     this.deactivateExpiredProduct(p.sku);
                     return false;
                 }
@@ -163,8 +343,8 @@ class ApiService {
     }
 
     async getProductsByCategory(category) {
-        const activeProducts = await this.getActiveProducts();
-        return activeProducts.filter(p => p.category === category);
+        const products = await this.getAllProducts();
+        return products.filter(p => p.category === category && p.activityStatus === 'Active');
     }
 
     async getProductBySku(sku) {
@@ -172,64 +352,47 @@ class ApiService {
         return products.find(p => p.sku === sku);
     }
 
-    // FIXED createProduct method - matches original requirements exactly
     async createProduct(productData) {
         try {
             const products = await this.getAllProducts();
             
-            // Generate unique SKU as required
             const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
             
             const now = new Date();
             let endDate = new Date();
             
-            // If free product, set end date to 2 weeks as required
             if (productData.paymentStatus === 'free') {
-                endDate.setDate(endDate.getDate() + 14); // 2 weeks for free products
+                endDate.setDate(endDate.getDate() + 14);
             } else {
-                endDate = null; // Paid products set end date after payment
+                endDate = null;
             }
             
-            // Complete product data structure matching original requirements
             const newProduct = {
-                // Core product information (visible during registration)
                 sku: sku,
                 name: productData.name,
                 description: productData.description,
                 price: parseFloat(productData.price),
                 category: productData.category,
-                images: productData.images || [], // Base64 encoded images - minimum 4 required
-                
-                // Seller information (required per original spec)
+                images: productData.images || [],
                 sellerId: productData.sellerId,
                 sellerName: productData.sellerName || '',
                 sellerContact: productData.sellerContact || '',
-                
-                // Status fields (NOT visible during registration - per original note)
                 activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
                 paymentStatus: productData.paymentStatus || 'free',
-                paymentType: productData.paymentType || null, // 'day', 'week', 'month' or null for free
-                
-                // Dates (NOT visible during registration - per original note)
+                paymentType: productData.paymentType || null,
                 dateAdvertised: now.toISOString(),
                 endDate: endDate ? endDate.toISOString() : null,
-                
-                // Chat session (NOT visible during registration - per original note)
                 chats: [],
                 unreadChatCount: 0,
-                
-                // Additional metadata
                 createdAt: now.toISOString(),
                 updatedAt: now.toISOString(),
                 viewCount: 0
             };
             
-            console.log('Creating product with structure:', newProduct);
-            
             products.push(newProduct);
             await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
             
-            // Update user's advert count (track free adverts)
+            // Update user's advert count
             const users = await this.getAllUsers();
             const userIndex = users.findIndex(u => u.userId === productData.sellerId);
             if (userIndex !== -1) {
@@ -237,11 +400,9 @@ class ApiService {
                 await this.updateBin(CONFIG.BINS.ALLUSERS, users);
             }
             
-            console.log('✅ Product created successfully:', newProduct);
             return newProduct;
-            
         } catch (error) {
-            console.error('❌ Error creating product:', error);
+            console.error('Error creating product:', error);
             throw error;
         }
     }
@@ -298,7 +459,6 @@ class ApiService {
             
             product.chats.push(chatMessage);
             
-            // Update unread count for notifications (red color per original spec)
             if (senderId !== product.sellerId) {
                 product.unreadChatCount = (product.unreadChatCount || 0) + 1;
             }
@@ -353,7 +513,7 @@ class ApiService {
         return paymentData;
     }
 
-    // Initialize admin user if not exists
+    // Initialize admin user
     async initializeAdmin() {
         try {
             const users = await this.getAllUsers();
