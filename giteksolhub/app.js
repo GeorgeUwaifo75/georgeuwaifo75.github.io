@@ -215,29 +215,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert('Error initializing application. Please check the console for details.');
     }
 });
-/*document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize admin user
-    await api.initializeAdmin();
+
+
+// Rate limit management
+/*
+function showRateLimitWarning(message) {
+    const warning = document.getElementById('rateLimitWarning');
+    const messageSpan = document.getElementById('rateLimitMessage');
+    messageSpan.textContent = message;
+    warning.style.display = 'flex';
     
-    // Check for existing session
-    const user = auth.checkSession();
-    if (user) {
-        updateUIForUser(user);
+    // Disable add product button if needed
+    const addBtn = document.querySelector('[data-view="add-product"]');
+    if (addBtn) addBtn.style.pointerEvents = 'none';
+}
+
+function hideRateLimitWarning() {
+    const warning = document.getElementById('rateLimitWarning');
+    warning.style.display = 'none';
+    
+    // Re-enable add product button
+    const addBtn = document.querySelector('[data-view="add-product"]');
+    if (addBtn) addBtn.style.pointerEvents = 'auto';
+}
+*/
+
+// Rate limit management functions
+function showRateLimitWarning(message) {
+    const warning = document.getElementById('rateLimitWarning');
+    const messageSpan = document.getElementById('rateLimitMessage');
+    if (warning && messageSpan) {
+        messageSpan.textContent = message;
+        warning.style.display = 'flex';
+        
+        // Disable add product button if it exists
+        const addProductBtn = document.querySelector('[data-view="add-product"]');
+        if (addProductBtn) {
+            addProductBtn.style.pointerEvents = 'none';
+            addProductBtn.style.opacity = '0.5';
+        }
     }
+}
 
-    // Initialize UI components
-    initializeNavigation();
-    initializeCategories();
-    initializeAuthForms();
-    
-    // Load categories
-    loadCategories();
+function hideRateLimitWarning() {
+    const warning = document.getElementById('rateLimitWarning');
+    if (warning) {
+        warning.style.display = 'none';
+        
+        // Re-enable add product button
+        const addProductBtn = document.querySelector('[data-view="add-product"]');
+        if (addProductBtn) {
+            addProductBtn.style.pointerEvents = 'auto';
+            addProductBtn.style.opacity = '1';
+        }
+    }
+}
 
-    // Hamburger menu toggle
-    document.getElementById('hamburger').addEventListener('click', () => {
-        document.getElementById('navMenu').classList.toggle('active');
-    });
-});*/
+// Check rate limit periodically
+setInterval(() => {
+    if (api.rateLimitReset > Date.now()) {
+        const timeLeft = Math.ceil((api.rateLimitReset - Date.now()) / 1000);
+        if (api.rateLimitRemaining < 3 && timeLeft > 0) {
+            showRateLimitWarning(`Rate limit will reset in ${timeLeft} seconds`);
+        } else if (api.rateLimitRemaining >= 3) {
+            hideRateLimitWarning();
+        }
+    }
+}, 5000);
+
 
 function initializeNavigation() {
     // About link
