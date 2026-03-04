@@ -703,3 +703,46 @@ footer {
     font-size: 3rem;
     cursor: pointer;
 }
+
+/* Rate Limit Warning Styles - Add to styles.css */
+.rate-limit-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    padding: 12px 20px;
+    border-radius: 10px;
+    margin: 0 20px 20px 20px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.rate-limit-warning i {
+    font-size: 1.2rem;
+    color: #856404;
+}
+
+.rate-limit-warning span {
+    flex: 1;
+}
+
+/* Disabled state for menu items */
+.dashboard-menu li.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
