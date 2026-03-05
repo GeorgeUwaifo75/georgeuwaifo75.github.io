@@ -20,6 +20,8 @@ function loadCategories() {
     }
 }
 
+
+
 // Add this missing function if not present
 function loadUserPayments() {
     console.log('Loading user payments...');
@@ -87,6 +89,9 @@ function showUserProfile() {
         <button onclick="showEditProfileForm()" class="btn">Edit Profile</button>
     `;
 }
+
+
+
 
 // Add this if needed
 function showEditProfileForm() {
@@ -259,6 +264,10 @@ setInterval(() => {
         }
     }
 }, 5000);
+
+
+
+
 
 
 function initializeNavigation() {
@@ -677,14 +686,21 @@ async function loadUserDashboard() {
 
 // New helper function to collect images
 async function collectImages() {
+    const previewContainers = document.querySelectorAll('#imagePreview div');
     const images = [];
-    const previews = document.querySelectorAll('#imagePreview img');
-    previews.forEach(img => images.push(img.src));
+    
+    for (const container of previewContainers) {
+        const img = container.querySelector('img');
+        if (img) {
+            images.push(img.src);
+        }
+    }
     
     if (images.length < 4) {
-        alert('Please upload at least 4 images');
+        alert(`Please upload at least 4 images. Currently have ${images.length}`);
         return null;
     }
+    
     return images;
 }
 
@@ -713,24 +729,75 @@ function showAddProductForm() {
                 <input type="number" id="productPrice" required>
             </div>
             <div class="form-group">
-                <label for="productImages">Images (at least 4, use data URLs)</label>
+                <label for="productImages">Images (at least 4, will be compressed automatically)</label>
                 <input type="file" id="productImages" multiple accept="image/*" onchange="handleImageUpload(this)">
-                <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem;"></div>
+                <small style="display: block; margin-top: 5px; color: #666;">
+                    Images will be compressed to reduce size. Max total size: 8MB after compression.
+                </small>
+                <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem; min-height: 120px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;"></div>
+                <div id="imageCount" style="margin-top: 5px; font-weight: bold; color: red;">0 of 4 images uploaded</div>
+                <div id="sizeWarning" style="margin-top: 5px; color: orange; display: none;"></div>
             </div>
-            <button type="submit" class="btn">Add Product</button>
+            <button type="submit" class="btn" id="submitProductBtn">Add Product</button>
         </form>
     `;
     
     document.getElementById('addProductForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // Check if user has free adverts available
-        if (auth.currentUser.numberOfAdverts < 2) {
-            // Free advert
-            await createProduct('free');
-        } else {
-            // Paid advert - show payment options first
-            showPaymentOptions();
+        const submitBtn = document.getElementById('submitProductBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+        
+        try {
+            if (!auth.currentUser) {
+                alert('Please login first');
+                return;
+            }
+            
+            const previews = document.querySelectorAll('#imagePreview div');
+            if (previews.length < 4) {
+                alert(`Please upload at least 4 images. Currently have ${previews.length}`);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Add Product';
+                return;
+            }
+            
+            // Get user's product count
+            const userProducts = await api.getProductsBySeller(auth.currentUser.userId);
+            const userAdvertCount = userProducts.length;
+            
+            console.log(`User has ${userAdvertCount} products`);
+            
+            if (userAdvertCount < 2) {
+                // Free advert
+                console.log('Creating free product...');
+                const product = await createProduct('free');
+                if (product) {
+                    alert('Product added successfully as free advert!');
+                    loadUserDashboard();
+                }
+            } else {
+                // Paid advert
+                console.log('Showing payment options...');
+                const images = await collectImages();
+                if (images) {
+                    const productData = {
+                        name: document.getElementById('productName').value,
+                        category: document.getElementById('productCategory').value,
+                        description: document.getElementById('productDescription').value,
+                        price: document.getElementById('productPrice').value,
+                        images: images
+                    };
+                    showPaymentOptionsWithProductData(productData);
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Add Product';
         }
     });
 }
@@ -782,49 +849,61 @@ async function processPaidProduct(productDataStr) {
 }
 
 
+// Update createProduct function to validate total payload size
 async function createProduct(paymentStatus, productData = null) {
-    let images = [];
-    let name, category, description, price;
-    
-    if (productData) {
-        // Use provided product data
-        name = productData.name;
-        category = productData.category;
-        description = productData.description;
-        price = productData.price;
-        images = productData.images;
-    } else {
-        // Collect from form
-        images = [];
-        const previews = document.querySelectorAll('#imagePreview img');
-        previews.forEach(img => images.push(img.src));
+    try {
+        let images = [];
+        let name, category, description, price;
         
-        if (images.length < 4) {
-            alert('Please upload at least 4 images');
+        if (productData) {
+            // Use provided product data
+            name = productData.name;
+            category = productData.category;
+            description = productData.description;
+            price = productData.price;
+            images = productData.images;
+        } else {
+            // Collect from form
+            images = await collectImages();
+            if (!images) return null;
+            
+            name = document.getElementById('productName').value;
+            category = document.getElementById('productCategory').value;
+            description = document.getElementById('productDescription').value;
+            price = document.getElementById('productPrice').value;
+        }
+        
+        // Validate total payload size
+        const totalSize = images.reduce((sum, img) => sum + img.length, 0);
+        const totalSizeMB = (totalSize * 0.75) / 1024 / 1024; // Approximate MB
+        
+        console.log(`Total payload size: ~${totalSizeMB.toFixed(2)}MB`);
+        
+        if (totalSizeMB > 8) { // Leave some margin under 10MB limit
+            alert(`Total image size (${totalSizeMB.toFixed(2)}MB) is too large. Please use smaller images or lower compression.`);
             return null;
         }
         
-        name = document.getElementById('productName').value;
-        category = document.getElementById('productCategory').value;
-        description = document.getElementById('productDescription').value;
-        price = document.getElementById('productPrice').value;
+        const productDataObj = {
+            name: name,
+            description: description,
+            price: parseFloat(price),
+            category: category,
+            images: images,
+            sellerId: auth.currentUser.userId,
+            sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
+            sellerContact: auth.currentUser.telephone,
+            paymentStatus: paymentStatus
+        };
+        
+        console.log('Sending product data to API...');
+        const createdProduct = await api.createProduct(productDataObj);
+        return createdProduct;
+        
+    } catch (error) {
+        console.error('Error in createProduct:', error);
+        throw error;
     }
-    
-    const productDataObj = {
-        name: name,
-        description: description,
-        price: parseFloat(price),
-        category: category,
-        images: images,
-        sellerId: auth.currentUser.userId,
-        sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
-        sellerContact: auth.currentUser.telephone,
-        paymentStatus: paymentStatus
-    };
-    
-    // Save to database
-    const createdProduct = await api.createProduct(productDataObj);
-    return createdProduct;
 }
 
 
@@ -996,22 +1075,126 @@ async function deleteProduct(sku) {
     }
 }
 
-function handleImageUpload(input) {
+
+async function compressImage(base64String, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = base64String;
+        
+        img.onload = () => {
+            // Create canvas for resizing
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Calculate new dimensions while maintaining aspect ratio
+            if (width > height) {
+                if (width > maxWidth) {
+                    height = Math.round(height * (maxWidth / width));
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width = Math.round(width * (maxHeight / height));
+                    height = maxHeight;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw resized image
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Convert to compressed JPEG
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedBase64);
+        };
+        
+        img.onerror = (error) => {
+            reject(error);
+        };
+    });
+}
+
+
+async function handleImageUpload(input) {
     const preview = document.getElementById('imagePreview');
     preview.innerHTML = '';
+    const files = Array.from(input.files);
     
-    for (const file of input.files) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
+    // Show loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-spinner';
+    loadingDiv.style.cssText = 'text-align: center; padding: 20px;';
+    loadingDiv.innerHTML = 'Compressing images...';
+    preview.appendChild(loadingDiv);
+    
+    const compressedImages = [];
+    
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Check file size first (warn if too large)
+        if (file.size > 5 * 1024 * 1024) { // 5MB
+            alert(`Image ${file.name} is larger than 5MB. It will be compressed.`);
+        }
+        
+        // Read file as base64
+        const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+        
+        try {
+            // Compress image
+            const compressed = await compressImage(base64, 600, 600, 0.6);
+            compressedImages.push(compressed);
+            
+            // Show preview
             const img = document.createElement('img');
-            img.src = e.target.result;
+            img.src = compressed;
             img.style.width = '100px';
             img.style.height = '100px';
             img.style.objectFit = 'cover';
-            preview.appendChild(img);
-        };
-        reader.readAsDataURL(file);
+            img.style.margin = '5px';
+            img.style.border = '2px solid #ddd';
+            img.style.borderRadius = '5px';
+            
+            // Show file size info
+            const originalSize = (base64.length * 0.75) / 1024 / 1024; // Approximate MB
+            const newSize = (compressed.length * 0.75) / 1024 / 1024;
+            const sizeInfo = document.createElement('small');
+            sizeInfo.style.cssText = 'display: block; color: #666; font-size: 10px;';
+            sizeInfo.textContent = `${originalSize.toFixed(1)}MB → ${newSize.toFixed(1)}MB`;
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'display: inline-block; text-align: center; margin: 5px;';
+            container.appendChild(img);
+            container.appendChild(sizeInfo);
+            
+            preview.appendChild(container);
+        } catch (error) {
+            console.error('Error compressing image:', error);
+            alert(`Error compressing image ${file.name}. Please try another image.`);
+        }
     }
+    
+    // Remove loading indicator
+    if (loadingDiv.parentNode) {
+        loadingDiv.remove();
+    }
+    
+    // Update image count
+    const imageCount = document.getElementById('imageCount');
+    if (imageCount) {
+        imageCount.textContent = `${compressedImages.length} of 4 images uploaded (compressed)`;
+        imageCount.style.color = compressedImages.length >= 4 ? 'green' : 'red';
+    }
+    
+    return compressedImages;
 }
 
 async function loadAdminDashboard() {
