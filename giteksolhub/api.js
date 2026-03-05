@@ -1,4 +1,4 @@
-// api.js - Updated with working pattern from sampleprog.txt
+// api.js - Using JSONBin.io for storage
 class ApiService {
     constructor() {
         this.apiKey = CONFIG.JSONBIN_API_KEY;
@@ -34,7 +34,9 @@ class ApiService {
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-            'X-Master-Key': this.apiKey
+            //'X-Master-Key': this.apiKey,
+            'X-Access-Key': this.apiKey,
+            'X-Bin-Meta': 'false' // Don't include metadata in response
         };
     }
 
@@ -94,7 +96,9 @@ class ApiService {
         }
 
         try {
-            console.log(`📡 Fetching ${binName} from server...`);
+            console.log(`📡 Fetching ${binName} from JSONBin.io...`);
+            
+            // For JSONBin.io, the entire bin contains all data
             const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
             
             if (!response.ok) {
@@ -107,13 +111,18 @@ class ApiService {
             }
             
             const data = await response.json();
-            const binData = data.record[binName] || [];
+            
+            // JSONBin.io returns the data directly (with X-Bin-Meta: false)
+            // The data should be an object with properties: allusers, allproducts, allpayments
+            const binData = data[binName] || [];
             
             // Update cache
             this.localCache[binName] = binData;
             this.lastFetchTime[binName] = Date.now();
             
+            console.log(`✅ Fetched ${binData.length} ${binName} records`);
             return binData;
+            
         } catch (error) {
             console.error(`Error fetching ${binName}:`, error);
             // Return cached data if available, even if expired
@@ -125,33 +134,45 @@ class ApiService {
         }
     }
 
-    // Update bin data
+    // Get the entire data structure from JSONBin.io
+    async getFullData() {
+        try {
+            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching full data:', error);
+            return {
+                allusers: [],
+                allproducts: [],
+                allpayments: []
+            };
+        }
+    }
+
+    // Update bin data on JSONBin.io
     async updateBin(binName, data) {
         // Update cache immediately
         this.localCache[binName] = data;
         
         try {
-            // First get current bin to preserve structure
-            const getResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
-            
-            if (!getResponse.ok) {
-                throw new Error(`Failed to fetch current bin: ${getResponse.status}`);
-            }
-            
-            const currentData = await getResponse.json();
+            // Get current full data
+            const fullData = await this.getFullData();
             
             // Update the specific bin
-            currentData.record[binName] = data;
+            fullData[binName] = data;
             
-            // Save back to jsonbin
+            // Save back to JSONBin.io using PUT
             const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
                 method: 'PUT',
-                body: JSON.stringify(currentData.record)
+                body: JSON.stringify(fullData)
             });
             
             if (updateResponse.ok) {
                 this.lastFetchTime[binName] = Date.now();
-                console.log(`✅ Successfully updated ${binName}`);
+                console.log(`✅ Successfully updated ${binName} on JSONBin.io`);
                 return true;
             }
             
@@ -173,18 +194,27 @@ class ApiService {
         };
         
         try {
-            const response = await fetch(`${this.baseUrl}/b`, {
+            // For JSONBin.io, we need to create a new bin first
+            const response = await fetch('https://api.jsonbin.io/v3/b', {
                 method: 'POST',
-                headers: this.getHeaders(),
+                headers: {
+                    'Content-Type': 'application/json',
+                    //'X-Master-Key': this.apiKey
+                    'X-Access-Key': this.apiKey
+                },
                 body: JSON.stringify(initialData)
             });
             
             if (response.ok) {
                 const newBin = await response.json();
                 this.mainBinId = newBin.metadata.id;
-                console.log('✅ Created new bin with ID:', this.mainBinId);
+                console.log('✅ Created new JSONBin.io bin with ID:', this.mainBinId);
+                
                 // Update config with new bin ID
                 CONFIG.JSONBIN_MAIN_BIN_ID = this.mainBinId;
+                
+                // Show notification
+                this.showBinUpdateNotification(this.mainBinId);
                 return true;
             }
         } catch (error) {
@@ -193,11 +223,51 @@ class ApiService {
         return false;
     }
 
+    showBinUpdateNotification(newBinId) {
+        // Create notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 9999;
+            max-width: 350px;
+            animation: slideIn 0.3s ease;
+        `;
+        notification.innerHTML = `
+            <strong>✅ New JSONBin.io Bin Created!</strong>
+            <p style="margin: 5px 0 0; font-size: 0.9rem;">
+                <strong>Bin ID:</strong> ${newBinId}<br>
+                <small>Update your config.js with this new ID.</small>
+            </p>
+            <button onclick="this.parentElement.remove()" style="
+                background: white;
+                color: #4CAF50;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 5px;
+                margin-top: 10px;
+                cursor: pointer;
+            ">Got it</button>
+        `;
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 15 seconds
+        setTimeout(() => {
+            if (notification.parentElement) notification.remove();
+        }, 15000);
+    }
+
     // Queue offline operations
     queueOperation(binName, data) {
         this.requestQueue.push({
             binName,
-            data: [...data], // Copy array
+            data: JSON.parse(JSON.stringify(data)), // Deep copy
             timestamp: Date.now()
         });
         
@@ -219,25 +289,25 @@ class ApiService {
             const operation = this.requestQueue.shift();
             
             try {
-                const getResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
+                // Get current full data
+                const fullData = await this.getFullData();
                 
-                if (getResponse.ok) {
-                    const currentData = await getResponse.json();
-                    currentData.record[operation.binName] = operation.data;
-                    
-                    const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(currentData.record)
-                    });
-                    
-                    if (updateResponse.ok) {
-                        console.log(`✅ Synced ${operation.binName} from queue`);
-                        this.lastFetchTime[operation.binName] = Date.now();
-                    } else {
-                        // Put back in queue
-                        this.requestQueue.unshift(operation);
-                        break;
-                    }
+                // Update the specific bin
+                fullData[operation.binName] = operation.data;
+                
+                // Save back to JSONBin.io
+                const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(fullData)
+                });
+                
+                if (updateResponse.ok) {
+                    console.log(`✅ Synced ${operation.binName} from queue`);
+                    this.lastFetchTime[operation.binName] = Date.now();
+                } else {
+                    // Put back in queue
+                    this.requestQueue.unshift(operation);
+                    break;
                 }
             } catch (error) {
                 console.error('Queue processing error:', error);
@@ -544,6 +614,31 @@ class ApiService {
             console.error('Error initializing admin:', error);
         }
     }
+
+    // Load from localStorage on startup (backup only)
+    loadFromLocalStorage() {
+        try {
+            const users = localStorage.getItem('backup_allusers');
+            if (users) {
+                this.localCache.allusers = JSON.parse(users);
+            }
+            
+            const products = localStorage.getItem('backup_allproducts');
+            if (products) {
+                this.localCache.allproducts = JSON.parse(products);
+            }
+            
+            const payments = localStorage.getItem('backup_allpayments');
+            if (payments) {
+                this.localCache.allpayments = JSON.parse(payments);
+            }
+        } catch (e) {
+            console.error('Error loading from localStorage:', e);
+        }
+    }
 }
 
 const api = new ApiService();
+
+// Load from localStorage on startup
+api.loadFromLocalStorage();
