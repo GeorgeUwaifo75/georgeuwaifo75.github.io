@@ -1,4 +1,6 @@
 // app.js
+// Add these variables at the top of app.js
+let pendingProductData = null; // Store product data while processing payment
 
 // Add this function to app.js - it's currently missing
 function initializeAuthForms() {
@@ -704,6 +706,110 @@ async function collectImages() {
     return images;
 }
 
+// Function to handle payment type selection
+async function selectPaymentType(paymentType, amount) {
+    closePaymentModal();
+    
+    if (!pendingProductData) {
+        alert('Error: Product data not found. Please try again.');
+        return;
+    }
+    
+    try {
+        // Initialize Paystack payment
+        await paymentService.initializePayment(
+            amount,
+            auth.currentUser.email,
+            paymentType,
+            pendingProductData,
+            async (response) => {
+                // Payment success callback
+                console.log('Payment successful:', response);
+                
+                // Create the product with paid status
+                const product = await createProduct('paid', pendingProductData, paymentType);
+                
+                if (product) {
+                    // Record the payment
+                    await api.createPayment({
+                        productSKU: product.sku,
+                        userID: auth.currentUser.userId,
+                        payAmount: amount,
+                        reference: response.reference,
+                        paymentType: paymentType
+                    });
+                    
+                    alert('✅ Payment successful! Your product has been listed and will be active according to your selected duration.');
+                    
+                    // Clear pending data
+                    pendingProductData = null;
+                    
+                    // Refresh dashboard
+                    loadUserDashboard();
+                }
+            },
+            (error) => {
+                // Payment failure callback
+                console.error('Payment failed:', error);
+                alert('❌ Payment failed: ' + error.message);
+                
+                // Ask if user wants to try again
+                if (confirm('Payment failed. Would you like to try again?')) {
+                    showPaymentTypeSelection();
+                } else {
+                    pendingProductData = null;
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Error initializing payment:', error);
+        alert('Error initializing payment: ' + error.message);
+    }
+}
+
+
+
+
+// Function to show payment type selection
+async function showPaymentTypeSelection() {
+    // Get payment rates from admin
+    const rates = await paymentService.getPaymentRates();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close" onclick="closePaymentModal()">&times;</span>
+            <h3>Select Advert Payment Plan</h3>
+            <p>You have used your 2 free adverts. Please select a payment plan for your product:</p>
+            
+            <div class="payment-options" style="display: grid; gap: 15px; margin: 20px 0;">
+                <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="selectPaymentType('daily', ${rates.daily})">
+                    <h4 style="color: var(--primary-purple);">Daily Advert</h4>
+                    <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.daily}</p>
+                    <p>Valid for 1 day</p>
+                </div>
+                
+                <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="selectPaymentType('weekly', ${rates.weekly})">
+                    <h4 style="color: var(--primary-purple);">Weekly Advert</h4>
+                    <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.weekly}</p>
+                    <p>Valid for 7 days</p>
+                </div>
+                
+                <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="selectPaymentType('monthly', ${rates.monthly})">
+                    <h4 style="color: var(--primary-purple);">Monthly Advert</h4>
+                    <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.monthly}</p>
+                    <p>Valid for 30 days</p>
+                </div>
+            </div>
+            
+            <button onclick="closePaymentModal()" class="btn" style="background: #666;">Cancel</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
 function showAddProductForm() {
     const dashboardContent = document.getElementById('dashboardContent');
     
@@ -729,18 +835,22 @@ function showAddProductForm() {
                 <input type="number" id="productPrice" required>
             </div>
             <div class="form-group">
-                <label for="productImages">Images (at least 4, will be compressed automatically)</label>
+                <label for="productImages">Images (at least 4)</label>
                 <input type="file" id="productImages" multiple accept="image/*" onchange="handleImageUpload(this)">
-                <small style="display: block; margin-top: 5px; color: #666;">
-                    Images will be compressed to reduce size. Max total size: 8MB after compression.
-                </small>
-                <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem; min-height: 120px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;"></div>
-                <div id="imageCount" style="margin-top: 5px; font-weight: bold; color: red;">0 of 4 images uploaded</div>
-                <div id="sizeWarning" style="margin-top: 5px; color: orange; display: none;"></div>
+                <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem;"></div>
+                <small id="imageCount" style="color: red;">0 of 4 images uploaded</small>
             </div>
             <button type="submit" class="btn" id="submitProductBtn">Add Product</button>
         </form>
     `;
+    
+    // Update image count
+    document.getElementById('productImages').addEventListener('change', function() {
+        const count = this.files.length;
+        const imageCount = document.getElementById('imageCount');
+        imageCount.textContent = `${count} of 4 images uploaded`;
+        imageCount.style.color = count >= 4 ? 'green' : 'red';
+    });
     
     document.getElementById('addProductForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -750,12 +860,14 @@ function showAddProductForm() {
         submitBtn.textContent = 'Processing...';
         
         try {
+            // Check if user is logged in
             if (!auth.currentUser) {
                 alert('Please login first');
                 return;
             }
             
-            const previews = document.querySelectorAll('#imagePreview div');
+            // Check image count
+            const previews = document.querySelectorAll('#imagePreview img');
             if (previews.length < 4) {
                 alert(`Please upload at least 4 images. Currently have ${previews.length}`);
                 submitBtn.disabled = false;
@@ -763,44 +875,55 @@ function showAddProductForm() {
                 return;
             }
             
-            // Get user's product count
+            // Get user's existing products count
             const userProducts = await api.getProductsBySeller(auth.currentUser.userId);
             const userAdvertCount = userProducts.length;
             
-            console.log(`User has ${userAdvertCount} products`);
+            console.log(`User has ${userAdvertCount} existing products`);
+            
+            // Collect images
+            const images = [];
+            previews.forEach(img => images.push(img.src));
+            
+            // Prepare product data
+            const productData = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                description: document.getElementById('productDescription').value,
+                price: document.getElementById('productPrice').value,
+                images: images
+            };
             
             if (userAdvertCount < 2) {
-                // Free advert
+                // Free advert - first or second product
                 console.log('Creating free product...');
-                const product = await createProduct('free');
+                const product = await createProduct('free', productData);
+                
                 if (product) {
-                    alert('Product added successfully as free advert!');
+                    alert('✅ Product added successfully as free advert! It will be active for 14 days.');
                     loadUserDashboard();
                 }
             } else {
-                // Paid advert
-                console.log('Showing payment options...');
-                const images = await collectImages();
-                if (images) {
-                    const productData = {
-                        name: document.getElementById('productName').value,
-                        category: document.getElementById('productCategory').value,
-                        description: document.getElementById('productDescription').value,
-                        price: document.getElementById('productPrice').value,
-                        images: images
-                    };
-                    showPaymentOptionsWithProductData(productData);
-                }
+                // Paid advert - third product onwards
+                console.log('Free adverts used up (2/2), showing payment options...');
+                
+                // Store product data temporarily
+                pendingProductData = productData;
+                
+                // Show payment type selection
+                showPaymentTypeSelection();
             }
+            
         } catch (error) {
-            console.error('Error:', error);
-            alert('Error: ' + error.message);
+            console.error('Error in form submission:', error);
+            alert('Error creating product: ' + error.message);
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Add Product';
         }
     });
 }
+
 
 function showPaymentOptionsWithProductData(productData) {
     const modal = document.createElement('div');
@@ -849,8 +972,8 @@ async function processPaidProduct(productDataStr) {
 }
 
 
-// Update createProduct function to validate total payload size
-async function createProduct(paymentStatus, productData = null) {
+// Fixed createProduct function with complete data structure
+async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
         let name, category, description, price;
@@ -873,17 +996,36 @@ async function createProduct(paymentStatus, productData = null) {
             price = document.getElementById('productPrice').value;
         }
         
-        // Validate total payload size
-        const totalSize = images.reduce((sum, img) => sum + img.length, 0);
-        const totalSizeMB = (totalSize * 0.75) / 1024 / 1024; // Approximate MB
-        
-        console.log(`Total payload size: ~${totalSizeMB.toFixed(2)}MB`);
-        
-        if (totalSizeMB > 8) { // Leave some margin under 10MB limit
-            alert(`Total image size (${totalSizeMB.toFixed(2)}MB) is too large. Please use smaller images or lower compression.`);
-            return null;
+        // Validate inputs
+        if (!name || !category || !description || !price || images.length < 4) {
+            throw new Error('Missing required fields or insufficient images');
         }
         
+        const now = new Date();
+        let endDate = null;
+        
+        // Calculate end date based on payment status and type
+        if (paymentStatus === 'free') {
+            endDate = new Date();
+            endDate.setDate(endDate.getDate() + 14); // 2 weeks for free products
+        } else if (paymentStatus === 'paid' && paymentType) {
+            endDate = new Date();
+            switch(paymentType) {
+                case 'daily':
+                    endDate.setDate(endDate.getDate() + 1);
+                    break;
+                case 'weekly':
+                    endDate.setDate(endDate.getDate() + 7);
+                    break;
+                case 'monthly':
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    break;
+                default:
+                    endDate.setDate(endDate.getDate() + 7); // Default to 1 week
+            }
+        }
+        
+        // Prepare product data with complete structure
         const productDataObj = {
             name: name,
             description: description,
@@ -893,11 +1035,18 @@ async function createProduct(paymentStatus, productData = null) {
             sellerId: auth.currentUser.userId,
             sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
             sellerContact: auth.currentUser.telephone,
-            paymentStatus: paymentStatus
+            paymentStatus: paymentStatus,
+            paymentType: paymentType,
+            activityStatus: (paymentStatus === 'free' || paymentStatus === 'paid') ? 'Active' : 'Inactive',
+            endDate: endDate ? endDate.toISOString() : null
         };
         
-        console.log('Sending product data to API...');
+        console.log('Creating product with data:', productDataObj);
+        
+        // Save to database
         const createdProduct = await api.createProduct(productDataObj);
+        
+        console.log('Product created successfully:', createdProduct);
         return createdProduct;
         
     } catch (error) {
@@ -1365,6 +1514,11 @@ function exportPaymentsReport() {
     alert('Export functionality would be implemented here');
 }
 
+// Helper function to close modal
+function closePaymentModal() {
+    const modal = document.querySelector('.modal');
+    if (modal) modal.remove();
+}
 async function loadAdminSettings() {
     const adminContent = document.getElementById('adminContent');
     const admin = await api.getUserByUserId('admin01');
@@ -1581,4 +1735,7 @@ window.adminDeleteUser = adminDeleteUser;
 window.adminToggleProductStatus = adminToggleProductStatus;
 window.adminDeleteProduct = adminDeleteProduct;
 window.exportPaymentsReport = exportPaymentsReport;
+
+window.selectPaymentType = selectPaymentType;
+window.closePaymentModal = closePaymentModal;
 
