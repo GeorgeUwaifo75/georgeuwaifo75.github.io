@@ -746,3 +746,48 @@ footer {
     opacity: 0.5;
     cursor: not-allowed;
 }
+/* Image preview styles */
+.product-images-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+.product-images-grid div {
+    position: relative;
+    transition: transform 0.2s;
+}
+
+.product-images-grid div:hover {
+    transform: scale(1.05);
+}
+
+.product-images-grid img {
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary-purple);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#sizeWarning {
+    padding: 5px 10px;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
