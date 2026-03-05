@@ -437,27 +437,28 @@ class ApiService {
                 endDate = null;
             }
             
-            const newProduct = {
-                sku: sku,
-                name: productData.name,
-                description: productData.description,
-                price: parseFloat(productData.price),
-                category: productData.category,
-                images: productData.images || [],
-                sellerId: productData.sellerId,
-                sellerName: productData.sellerName || '',
-                sellerContact: productData.sellerContact || '',
-                activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
-                paymentStatus: productData.paymentStatus || 'free',
-                paymentType: productData.paymentType || null,
-                dateAdvertised: now.toISOString(),
-                endDate: endDate ? endDate.toISOString() : null,
-                chats: [],
-                unreadChatCount: 0,
-                createdAt: now.toISOString(),
-                updatedAt: now.toISOString(),
-                viewCount: 0
-            };
+            // Complete product data structure
+              const newProduct = {
+                  sku: sku,
+                  name: productData.name,
+                  description: productData.description,
+                  price: parseFloat(productData.price),
+                  category: productData.category,
+                  images: productData.images || [],
+                  sellerId: productData.sellerId,
+                  sellerName: productData.sellerName || '',
+                  sellerContact: productData.sellerContact || '',
+                  activityStatus: productData.activityStatus || 'Active',
+                  paymentStatus: productData.paymentStatus || 'free',
+                  paymentType: productData.paymentType || null,
+                  dateAdvertised: now.toISOString(),
+                  endDate: productData.endDate || null,
+                  chats: [],
+                  unreadChatCount: 0,
+                  createdAt: now.toISOString(),
+                  updatedAt: now.toISOString(),
+                  viewCount: 0
+              };
             
             products.push(newProduct);
             await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
@@ -470,6 +471,7 @@ class ApiService {
                 await this.updateBin(CONFIG.BINS.ALLUSERS, users);
             }
             
+            console.log('✅ Product created:', newProduct);
             return newProduct;
         } catch (error) {
             console.error('Error creating product:', error);
