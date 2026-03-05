@@ -217,29 +217,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
-// Rate limit management
-/*
-function showRateLimitWarning(message) {
-    const warning = document.getElementById('rateLimitWarning');
-    const messageSpan = document.getElementById('rateLimitMessage');
-    messageSpan.textContent = message;
-    warning.style.display = 'flex';
-    
-    // Disable add product button if needed
-    const addBtn = document.querySelector('[data-view="add-product"]');
-    if (addBtn) addBtn.style.pointerEvents = 'none';
-}
-
-function hideRateLimitWarning() {
-    const warning = document.getElementById('rateLimitWarning');
-    warning.style.display = 'none';
-    
-    // Re-enable add product button
-    const addBtn = document.querySelector('[data-view="add-product"]');
-    if (addBtn) addBtn.style.pointerEvents = 'auto';
-}
-*/
-
 // Rate limit management functions
 function showRateLimitWarning(message) {
     const warning = document.getElementById('rateLimitWarning');
@@ -697,6 +674,20 @@ async function loadUserDashboard() {
     });
 }
 
+
+// New helper function to collect images
+async function collectImages() {
+    const images = [];
+    const previews = document.querySelectorAll('#imagePreview img');
+    previews.forEach(img => images.push(img.src));
+    
+    if (images.length < 4) {
+        alert('Please upload at least 4 images');
+        return null;
+    }
+    return images;
+}
+
 function showAddProductForm() {
     const dashboardContent = document.getElementById('dashboardContent');
     
@@ -744,40 +735,98 @@ function showAddProductForm() {
     });
 }
 
-async function createProduct(paymentStatus) {
-    const images = [];
-    const previews = document.querySelectorAll('#imagePreview img');
-    previews.forEach(img => images.push(img.src));
+function showPaymentOptionsWithProductData(productData) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close" onclick="this.parentElement.parentElement.remove()">&times;</span>
+            <h3>Select Payment Type</h3>
+            <p>You have used your 2 free adverts. Please select a payment plan for your ${userAdvertCount + 1}th product:</p>
+            <div class="form-group">
+                <label for="paymentType">Payment Duration</label>
+                <select id="paymentType">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+            <button onclick="processPaidProduct('${encodeURIComponent(JSON.stringify(productData))}')" class="btn">Proceed to Payment</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function processPaidProduct(productDataStr) {
+    const productData = JSON.parse(decodeURIComponent(productDataStr));
+    const paymentType = document.getElementById('paymentType').value;
     
-    if (images.length < 4) {
-        alert('Please upload at least 4 images');
-        return;
+    try {
+        // First create the product with pending status
+        const product = await createProduct('pending', productData);
+        
+        if (product) {
+            // Then process payment
+            await paymentService.processAdvertPayment(product.sku, paymentType);
+            alert('Payment successful! Your ad is now active.');
+            loadUserDashboard();
+        }
+    } catch (error) {
+        alert('Payment failed: ' + error.message);
     }
     
-    const productData = {
-        sku: 'SKU-' + Date.now(),
-        name: document.getElementById('productName').value,
-        category: document.getElementById('productCategory').value,
-        description: document.getElementById('productDescription').value,
-        price: document.getElementById('productPrice').value,
+    // Close modal
+    const modal = document.querySelector('.modal');
+    if (modal) modal.remove();
+}
+
+
+async function createProduct(paymentStatus, productData = null) {
+    let images = [];
+    let name, category, description, price;
+    
+    if (productData) {
+        // Use provided product data
+        name = productData.name;
+        category = productData.category;
+        description = productData.description;
+        price = productData.price;
+        images = productData.images;
+    } else {
+        // Collect from form
+        images = [];
+        const previews = document.querySelectorAll('#imagePreview img');
+        previews.forEach(img => images.push(img.src));
+        
+        if (images.length < 4) {
+            alert('Please upload at least 4 images');
+            return null;
+        }
+        
+        name = document.getElementById('productName').value;
+        category = document.getElementById('productCategory').value;
+        description = document.getElementById('productDescription').value;
+        price = document.getElementById('productPrice').value;
+    }
+    
+    const productDataObj = {
+        name: name,
+        description: description,
+        price: parseFloat(price),
+        category: category,
         images: images,
         sellerId: auth.currentUser.userId,
-        activityStatus: 'Active',
-        paymentStatus: paymentStatus,
-        dateAdvertised: new Date().toISOString(),
-        chats: []
+        sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
+        sellerContact: auth.currentUser.telephone,
+        paymentStatus: paymentStatus
     };
     
-    if (paymentStatus === 'free') {
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + 14);
-        productData.endDate = endDate.toISOString();
-    }
-    
-    await api.createProduct(productData);
-    alert('Product added successfully!');
-    loadUserDashboard();
+    // Save to database
+    const createdProduct = await api.createProduct(productDataObj);
+    return createdProduct;
 }
+
 
 function showPaymentOptions() {
     const modal = document.createElement('div');
@@ -804,20 +853,35 @@ function showPaymentOptions() {
 async function processPayment() {
     const paymentType = document.getElementById('paymentType').value;
     
-    // First create the product with pending status
-    await createProduct('pending');
+    // Collect images first
+    const images = await collectImages();
+    if (!images) return;
     
-    // Then process payment
+    const productData = {
+        name: document.getElementById('productName').value,
+        category: document.getElementById('productCategory').value,
+        description: document.getElementById('productDescription').value,
+        price: document.getElementById('productPrice').value,
+        images: images
+    };
+    
     try {
-        await paymentService.processAdvertPayment(product.sku, paymentType);
-        alert('Payment successful! Your ad is now active.');
-        loadUserDashboard();
+        // First create the product with pending status
+        const product = await createProduct('pending', productData);
+        
+        if (product) {
+            // Then process payment
+            await paymentService.processAdvertPayment(product.sku, paymentType);
+            alert('Payment successful! Your ad is now active.');
+            loadUserDashboard();
+        }
     } catch (error) {
         alert('Payment failed: ' + error.message);
     }
     
     document.querySelector('.modal').remove();
 }
+
 
 async function payForAdvert(sku) {
     const modal = document.createElement('div');
