@@ -2,6 +2,211 @@
 // Add these variables at the top of app.js
 let pendingProductData = null; // Store product data while processing payment
 
+// ============ SEARCH FUNCTIONALITY ============
+
+// Initialize search
+function initializeSearch() {
+    console.log('Initializing search...');
+    
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchButton');
+    
+    if (!searchInput || !searchBtn) return;
+    
+    // Search on button click
+    searchBtn.addEventListener('click', performSearch);
+    
+    // Search on Enter key
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+    
+    // Real-time search with debounce (optional)
+    let debounceTimeout;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => {
+            if (searchInput.value.trim().length >= 2) {
+                performSearch();
+            }
+        }, 400);
+    });
+}
+
+// Main search function
+async function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    
+    if (searchTerm.length < 2) {
+        alert('Please enter at least 2 characters to search');
+        return;
+    }
+    
+    try {
+        // Show loading state in products grid
+        const productsGrid = document.getElementById('productsGrid');
+        productsGrid.innerHTML = `
+            <div class="no-results">
+                <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
+                <p>Searching for "${searchTerm}"...</p>
+            </div>
+        `;
+        
+        // Get all active products
+        const allProducts = await api.getAllProducts();
+        const activeProducts = allProducts.filter(p => p.activityStatus === 'Active');
+        
+        // Perform search in name and description
+        let results = activeProducts.filter(product => {
+            const nameMatch = product.name.toLowerCase().includes(searchTerm);
+            const descMatch = product.description.toLowerCase().includes(searchTerm);
+            return nameMatch || descMatch;
+        });
+        
+        // Sort by relevance (name matches first, then description)
+        results.sort((a, b) => {
+            const aNameMatch = a.name.toLowerCase().includes(searchTerm);
+            const bNameMatch = b.name.toLowerCase().includes(searchTerm);
+            
+            if (aNameMatch && !bNameMatch) return -1;
+            if (!aNameMatch && bNameMatch) return 1;
+            
+            // If both match in name or both don't, sort by date
+            return new Date(b.dateAdvertised) - new Date(a.dateAdvertised);
+        });
+        
+        // Display results
+        displaySearchResults(results, searchTerm);
+        
+    } catch (error) {
+        console.error('Search error:', error);
+        alert('An error occurred while searching. Please try again.');
+    }
+}
+
+// Display search results
+function displaySearchResults(results, searchTerm) {
+    const productsGrid = document.getElementById('productsGrid');
+    const categoryTitle = document.getElementById('currentCategoryTitle');
+    
+    // Update header with search results info
+    categoryTitle.innerHTML = `
+        <div class="search-results-header">
+            <h3>
+                <i class="fas fa-search"></i>
+                Found <span>${results.length}</span> result${results.length !== 1 ? 's' : ''} 
+                for "${searchTerm}"
+            </h3>
+            <button class="clear-search-btn" onclick="clearSearch()">
+                <i class="fas fa-times"></i> Clear Search
+            </button>
+        </div>
+    `;
+    
+    // Clear and populate grid
+    productsGrid.innerHTML = '';
+    
+    if (results.length === 0) {
+        productsGrid.innerHTML = `
+            <div class="no-results">
+                <i class="fas fa-search"></i>
+                <h3>No products found</h3>
+                <p>We couldn't find any products matching "${searchTerm}"</p>
+                <p class="text-muted">Try different keywords or browse categories instead</p>
+                <button class="btn" onclick="clearSearch()">Browse All Categories</button>
+            </div>
+        `;
+    } else {
+        results.forEach(product => {
+            // Create highlighted version of name and description
+            const highlightedProduct = {
+                ...product,
+                displayName: highlightText(product.name, searchTerm),
+                displayDescription: highlightText(product.description, searchTerm)
+            };
+            
+            const card = createSearchResultCard(highlightedProduct, searchTerm);
+            productsGrid.appendChild(card);
+        });
+    }
+    
+    // Show the products section
+    showSection('productsSection');
+}
+
+// Create search result card with highlighting
+function createSearchResultCard(product, searchTerm) {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    
+    const mainImage = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/250x200?text=No+Image';
+    
+    card.innerHTML = `
+        <div class="product-images">
+            <img src="${mainImage}" alt="${product.name}" class="product-main-image">
+            <span class="image-count">${product.images ? product.images.length : 0} photos</span>
+            ${product.paymentStatus === 'free' ? '<span class="free-badge">FREE</span>' : ''}
+        </div>
+        <div class="product-info">
+            <div class="product-name">${product.displayName || product.name}</div>
+            <div class="product-description-preview">${product.displayDescription || product.description.substring(0, 60)}${product.description.length > 60 ? '...' : ''}</div>
+            <div class="product-price">₦${product.price.toLocaleString()}</div>
+            <div class="product-seller">
+                <i class="fas fa-user"></i> ${product.sellerName || product.sellerId}
+            </div>
+        </div>
+    `;
+    
+    card.addEventListener('click', () => loadProductDetail(product.sku));
+    return card;
+}
+
+// Helper function to highlight text
+function highlightText(text, searchTerm) {
+    if (!text || !searchTerm) return text;
+    
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    return text.replace(regex, '<span class="search-highlight">$1</span>');
+}
+
+// Clear search and return to categories
+function clearSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    
+    // Go back to categories
+    showSection('categoriesSection');
+    
+    // Reset category title
+    document.getElementById('currentCategoryTitle').textContent = '';
+}
+
+// Add this CSS for product description preview (add to your styles)
+function addSearchStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .product-description-preview {
+            font-size: 0.8rem;
+            color: #666;
+            margin: 0.25rem 0;
+            line-height: 1.4;
+            max-height: 2.8em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+
+
+
 // Add this function to app.js - it's currently missing
 function initializeAuthForms() {
     console.log('Initializing auth forms...');
@@ -203,6 +408,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         initializeNavigation();
         initializeCategories();
         initializeAuthForms(); // Now this exists
+        
+        
+        // ADD THIS: Initialize search
+        initializeSearch();
+        addSearchStyles();
         
         // Load categories
         loadCategories();
@@ -1859,4 +2069,8 @@ window.exportPaymentsReport = exportPaymentsReport;
 
 window.selectPaymentType = selectPaymentType;
 window.closePaymentModal = closePaymentModal;
+
+// Make search functions globally available
+window.performSearch = performSearch;
+window.clearSearch = clearSearch;
 
