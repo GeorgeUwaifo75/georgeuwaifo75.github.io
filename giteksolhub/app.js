@@ -422,64 +422,185 @@ function createProductCard(product) {
 }
 
 async function loadProductDetail(sku) {
-    const products = await api.getAllProducts();
-    const product = products.find(p => p.sku === sku);
-    
-    if (!product) return;
-    
-    const seller = await api.getUserByUserId(product.sellerId);
-    const detailContainer = document.getElementById('productDetail');
-    
-    detailContainer.innerHTML = `
-        <div class="product-detail-container">
-            <h2>${product.name}</h2>
-            <p class="product-sku">SKU: ${product.sku}</p>
-            
-            <div class="product-images-grid">
-                ${product.images ? product.images.map(img => 
-                    `<img src="${img}" alt="${product.name}" loading="lazy">`
-                ).join('') : '<p>No images available</p>'}
-            </div>
-            
-            <div class="product-description">
-                <h3>Description</h3>
-                <p>${product.description}</p>
-            </div>
-            
-            <div class="product-price-large">
-                <h3>Price</h3>
-                <p class="price">₦${product.price}</p>
-            </div>
-            
-            <div class="seller-info">
-                <h3>Seller Information</h3>
-                <p><strong>Name:</strong> ${seller ? seller.firstName + ' ' + seller.lastName : 'Unknown'}</p>
-                <p><strong>Contact:</strong> ${seller ? seller.telephone : 'N/A'}</p>
-            </div>
-            
-            <div class="chat-section">
-                <h3>Chat with Seller</h3>
-                <div class="chat-messages" id="chatMessages">
-                    ${product.chats ? product.chats.map(chat => `
-                        <div class="chat-message ${chat.sender === auth.currentUser?.userId ? 'own-message' : ''}">
-                            <span class="sender">${chat.sender}</span>
-                            <span class="time">${new Date(chat.timestamp).toLocaleString()}</span>
-                            <p>${chat.message}</p>
-                        </div>
-                    `).join('') : '<p>No messages yet</p>'}
+    try {
+        const products = await api.getAllProducts();
+        const product = products.find(p => p.sku === sku);
+        
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        const seller = await api.getUserByUserId(product.sellerId);
+        const detailContainer = document.getElementById('productDetail');
+        
+        // Mark chats as read if current user is the seller
+        if (auth.currentUser && auth.currentUser.userId === product.sellerId) {
+            await api.markChatAsRead(sku, auth.currentUser.userId);
+        }
+        
+        // Format dates
+        const advertisedDate = new Date(product.dateAdvertised).toLocaleDateString('en-NG', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        const endDate = product.endDate ? new Date(product.endDate).toLocaleDateString('en-NG', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        }) : 'Not set';
+        
+        // Calculate days remaining
+        let daysRemaining = 'N/A';
+        if (product.endDate) {
+            const remaining = Math.ceil((new Date(product.endDate) - new Date()) / (1000 * 60 * 60 * 24));
+            daysRemaining = remaining > 0 ? `${remaining} days` : 'Expired';
+        }
+        
+        // Create image grid HTML with 2x2 layout
+        const imageGridHTML = product.images && product.images.length > 0 
+            ? product.images.map((img, index) => `
+                <div class="product-image-item" onclick="expandImage('${img}')">
+                    <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
+                </div>
+            `).join('')
+            : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
+        
+        detailContainer.innerHTML = `
+            <div class="product-detail-container">
+                <div class="product-header">
+                    <h2>${product.name}</h2>
+                    <p class="product-sku">SKU: ${product.sku}</p>
                 </div>
                 
-                ${auth.currentUser ? `
-                    <div class="chat-input">
-                        <textarea id="chatMessageInput" placeholder="Type your message..." rows="2"></textarea>
-                        <button onclick="sendChatMessage('${product.sku}')">Send</button>
+                <div class="product-images-grid">
+                    ${imageGridHTML}
+                </div>
+                
+                <div class="product-info-grid">
+                    <div class="product-description">
+                        <h3>📝 Description</h3>
+                        <p>${product.description || 'No description provided.'}</p>
                     </div>
-                ` : '<p>Please <a href="#" onclick="showAuthForm(\'signin\')">sign in</a> to chat with the seller.</p>'}
+                    
+                    <div class="product-price-large">
+                        <h3>💰 Price</h3>
+                        <p class="price">₦${product.price.toLocaleString()}</p>
+                    </div>
+                </div>
+                
+                <div class="product-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Category</div>
+                        <div class="meta-value">${product.category}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Listed on</div>
+                        <div class="meta-value">${advertisedDate}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Ad expires</div>
+                        <div class="meta-value">${endDate}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Time remaining</div>
+                        <div class="meta-value">${daysRemaining}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Views</div>
+                        <div class="meta-value">${product.viewCount || 0}</div>
+                    </div>
+                </div>
+                
+                <div class="seller-info">
+                    <h3>👤 Seller Information</h3>
+                    <div class="seller-details">
+                        <div class="seller-detail-item">
+                            <i class="fas fa-user"></i>
+                            <span>${seller ? seller.firstName + ' ' + seller.lastName : product.sellerName || 'Unknown'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-phone"></i>
+                            <span>${seller ? seller.telephone : product.sellerContact || 'N/A'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Member since: ${seller ? new Date(seller.dateOfRegistration).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-tag"></i>
+                            <span>${product.paymentStatus === 'free' ? 'Free Advert' : 'Paid Advert'}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chat-section">
+                    <div class="chat-header">
+                        <h3>💬 Chat with Seller</h3>
+                        ${product.unreadChatCount > 0 ? 
+                            `<span class="chat-notification">${product.unreadChatCount} new</span>` : ''}
+                    </div>
+                    
+                    <div class="chat-messages" id="chatMessages">
+                        ${product.chats && product.chats.length > 0 
+                            ? product.chats.map(chat => {
+                                const isOwn = chat.sender === auth.currentUser?.userId;
+                                return `
+                                    <div class="chat-message ${isOwn ? 'own-message' : 'other-message'}">
+                                        <div class="message-sender">${chat.senderName || chat.sender}</div>
+                                        <div>${chat.message}</div>
+                                        <div class="message-time">${new Date(chat.timestamp).toLocaleString()}</div>
+                                    </div>
+                                `;
+                            }).join('') 
+                            : '<p style="text-align: center; color: #666;">No messages yet. Start a conversation!</p>'}
+                    </div>
+                    
+                    ${auth.currentUser ? `
+                        <div class="chat-input">
+                            <textarea id="chatMessageInput" placeholder="Type your message..." rows="2"></textarea>
+                            <button onclick="sendChatMessage('${product.sku}')">
+                                <i class="fas fa-paper-plane"></i> Send
+                            </button>
+                        </div>
+                    ` : `
+                        <p style="text-align: center; color: #666;">
+                            Please <a href="#" onclick="showAuthForm('signin')">sign in</a> to chat with the seller.
+                        </p>
+                    `}
+                </div>
             </div>
-        </div>
+        `;
+        
+        // Increment view count
+        await api.updateProduct(sku, { viewCount: (product.viewCount || 0) + 1 });
+        
+        showSection('productDetailSection');
+        
+    } catch (error) {
+        console.error('Error loading product detail:', error);
+        alert('Error loading product details. Please try again.');
+    }
+}
+
+// Enhanced expandImage function
+function expandImage(src) {
+    const modal = document.createElement('div');
+    modal.className = 'image-expand-modal';
+    modal.innerHTML = `
+        <span class="close" onclick="this.parentElement.remove()">&times;</span>
+        <img src="${src}" alt="Expanded view" onclick="this.style.transform = this.style.transform === 'scale(1.5)' ? 'scale(1)' : 'scale(1.5)'; this.style.transition = 'transform 0.3s ease';">
     `;
+    document.body.appendChild(modal);
     
-    showSection('productDetailSection');
+    // Close on click outside image
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
 async function sendChatMessage(sku) {
