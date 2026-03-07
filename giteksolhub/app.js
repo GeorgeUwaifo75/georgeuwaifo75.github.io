@@ -639,27 +639,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load categories
         loadCategories();
 
-       // Hamburger menu toggle - IMPROVED VERSION
+// Hamburger menu toggle - DROPDOWN STYLE
 const hamburger = document.getElementById('hamburger');
 const navMenu = document.getElementById('navMenu');
 const menuOverlay = document.getElementById('menuOverlay');
 
 if (hamburger && navMenu) {
-    console.log('Hamburger menu initialized'); // Debug log
+    console.log('Hamburger menu initialized');
+    
+    // Hide overlay since we're using dropdown style
+    if (menuOverlay) {
+        menuOverlay.style.display = 'none';
+    }
     
     // Toggle menu on hamburger click
     hamburger.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Hamburger clicked'); // Debug log
+        console.log('Hamburger clicked');
         
         // Toggle menu
         navMenu.classList.toggle('active');
-        
-        // Toggle overlay
-        if (menuOverlay) {
-            menuOverlay.classList.toggle('active');
-        }
         
         // Toggle hamburger icon
         const icon = hamburger.querySelector('i');
@@ -667,33 +667,10 @@ if (hamburger && navMenu) {
             if (navMenu.classList.contains('active')) {
                 icon.classList.remove('fa-bars');
                 icon.classList.add('fa-times');
-                // Prevent body scrolling when menu is open
-                document.body.style.overflow = 'hidden';
             } else {
                 icon.classList.remove('fa-times');
                 icon.classList.add('fa-bars');
-                // Restore body scrolling
-                document.body.style.overflow = '';
             }
-        }
-    });
-    
-    // Close menu when clicking on overlay
-    if (menuOverlay) {
-        menuOverlay.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Overlay clicked'); // Debug log
-            closeMobileMenu();
-        });
-    }
-    
-    // Close menu when window resizes to desktop size
-    window.addEventListener('resize', () => {
-        if (window.innerWidth > 768) {
-            closeMobileMenu();
-            // Restore body scrolling
-            document.body.style.overflow = '';
         }
     });
     
@@ -701,11 +678,18 @@ if (hamburger && navMenu) {
     const navLinks = navMenu.querySelectorAll('.nav-link:not(.dropdown-toggle)');
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768) {
-                console.log('Nav link clicked, closing menu'); // Debug log
+            if (window.innerWidth <= 768 && navMenu.classList.contains('active')) {
+                console.log('Nav link clicked, closing menu');
+                
+                // Small delay to allow navigation
                 setTimeout(() => {
-                    closeMobileMenu();
-                }, 100); // Small delay to allow navigation
+                    navMenu.classList.remove('active');
+                    const icon = hamburger.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                }, 150);
             }
         });
     });
@@ -734,10 +718,50 @@ if (hamburger && navMenu) {
         }
     });
     
+    // Close menu when clicking outside (on the main content)
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+            const isClickInsideMenu = navMenu.contains(e.target);
+            const isClickOnHamburger = hamburger.contains(e.target);
+            
+            if (!isClickInsideMenu && !isClickOnHamburger && navMenu.classList.contains('active')) {
+                navMenu.classList.remove('active');
+                const icon = hamburger.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
+        }
+    });
+    
+    // Close menu when window resizes to desktop size
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            navMenu.classList.remove('active');
+            const icon = hamburger.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+            
+            // Close all dropdowns
+            const dropdowns = document.querySelectorAll('.dropdown');
+            dropdowns.forEach(dropdown => {
+                dropdown.classList.remove('active');
+            });
+        }
+    });
+    
     // Close menu on escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && window.innerWidth <= 768) {
-            closeMobileMenu();
+        if (e.key === 'Escape' && window.innerWidth <= 768 && navMenu.classList.contains('active')) {
+            navMenu.classList.remove('active');
+            const icon = hamburger.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
         }
     });
 }
@@ -750,42 +774,31 @@ if (hamburger && navMenu) {
     }
 });
 
-// Helper function to close mobile menu - IMPROVED VERSION
+// Helper function to close mobile menu - kept for backward compatibility
 function closeMobileMenu() {
     const navMenu = document.getElementById('navMenu');
-    const menuOverlay = document.getElementById('menuOverlay');
     const hamburger = document.getElementById('hamburger');
     
-    if (navMenu) {
+    if (navMenu && window.innerWidth <= 768) {
         navMenu.classList.remove('active');
-    }
-    
-    if (menuOverlay) {
-        menuOverlay.classList.remove('active');
-    }
-    
-    if (hamburger) {
-        const icon = hamburger.querySelector('i');
-        if (icon) {
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-bars');
+        
+        if (hamburger) {
+            const icon = hamburger.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
         }
+        
+        // Close all dropdowns
+        const dropdowns = document.querySelectorAll('.dropdown');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.remove('active');
+        });
     }
-    
-    // Restore body scrolling
-    document.body.style.overflow = '';
-    
-    // Close all dropdowns
-    const dropdowns = document.querySelectorAll('.dropdown');
-    dropdowns.forEach(dropdown => {
-        dropdown.classList.remove('active');
-    });
-    
-    console.log('Mobile menu closed'); // Debug log
 }
 
-// Make closeMobileMenu globally available
-window.closeMobileMenu = closeMobileMenu;
+
 
 
 // Rate limit management functions
@@ -2646,6 +2659,9 @@ window.closePaymentModal = closePaymentModal;
 
 window.performSearch = performSearch;
 window.clearSearch = clearSearch;
+
+// Make closeMobileMenu globally available
+window.closeMobileMenu = closeMobileMenu;
 
 window.goToHome = goToHome;
 window.createNewAd = createNewAd;
