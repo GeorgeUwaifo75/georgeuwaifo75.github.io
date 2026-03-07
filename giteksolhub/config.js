@@ -9,6 +9,13 @@ const CONFIG = {
         ALLPRODUCTS: 'allproducts',
         ALLPAYMENTS: 'allpayments'
     }
+    ,
+    // Add EmailJS configuration
+    EMAILJS: {
+        PUBLIC_KEY: 'VGj6eL5SaKXRW2fIi', // Get from EmailJS dashboard
+        SERVICE_ID: 'service_78wp8b9', // Your email service ID
+        TEMPLATE_ID: 'template_cbevt8h' // Your template ID
+    }
 };
 
 const CATEGORIES = [
