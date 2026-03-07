@@ -1,5 +1,4 @@
 // app.js
-// Add these variables at the top of app.js
 let pendingProductData = null; // Store product data while processing payment
 
 // ============ EMAILJS INTEGRATION ============
