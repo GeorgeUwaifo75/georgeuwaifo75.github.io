@@ -2,6 +2,113 @@
 // Add these variables at the top of app.js
 let pendingProductData = null; // Store product data while processing payment
 
+// ============ EMAILJS INTEGRATION ============
+
+// Initialize EmailJS (call this once when app starts)
+function initializeEmailJS() {
+    if (typeof emailjs !== 'undefined') {
+        emailjs.init(CONFIG.EMAILJS.PUBLIC_KEY);
+        console.log('✅ EmailJS initialized successfully');
+    } else {
+        console.error('❌ EmailJS library not loaded');
+    }
+}
+
+// Function to send email alert to merchant
+async function sendChatAlertEmail(chatData) {
+    try {
+        // Check if EmailJS is available
+        if (typeof emailjs === 'undefined') {
+            console.error('EmailJS not available');
+            return false;
+        }
+
+        // Get seller details
+        const seller = await api.getUserByUserId(chatData.sellerId);
+        if (!seller || !seller.email) {
+            console.error('Seller email not found');
+            return false;
+        }
+
+        // Prepare template parameters
+        const templateParams = {
+            to_name: seller.firstName || 'Merchant',
+            from_name: chatData.buyerName || 'A potential buyer',
+            product_name: chatData.productName,
+            message_preview: chatData.message.substring(0, 100) + (chatData.message.length > 100 ? '...' : ''),
+            product_link: `${window.location.origin}/#product/${chatData.productSku}`, // Adjust based on your URL structure
+            timestamp: new Date().toLocaleString(),
+            seller_email: seller.email,
+            reply_link: `${window.location.origin}/#chat/${chatData.productSku}` // Link to chat
+        };
+
+        console.log('📧 Sending email alert to:', seller.email);
+
+        // Send email using EmailJS
+        const response = await emailjs.send(
+            CONFIG.EMAILJS.SERVICE_ID,
+            CONFIG.EMAILJS.TEMPLATE_ID,
+            templateParams
+        );
+
+        console.log('✅ Email sent successfully!', response);
+        
+        // Optional: Log the email notification in your system
+        await logEmailNotification(chatData, seller.userId);
+        
+        return true;
+
+    } catch (error) {
+        console.error('❌ Failed to send email:', error);
+        
+        // Optional: Show user-friendly message but don't disrupt chat
+        if (error.text) {
+            console.error('EmailJS error details:', error.text);
+        }
+        
+        return false;
+    }
+}
+
+// Optional: Log email notifications in your database
+async function logEmailNotification(chatData, sellerId) {
+    try {
+        // You could create a new bin for email logs or add to existing structure
+        const emailLog = {
+            sellerId: sellerId,
+            productSku: chatData.productSku,
+            buyerId: chatData.buyerId,
+            messagePreview: chatData.message.substring(0, 50),
+            sentAt: new Date().toISOString(),
+            status: 'sent'
+        };
+        
+        // Optional: Store in your database
+        // await api.createEmailLog(emailLog);
+        
+        console.log('📝 Email notification logged:', emailLog);
+    } catch (error) {
+        console.error('Error logging email:', error);
+    }
+}
+
+// Function to check if email should be sent (e.g., not for own messages)
+function shouldSendEmailAlert(chatData) {
+    // Don't send email if:
+    // 1. The message is from the seller themselves
+    // 2. The message is a system message
+    // 3. It's a duplicate or test message
+    
+    if (chatData.senderId === chatData.sellerId) {
+        console.log('Message from seller - no email needed');
+        return false;
+    }
+    
+    return true;
+}
+
+
+
 // ============ SEARCH FUNCTIONALITY ============
 
 // Initialize search
@@ -227,7 +334,58 @@ function loadCategories() {
     }
 }
 
+// Show temporary notification
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'var(--success-green)' : 'var(--primary-purple)'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+        max-width: 300px;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
 
+// Add animation styles
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
 
 // Add this missing function if not present
 function loadUserPayments() {
@@ -394,6 +552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             initializeAuthForms: typeof initializeAuthForms,
             loadCategories: typeof loadCategories
         });
+        
+         // Initialize EmailJS (add this line)
+        initializeEmailJS();
         
         // Initialize admin user
         await api.initializeAdmin();
@@ -813,28 +974,86 @@ function expandImage(src) {
     });
 }
 
+
+
+
+
+// Updated sendChatMessage function with email alerts
 async function sendChatMessage(sku) {
     const messageInput = document.getElementById('chatMessageInput');
     const message = messageInput.value.trim();
     
     if (!message || !auth.currentUser) return;
     
-    const products = await api.getAllProducts();
-    const product = products.find(p => p.sku === sku);
-    
-    if (product) {
-        if (!product.chats) product.chats = [];
+    try {
+        // Get product details
+        const products = await api.getAllProducts();
+        const product = products.find(p => p.sku === sku);
         
-        product.chats.push({
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Prepare chat message
+        const chatMessage = {
             sender: auth.currentUser.userId,
+            senderName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
             message: message,
             timestamp: new Date().toISOString(),
             read: false
+        };
+        
+        // Add message to product chats
+        if (!product.chats) product.chats = [];
+        product.chats.push(chatMessage);
+        
+        // Update unread count
+        if (auth.currentUser.userId !== product.sellerId) {
+            product.unreadChatCount = (product.unreadChatCount || 0) + 1;
+        }
+        
+        // Save to database
+        await api.updateProduct(sku, { 
+            chats: product.chats,
+            unreadChatCount: product.unreadChatCount 
         });
         
-        await api.updateProduct(sku, product);
+        // Clear input
         messageInput.value = '';
-        loadProductDetail(sku); // Reload to show new message
+        
+        // Send email alert to seller if this is a buyer message
+        if (auth.currentUser.userId !== product.sellerId) {
+            console.log('📨 New message from buyer - preparing email alert...');
+            
+            const chatData = {
+                sellerId: product.sellerId,
+                buyerId: auth.currentUser.userId,
+                buyerName: chatMessage.senderName,
+                productSku: sku,
+                productName: product.name,
+                message: message,
+                timestamp: chatMessage.timestamp
+            };
+            
+            // Send email alert (don't await to not block the chat)
+            sendChatAlertEmail(chatData).then(success => {
+                if (success) {
+                    console.log('📧 Email alert sent to seller');
+                    // Optional: Show subtle notification
+                    showNotification('Message sent and seller notified via email', 'success');
+                } else {
+                    console.log('Email alert could not be sent');
+                }
+            });
+        }
+        
+        // Reload product detail to show new message
+        loadProductDetail(sku);
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Failed to send message. Please try again.');
     }
 }
 
