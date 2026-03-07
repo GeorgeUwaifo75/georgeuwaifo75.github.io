@@ -8,8 +8,7 @@ const CONFIG = {
         ALLUSERS: 'allusers',
         ALLPRODUCTS: 'allproducts',
         ALLPAYMENTS: 'allpayments'
-    }
-    ,
+    },
     // Add EmailJS configuration
     EMAILJS: {
         PUBLIC_KEY: 'VGj6eL5SaKXRW2fIi', // Get from EmailJS dashboard
