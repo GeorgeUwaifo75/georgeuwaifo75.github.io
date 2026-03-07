@@ -16,6 +16,8 @@
     <meta name="theme-color" content="#6a4c9c"> <!-- Your purple theme color -->
 </head>
 <body>
+  <!-- Add this for mobile menu overlay -->
+<div class="menu-overlay" id="menuOverlay"></div>
     <header>
     <div class="header-container">
         <div class="logo-section">
@@ -46,10 +48,20 @@
                 <i class="fas fa-bars"></i>
             </button>
             <ul class="nav-menu" id="navMenu">
+              <!-- 
                 <li class="nav-item dropdown">
                     <a href="#" class="nav-link">Categories <i class="fas fa-chevron-down"></i></a>
                     <ul class="dropdown-menu" id="categoriesDropdown"></ul>
                 </li>
+                -->
+                
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">Categories <i class="fas fa-chevron-down"></i></a>
+                    <ul class="dropdown-menu" id="categoriesDropdown"></ul>
+                </li>
+                
+                
+                
                 <li class="nav-item"><a href="#" class="nav-link" id="homeLink"><i class="fas fa-home"></i> Home</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" id="aboutLink">About</a></li>
                 <li class="nav-item"><a href="#" class="nav-link" id="signinLink">Sign In</a></li>
