@@ -539,7 +539,7 @@ function showEditProfileForm() {
 }
 
 
-
+/*
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         console.log('App starting...');
@@ -599,6 +599,193 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert('Error initializing application. Please check the console for details.');
     }
 });
+*/
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        console.log('App starting...');
+        
+        // Check if all required functions exist
+        console.log('Checking functions:', {
+            initializeNavigation: typeof initializeNavigation,
+            initializeCategories: typeof initializeCategories,
+            initializeAuthForms: typeof initializeAuthForms,
+            loadCategories: typeof loadCategories
+        });
+        
+        // Initialize EmailJS
+        initializeEmailJS();
+        
+        // Initialize admin user
+        await api.initializeAdmin();
+        
+        // Hide New Ad menu initially (will be shown if user is merchant)
+        const newAdLink = document.getElementById('newAdLink');
+        if (newAdLink) {
+            newAdLink.style.display = 'none';
+        }
+        
+        // Check for existing session
+        const user = auth.checkSession();
+        if (user) {
+            updateUIForUser(user);
+        }
+
+        // Initialize UI components
+        initializeNavigation();
+        initializeCategories();
+        initializeAuthForms();
+        
+        // Load categories
+        loadCategories();
+
+       // Hamburger menu toggle - IMPROVED VERSION
+const hamburger = document.getElementById('hamburger');
+const navMenu = document.getElementById('navMenu');
+const menuOverlay = document.getElementById('menuOverlay');
+
+if (hamburger && navMenu) {
+    console.log('Hamburger menu initialized'); // Debug log
+    
+    // Toggle menu on hamburger click
+    hamburger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Hamburger clicked'); // Debug log
+        
+        // Toggle menu
+        navMenu.classList.toggle('active');
+        
+        // Toggle overlay
+        if (menuOverlay) {
+            menuOverlay.classList.toggle('active');
+        }
+        
+        // Toggle hamburger icon
+        const icon = hamburger.querySelector('i');
+        if (icon) {
+            if (navMenu.classList.contains('active')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-times');
+                // Prevent body scrolling when menu is open
+                document.body.style.overflow = 'hidden';
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+                // Restore body scrolling
+                document.body.style.overflow = '';
+            }
+        }
+    });
+    
+    // Close menu when clicking on overlay
+    if (menuOverlay) {
+        menuOverlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Overlay clicked'); // Debug log
+            closeMobileMenu();
+        });
+    }
+    
+    // Close menu when window resizes to desktop size
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            closeMobileMenu();
+            // Restore body scrolling
+            document.body.style.overflow = '';
+        }
+    });
+    
+    // Close menu when clicking on any nav link (except dropdown toggles)
+    const navLinks = navMenu.querySelectorAll('.nav-link:not(.dropdown-toggle)');
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                console.log('Nav link clicked, closing menu'); // Debug log
+                setTimeout(() => {
+                    closeMobileMenu();
+                }, 100); // Small delay to allow navigation
+            }
+        });
+    });
+    
+    // Handle dropdown toggles on mobile
+    const dropdowns = document.querySelectorAll('.dropdown');
+    dropdowns.forEach(dropdown => {
+        const dropdownLink = dropdown.querySelector('.nav-link');
+        if (dropdownLink) {
+            dropdownLink.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Close other dropdowns
+                    dropdowns.forEach(d => {
+                        if (d !== dropdown) {
+                            d.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle current dropdown
+                    dropdown.classList.toggle('active');
+                }
+            });
+        }
+    });
+    
+    // Close menu on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && window.innerWidth <= 768) {
+            closeMobileMenu();
+        }
+    });
+}
+        
+        console.log('App initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        alert('Error initializing application. Please check the console for details.');
+    }
+});
+
+// Helper function to close mobile menu - IMPROVED VERSION
+function closeMobileMenu() {
+    const navMenu = document.getElementById('navMenu');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const hamburger = document.getElementById('hamburger');
+    
+    if (navMenu) {
+        navMenu.classList.remove('active');
+    }
+    
+    if (menuOverlay) {
+        menuOverlay.classList.remove('active');
+    }
+    
+    if (hamburger) {
+        const icon = hamburger.querySelector('i');
+        if (icon) {
+            icon.classList.remove('fa-times');
+            icon.classList.add('fa-bars');
+        }
+    }
+    
+    // Restore body scrolling
+    document.body.style.overflow = '';
+    
+    // Close all dropdowns
+    const dropdowns = document.querySelectorAll('.dropdown');
+    dropdowns.forEach(dropdown => {
+        dropdown.classList.remove('active');
+    });
+    
+    console.log('Mobile menu closed'); // Debug log
+}
+
+// Make closeMobileMenu globally available
+window.closeMobileMenu = closeMobileMenu;
 
 
 // Rate limit management functions
