@@ -732,7 +732,7 @@ function initializeCategories() {
     
     // Sample category images (updated with new category name)
     const categoryImages = {
-        'Supermarkets and Businesses': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
+        'Supermarkets and Others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
         'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
         'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
         'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
@@ -750,7 +750,7 @@ function initializeCategories() {
         card.className = 'category-card';
         
         // Create a safe ID by replacing spaces and special characters
-        const safeCategoryId = category.replace(/[&\s]+/g, '-');
+        const safeCategoryId = category.replace(/[&\s]+/g, '-').toLowerCase();
         
         card.innerHTML = `
             <img src="${categoryImages[category]}" alt="${category}" class="category-image">
@@ -778,23 +778,8 @@ function initializeCategories() {
 }
 
 
+
 /*
-async function updateCategoryCounts() {
-    const products = await api.getAllProducts();
-    
-    CATEGORIES.forEach(category => {
-        const count = products.filter(p => p.category === category && p.activityStatus === 'Active').length;
-        document.getElementById(`count-${category}`).textContent = `${count} ads`;
-        
-        // Show notification if there are new products (you can implement this logic)
-        if (count > 0) {
-            const notif = document.getElementById(`notif-${category}`);
-            // notif.style.display = 'flex';
-            // notif.textContent = Math.floor(Math.random() * 5); // Random for demo
-        }
-    });
-}
-*/
 async function updateCategoryCounts() {
     const products = await api.getAllProducts();
     
@@ -809,8 +794,23 @@ async function updateCategoryCounts() {
             countElement.textContent = `${count} ads`;
         }
     });
-}
+}*/
 
+async function updateCategoryCounts() {
+    const products = await api.getAllProducts();
+    
+    CATEGORIES.forEach(category => {
+        const count = products.filter(p => p.category === category && p.activityStatus === 'Active').length;
+        
+        // Create a safe ID by replacing spaces and special characters
+        const safeCategoryId = category.replace(/[&\s]+/g, '-').toLowerCase();
+        const countElement = document.getElementById(`count-${safeCategoryId}`);
+        
+        if (countElement) {
+            countElement.textContent = `${count} ads`;
+        }
+    });
+}
 
 async function loadProductsByCategory(category) {
     const products = await api.getProductsByCategory(category);
