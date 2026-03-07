@@ -677,6 +677,7 @@ function initializeNavigation() {
     });
 }
 
+/*
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
     const dropdown = document.getElementById('categoriesDropdown');
@@ -723,10 +724,61 @@ function initializeCategories() {
     // Load category counts
     updateCategoryCounts();
 }
+*/
+
+function initializeCategories() {
+    const categoriesGrid = document.getElementById('categoriesGrid');
+    const dropdown = document.getElementById('categoriesDropdown');
+    
+    // Sample category images (updated with new category name)
+    const categoryImages = {
+        'Supermarkets and Businesses': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
+        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
+        'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
+        'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
+        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
+        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
+        'Automobiles': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
+        'Food services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20services.png',
+        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/furniture%20business.png',
+        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/props%20and%20real%20estate.png' 
+    };
+
+    CATEGORIES.forEach(category => {
+        // Add to grid
+        const card = document.createElement('div');
+        card.className = 'category-card';
+        
+        // Create a safe ID by replacing spaces and special characters
+        const safeCategoryId = category.replace(/[&\s]+/g, '-');
+        
+        card.innerHTML = `
+            <img src="${categoryImages[category]}" alt="${category}" class="category-image">
+            <div class="category-info">
+                <div class="category-name">${category}</div>
+                <div class="category-count" id="count-${safeCategoryId}">Loading...</div>
+                <span class="notification-badge" id="notif-${safeCategoryId}" style="display: none;">0</span>
+            </div>
+        `;
+        card.addEventListener('click', () => loadProductsByCategory(category));
+        categoriesGrid.appendChild(card);
+
+        // Add to dropdown
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="#" class="dropdown-item" data-category="${category}">${category}</a>`;
+        li.querySelector('a').addEventListener('click', (e) => {
+            e.preventDefault();
+            loadProductsByCategory(category);
+        });
+        dropdown.appendChild(li);
+    });
+
+    // Load category counts
+    updateCategoryCounts();
+}
 
 
-
-
+/*
 async function updateCategoryCounts() {
     const products = await api.getAllProducts();
     
@@ -742,7 +794,22 @@ async function updateCategoryCounts() {
         }
     });
 }
-
+*/
+async function updateCategoryCounts() {
+    const products = await api.getAllProducts();
+    
+    CATEGORIES.forEach(category => {
+        const count = products.filter(p => p.category === category && p.activityStatus === 'Active').length;
+        
+        // Create a safe ID by replacing spaces and special characters
+        const safeCategoryId = category.replace(/[&\s]+/g, '-');
+        const countElement = document.getElementById(`count-${safeCategoryId}`);
+        
+        if (countElement) {
+            countElement.textContent = `${count} ads`;
+        }
+    });
+}
 
 
 async function loadProductsByCategory(category) {
