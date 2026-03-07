@@ -19,7 +19,7 @@ const CONFIG = {
 };
 
 const CATEGORIES = [
-    'Supermarkets and Businesses', // Changed from 'Supermarkets'
+    'Supermarkets and Others', // Changed from 'Supermarkets'
     'Computing and Electronics',
     'Computer Services',
     'Household Products',
