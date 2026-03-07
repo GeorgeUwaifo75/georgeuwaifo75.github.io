@@ -558,6 +558,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Initialize admin user
         await api.initializeAdmin();
         
+        
+        // ADD THIS: Hide New Ad menu initially (will be shown if user is merchant)
+        const newAdLink = document.getElementById('newAdLink');
+        if (newAdLink) {
+            newAdLink.style.display = 'none';
+        }
+        
         // Check for existing session
         const user = auth.checkSession();
         if (user) {
@@ -666,6 +673,12 @@ function initializeNavigation() {
         e.preventDefault();
         showAuthForm('signup');
     });
+    
+    // ADD THIS: New Ad link
+    document.getElementById('newAdLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        createNewAd();
+    });
 
     // Logout button
     document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -682,6 +695,78 @@ function initializeNavigation() {
         showSection('productsSection');
     });
 }
+
+
+// Create new ad function
+function createNewAd() {
+    console.log('Creating new ad...');
+    
+    // Check if user is logged in
+    if (!auth.currentUser) {
+        // If not logged in, show sign in form with a message
+        alert('Please sign in to create a new advertisement.');
+        showAuthForm('signin');
+        return;
+    }
+    
+    // Check if user is a merchant (not admin)
+    if (auth.currentUser.userGroup === 0) {
+        alert('Admins cannot create advertisements. Please use a merchant account.');
+        return;
+    }
+    
+    // Navigate to user dashboard and show add product form
+    if (auth.currentUser.userGroup === 1) {
+        // Show user dashboard
+        showSection('userDashboardSection');
+        
+        // Load the dashboard first
+        loadUserDashboard().then(() => {
+            // Then show the add product form
+            // Find and click the "Add Product" menu item in the dashboard
+            const addProductMenuItem = document.querySelector('[data-view="add-product"]');
+            if (addProductMenuItem) {
+                addProductMenuItem.click();
+            } else {
+                // Fallback: directly call showAddProductForm
+                showAddProductForm();
+            }
+            
+            // Optional: Show a welcome message
+            console.log('Ready to create your new advertisement!');
+        });
+    }
+}
+
+// Alternative direct approach if the above doesn't work
+function createNewAdDirect() {
+    console.log('Creating new ad directly...');
+    
+    // Check if user is logged in
+    if (!auth.currentUser) {
+        alert('Please sign in to create a new advertisement.');
+        showAuthForm('signin');
+        return;
+    }
+    
+    // Check if user is a merchant (not admin)
+    if (auth.currentUser.userGroup === 0) {
+        alert('Admins cannot create advertisements. Please use a merchant account.');
+        return;
+    }
+    
+    // Navigate to user dashboard
+    showSection('userDashboardSection');
+    
+    // Load the dashboard
+    loadUserDashboard();
+    
+    // Directly call showAddProductForm after a short delay to ensure dashboard is loaded
+    setTimeout(() => {
+        showAddProductForm();
+    }, 100);
+}
+
 
 // Go to home page (categories section)
 function goToHome() {
@@ -1205,11 +1290,47 @@ function showAuthForm(type) {
     showSection('authSection');
 }
 
+/*
 function updateUIForUser(user) {
     document.getElementById('userInfo').style.display = 'flex';
     document.getElementById('displayName').textContent = user.firstName;
     document.getElementById('signinLink').style.display = 'none';
     document.getElementById('signupLink').style.display = 'none';
+    
+    // ADD THIS: Show/hide New Ad menu based on user type
+    const newAdLink = document.getElementById('newAdLink');
+    if (newAdLink) {
+        // Show New Ad for merchants (group 1), hide for admins (group 0)
+        newAdLink.style.display = user.userGroup === 1 ? 'inline-block' : 'none';
+    }
+    
+    // Show appropriate dashboard based on user type
+    if (user.userGroup === 0) {
+        loadAdminDashboard();
+        showSection('adminDashboardSection');
+    } else {
+        loadUserDashboard();
+        showSection('userDashboardSection');
+    }
+}
+ */
+
+function updateUIForUser(user) {
+    document.getElementById('userInfo').style.display = 'flex';
+    document.getElementById('displayName').textContent = user.firstName;
+    document.getElementById('signinLink').style.display = 'none';
+    document.getElementById('signupLink').style.display = 'none';
+    
+    // Show/hide New Ad menu based on user type
+    const newAdLink = document.getElementById('newAdLink');
+    if (newAdLink) {
+        // Show New Ad for merchants (group 1), hide for admins (group 0)
+        if (user.userGroup === 1) {
+            newAdLink.style.display = 'inline-flex'; // Use inline-flex for proper alignment
+        } else {
+            newAdLink.style.display = 'none';
+        }
+    }
     
     // Show appropriate dashboard based on user type
     if (user.userGroup === 0) {
@@ -2340,4 +2461,4 @@ window.performSearch = performSearch;
 window.clearSearch = clearSearch;
 
 window.goToHome = goToHome;
-
+window.createNewAd = createNewAd;
