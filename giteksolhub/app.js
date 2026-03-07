@@ -732,7 +732,7 @@ function initializeCategories() {
     
     // Sample category images (updated with new category name)
     const categoryImages = {
-        'Supermarkets and Others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
+        'All Business types': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
         'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
         'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
         'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
