@@ -1560,3 +1560,70 @@ footer {
         cursor: default;
     }
 }
+
+/* New Ad menu item styling - Compact version */
+#newAdLink {
+    background: linear-gradient(135deg, var(--primary-purple), var(--primary-red));
+    color: white !important;
+    padding: 0.25rem 0.9rem !important;
+    border-radius: 30px;
+    margin-left: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#newAdLink i {
+    margin-right: 5px;
+    font-size: 0.8rem;
+}
+
+#newAdLink:hover {
+    background: linear-gradient(135deg, var(--primary-red), var(--primary-purple));
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(106, 76, 156, 0.3);
+}
+
+#newAdLink:hover::after {
+    width: 0; /* Remove the underline effect */
+}
+
+/* Mobile adjustment for New Ad menu */
+@media (max-width: 768px) {
+    #newAdLink {
+        margin-left: 0;
+        margin-top: 0.5rem;
+        text-align: center;
+        justify-content: center;
+        padding: 0.5rem !important;
+        width: 100%;
+    }
+}
+
+/* Optional: Adjust the nav-menu gap to accommodate the new item */
+.nav-menu {
+    display: flex;
+    list-style: none;
+    gap: 1rem; /* Slightly reduced from 1.5rem */
+    align-items: center;
+}
+
+/* Make other nav links slightly more compact */
+.nav-link {
+    font-size: 0.95rem;
+    padding: 0.25rem 0;
+}
+
+/* Adjust dropdown menu to match new sizing */
+.dropdown-menu {
+    min-width: 200px;
+    font-size: 0.9rem;
+}
+
+.dropdown-menu a {
+    padding: 0.5rem 1rem;
+}
