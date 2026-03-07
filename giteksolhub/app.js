@@ -643,6 +643,12 @@ setInterval(() => {
 
 
 function initializeNavigation() {
+   // Home link
+    document.getElementById('homeLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        goToHome();
+    });
+   
     // About link
     document.getElementById('aboutLink').addEventListener('click', (e) => {
         e.preventDefault();
@@ -677,54 +683,29 @@ function initializeNavigation() {
     });
 }
 
-/*
-function initializeCategories() {
-    const categoriesGrid = document.getElementById('categoriesGrid');
-    const dropdown = document.getElementById('categoriesDropdown');
+// Go to home page (categories section)
+function goToHome() {
+    console.log('Navigating to home...');
     
-    // Sample category images (you can replace with actual images)
-    const categoryImages = {
-        'Supermarkets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png',
-        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
-        'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
-        'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
-        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
-        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
-        'Automobiles': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
-        'Food services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20services.png',
-        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/furniture%20business.png',
-        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/props%20and%20real%20estate.png' 
-    };
-
-    CATEGORIES.forEach(category => {
-        // Add to grid
-        const card = document.createElement('div');
-        card.className = 'category-card';
-        card.innerHTML = `
-            <img src="${categoryImages[category]}" alt="${category}" class="category-image">
-            <div class="category-info">
-                <div class="category-name">${category}</div>
-                <div class="category-count" id="count-${category}">Loading...</div>
-                <span class="notification-badge" id="notif-${category}" style="display: none;">0</span>
-            </div>
-        `;
-        card.addEventListener('click', () => loadProductsByCategory(category));
-        categoriesGrid.appendChild(card);
-
-        // Add to dropdown
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="#" class="dropdown-item" data-category="${category}">${category}</a>`;
-        li.querySelector('a').addEventListener('click', (e) => {
-            e.preventDefault();
-            loadProductsByCategory(category);
-        });
-        dropdown.appendChild(li);
-    });
-
-    // Load category counts
+    // Clear any search if active
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    // Show categories section
+    showSection('categoriesSection');
+    
+    // Reset category title if needed
+    const categoryTitle = document.getElementById('currentCategoryTitle');
+    if (categoryTitle) {
+        categoryTitle.textContent = '';
+    }
+    
+    // Refresh category counts
     updateCategoryCounts();
 }
-*/
+
 
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
@@ -2355,7 +2336,8 @@ window.exportPaymentsReport = exportPaymentsReport;
 window.selectPaymentType = selectPaymentType;
 window.closePaymentModal = closePaymentModal;
 
-// Make search functions globally available
 window.performSearch = performSearch;
 window.clearSearch = clearSearch;
+
+window.goToHome = goToHome;
 
