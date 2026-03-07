@@ -1401,47 +1401,76 @@ footer {
 
     .nav-menu {
         display: none !important;
-        position: fixed;
-        top: 0;
+        position: absolute;
+        top: 100%;
         left: 0;
-        width: 80%;
-        max-width: 300px;
-        height: 100vh;
+        width: 100%;
         background: var(--white);
         flex-direction: column;
-        padding: 80px 1rem 2rem;
+        padding: 1rem;
         box-shadow: var(--shadow-lg);
         z-index: 1001;
+        max-height: 80vh;
         overflow-y: auto;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
+        border-top: 3px solid var(--primary-purple);
+        animation: slideDown 0.3s ease;
     }
 
     .nav-menu.active {
         display: flex !important;
-        transform: translateX(0);
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     .nav-menu li {
         width: 100%;
-        margin: 0.25rem 0;
+        margin: 0.15rem 0;
     }
 
     .nav-link {
         display: block;
-        padding: 0.75rem 1rem !important;
+        padding: 0.7rem 1rem !important;
         width: 100%;
         text-align: left;
         border-radius: var(--border-radius-md);
         font-size: 1rem;
+        transition: all 0.2s ease;
     }
 
     .nav-link:hover {
         background: var(--light-gray);
+        padding-left: 1.5rem !important;
     }
 
     .nav-link::after {
         display: none;
+    }
+
+    /* Special styling for New Ad button in dropdown */
+    #newAdLink {
+        margin: 0.5rem 0 0 0;
+        text-align: center;
+        justify-content: center;
+        padding: 0.7rem !important;
+        width: 100%;
+        display: inline-flex;
+        background: linear-gradient(135deg, var(--primary-purple), var(--primary-red));
+        color: white !important;
+        font-weight: 600;
+    }
+
+    #newAdLink:hover {
+        background: linear-gradient(135deg, var(--primary-red), var(--primary-purple));
+        transform: translateY(-2px);
     }
 
     .dropdown {
@@ -1452,12 +1481,13 @@ footer {
     .dropdown-menu {
         position: static;
         box-shadow: none;
-        padding-left: 1rem;
+        padding-left: 0;
         display: none;
         background: var(--light-gray);
-        margin-top: 0.25rem;
+        margin: 0.25rem 0 0.25rem 0.5rem;
         border-radius: var(--border-radius-md);
-        width: 100%;
+        width: calc(100% - 0.5rem);
+        animation: slideDown 0.2s ease;
     }
 
     .dropdown.active .dropdown-menu {
@@ -1465,49 +1495,31 @@ footer {
     }
 
     .dropdown-menu a {
-        padding: 0.75rem 1.5rem !important;
+        padding: 0.6rem 1.5rem !important;
+        font-size: 0.95rem;
     }
 
     .dropdown-menu a:hover {
         background: var(--primary-purple);
         color: white !important;
+        padding-left: 2rem !important;
     }
 
-    /* New Ad button mobile styling */
-    #newAdLink {
-        margin-left: 0;
-        margin-top: 0.5rem;
-        text-align: center;
-        justify-content: center;
-        padding: 0.75rem !important;
-        width: 100%;
-        display: inline-flex;
-    }
-
-    /* Menu overlay */
+    /* Remove overlay since we're using dropdown style */
     .menu-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-        backdrop-filter: blur(3px);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-
-    .menu-overlay.active {
-        display: block !important;
-        opacity: 1;
+        display: none !important;
     }
 
     /* Adjust nav-container for mobile */
     .nav-container {
         position: relative;
         z-index: 1002;
+        flex-wrap: wrap;
+    }
+
+    /* Ensure user info is properly positioned */
+    .user-info {
+        margin-left: auto;
     }
 
     /* Rest of your mobile styles */
@@ -1557,6 +1569,22 @@ footer {
         margin: 10% auto;
         padding: 1.5rem;
         width: 95%;
+    }
+}
+
+/* Small screen adjustments */
+@media (max-width: 480px) {
+    .nav-menu {
+        padding: 0.75rem;
+    }
+    
+    .nav-link {
+        padding: 0.6rem 0.8rem !important;
+        font-size: 0.95rem;
+    }
+    
+    #newAdLink {
+        padding: 0.6rem !important;
     }
 }
 
