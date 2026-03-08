@@ -1,7 +1,7 @@
 // config.js
 const CONFIG = {
-    JSONBIN_API_KEY: '$2a$10$GY26W.StiN7bdlaoYuva3.GCGhyglj8ne8v0aaIJ895NLv9o61bqy',
-    //JSONBIN_API_KEY: '$2a$10$p33UKD.Ju51IwJKELeOTKerEQM8JPavlsiRQ1ANegN7b/2bkEMvku',
+    //JSONBIN_API_KEY: '$2a$10$GY26W.StiN7bdlaoYuva3.GCGhyglj8ne8v0aaIJ895NLv9o61bqy',
+    JSONBIN_API_KEY: '$2a$10$p33UKD.Ju51IwJKELeOTKerEQM8JPavlsiRQ1ANegN7b/2bkEMvku',
     JSONBIN_MAIN_BIN_ID: '69a99281d0ea881f40f1dc8d', // Your new bin ID
     PAYSTACK_PUBLIC_KEY: 'pk_live_2018244c913523ab0751249b240bc3e3448c3c19',
     BINS: {
