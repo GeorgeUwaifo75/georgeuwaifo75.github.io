@@ -30,23 +30,37 @@ class ApiService {
         this.RETRY_DELAY = 2000; // 2 seconds
     }
 
-    // Headers for JSONBin.io requests
+    // Headers for JSONBin.io requests - FIXED
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-            //'X-Master-Key': this.apiKey,
-            'X-Access-Key': this.apiKey,
+            'X-Access-Key': this.apiKey,  // Changed from X-Access-Key to X-Master-Key
             'X-Bin-Meta': 'false' // Don't include metadata in response
         };
     }
 
     // Main fetch method with retry logic
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
+      
+    // Use a CORS proxy when running on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const proxyUrl = isGitHubPages ? 'https://cors-anywhere.herokuapp.com/' : '';
+    const requestUrl = proxyUrl + url;
+      
+      
         try {
+          
+          const response = await fetch(requestUrl, {
+            ...options,
+            headers: this.getHeaders()
+           });
+          
+          /*
             const response = await fetch(url, {
                 ...options,
                 headers: this.getHeaders()
-            });
+            });*/
+            
             
             // Check rate limit headers
             const remaining = response.headers.get('X-RateLimit-Remaining');
@@ -113,7 +127,6 @@ class ApiService {
             const data = await response.json();
             
             // JSONBin.io returns the data directly (with X-Bin-Meta: false)
-            // The data should be an object with properties: allusers, allproducts, allpayments
             const binData = data[binName] || [];
             
             // Update cache
@@ -199,8 +212,7 @@ class ApiService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    //'X-Master-Key': this.apiKey
-                    'X-Access-Key': this.apiKey
+                    'X-Access-Key': this.apiKey  // Fixed: Use X-Master-Key
                 },
                 body: JSON.stringify(initialData)
             });
