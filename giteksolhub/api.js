@@ -34,7 +34,7 @@ class ApiService {
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-            'X-Master-Key': this.apiKey,  // Changed from X-Access-Key to X-Master-Key
+            'X-Access-Key': this.apiKey,  // Changed from X-Access-Key to X-Master-Key
             'X-Bin-Meta': 'false' // Don't include metadata in response
         };
     }
@@ -212,7 +212,7 @@ class ApiService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': this.apiKey  // Fixed: Use X-Master-Key
+                    'X-Access-Key': this.apiKey  // Fixed: Use X-Master-Key
                 },
                 body: JSON.stringify(initialData)
             });
