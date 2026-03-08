@@ -638,7 +638,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Load categories
         loadCategories();
-
+// ============ FIX: Initialize Search ============
+        // Initialize search
+        initializeSearch();
+        addSearchStyles();
 // Hamburger menu toggle - DROPDOWN STYLE
 const hamburger = document.getElementById('hamburger');
 const navMenu = document.getElementById('navMenu');
