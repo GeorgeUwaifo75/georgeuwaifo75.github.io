@@ -200,8 +200,7 @@ class ApiService {
                 headers: {
                     'Content-Type': 'application/json',
                     //'X-Master-Key': this.apiKey
-                    'X-Access-Key': this.apiKey,
-                    'X-Bin-Meta': 'false' // Don't include metadata in response
+                    'X-Access-Key': this.apiKey
                 },
                 body: JSON.stringify(initialData)
             });
