@@ -955,59 +955,6 @@ function goToHome() {
 }
 
 
-
-function initializeCategories() {
-    const categoriesGrid = document.getElementById('categoriesGrid');
-    const dropdown = document.getElementById('categoriesDropdown');
-    
-    // Sample category images (updated with new category name)
-    const categoryImages = {
-        'All Business types': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png', // Using same image
-        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
-        'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
-        'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
-        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
-        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
-        'Automobiles': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
-        'Food services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20services.png',
-        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/furniture%20business.png',
-        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/props%20and%20real%20estate.png' 
-    };
-
-    CATEGORIES.forEach(category => {
-        // Add to grid
-        const card = document.createElement('div');
-        card.className = 'category-card';
-        
-        // Create a safe ID by replacing spaces and special characters
-        const safeCategoryId = category.replace(/[&\s]+/g, '-').toLowerCase();
-        
-        card.innerHTML = `
-            <img src="${categoryImages[category]}" alt="${category}" class="category-image">
-            <div class="category-info">
-                <div class="category-name">${category}</div>
-                <div class="category-count" id="count-${safeCategoryId}">Loading...</div>
-                <span class="notification-badge" id="notif-${safeCategoryId}" style="display: none;">0</span>
-            </div>
-        `;
-        card.addEventListener('click', () => loadProductsByCategory(category));
-        categoriesGrid.appendChild(card);
-
-        // Add to dropdown
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="#" class="dropdown-item" data-category="${category}">${category}</a>`;
-        li.querySelector('a').addEventListener('click', (e) => {
-            e.preventDefault();
-            loadProductsByCategory(category);
-        });
-        dropdown.appendChild(li);
-    });
-
-    // Load category counts
-    updateCategoryCounts();
-} 
-
-/*
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
     const dropdown = document.getElementById('categoriesDropdown');
@@ -1055,7 +1002,7 @@ function initializeCategories() {
             </div>
         `;
         
-        // Add click event listener - THIS IS THE KEY PART
+        // Add click event listener
         card.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1097,7 +1044,7 @@ function initializeCategories() {
     // Load category counts
     updateCategoryCounts();
 }
-*/
+
 
 
 
@@ -1143,30 +1090,6 @@ function createProductCard(product) {
 
 
 async function loadProductsByCategory(category) {
-    const products = await api.getProductsByCategory(category);
-    const productsGrid = document.getElementById('productsGrid');
-    const categoryTitle = document.getElementById('currentCategoryTitle');
-    
-    categoryTitle.textContent = category;
-    productsGrid.innerHTML = '';
-    
-    if (products.length === 0) {
-        productsGrid.innerHTML = '<p class="text-center">No products in this category yet.</p>';
-    } else {
-        products.sort((a, b) => new Date(b.dateAdvertised) - new Date(a.dateAdvertised));
-        
-        products.forEach(product => {
-            const card = createProductCard(product);
-            productsGrid.appendChild(card);
-        });
-    }
-    
-    showSection('productsSection');
-}
-
-
-/*
-async function loadProductsByCategory(category) {
     console.log(`Loading products for category: ${category}`);
     
     try {
@@ -1206,9 +1129,10 @@ async function loadProductsByCategory(category) {
         
     } catch (error) {
         console.error('Error loading products by category:', error);
-        alert('Error loading products. Please try again.');
+        productsGrid.innerHTML = '<p class="text-center">Error loading products. Please try again.</p>';
     }
-}*/
+}
+
 
 
 
@@ -1668,7 +1592,7 @@ dashboardContent.innerHTML = `
     
     
     // After loading products, check for incomplete ones
-    await checkIncompleteProducts();
+   // await checkIncompleteProducts();
 }
 
 
@@ -2409,83 +2333,7 @@ async function handleImageUpload(input) {
 }
 
 
-/*async function handleImageUpload(input) {
-    const preview = document.getElementById('imagePreview');
-    preview.innerHTML = '';
-    const files = Array.from(input.files);
-    
-    // Show loading indicator
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'loading-spinner';
-    loadingDiv.style.cssText = 'text-align: center; padding: 20px;';
-    loadingDiv.innerHTML = 'Compressing images...';
-    preview.appendChild(loadingDiv);
-    
-    const compressedImages = [];
-    
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Check file size first (warn if too large)
-        if (file.size > 5 * 1024 * 1024) { // 5MB
-            alert(`Image ${file.name} is larger than 5MB. It will be compressed.`);
-        }
-        
-        // Read file as base64
-        const base64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.readAsDataURL(file);
-        });
-        
-        try {
-            // Compress image
-            const compressed = await compressImage(base64, 600, 600, 0.6);
-            compressedImages.push(compressed);
-            
-            // Show preview
-            const img = document.createElement('img');
-            img.src = compressed;
-            img.style.width = '100px';
-            img.style.height = '100px';
-            img.style.objectFit = 'cover';
-            img.style.margin = '5px';
-            img.style.border = '2px solid #ddd';
-            img.style.borderRadius = '5px';
-            
-            // Show file size info
-            const originalSize = (base64.length * 0.75) / 1024 / 1024; // Approximate MB
-            const newSize = (compressed.length * 0.75) / 1024 / 1024;
-            const sizeInfo = document.createElement('small');
-            sizeInfo.style.cssText = 'display: block; color: #666; font-size: 10px;';
-            sizeInfo.textContent = `${originalSize.toFixed(1)}MB → ${newSize.toFixed(1)}MB`;
-            
-            const container = document.createElement('div');
-            container.style.cssText = 'display: inline-block; text-align: center; margin: 5px;';
-            container.appendChild(img);
-            container.appendChild(sizeInfo);
-            
-            preview.appendChild(container);
-        } catch (error) {
-            console.error('Error compressing image:', error);
-            alert(`Error compressing image ${file.name}. Please try another image.`);
-        }
-    }
-    
-    // Remove loading indicator
-    if (loadingDiv.parentNode) {
-        loadingDiv.remove();
-    }
-    
-    // Update image count
-    const imageCount = document.getElementById('imageCount');
-    if (imageCount) {
-        imageCount.textContent = `${compressedImages.length} of 4 images uploaded (compressed)`;
-        imageCount.style.color = compressedImages.length >= 4 ? 'green' : 'red';
-    }
-    
-    return compressedImages;
-}*/
+
 
 
 async function loadAdminDashboard() {
