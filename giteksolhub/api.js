@@ -1,6 +1,8 @@
 // api.js - Using JSONBin.io for storage
 class ApiService {
     constructor() {
+        this.m_apiKey = CONFIG.JSONBIN_M_API_KEY;
+        
         this.apiKey = CONFIG.JSONBIN_API_KEY;
         this.baseUrl = 'https://api.jsonbin.io/v3';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
@@ -34,8 +36,9 @@ class ApiService {
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-            'X-Access-Key': this.apiKey,  // Changed from X-Access-Key to X-Master-Key
-            'X-Bin-Meta': 'false' // Don't include metadata in response
+             'X-Master-Key': this.m_apiKey,  // Your master API key
+             'X-Access-Key': this.apiKey,  
+             'X-Bin-Meta': 'false' // Don't include metadata in response
         };
     }
 
@@ -61,7 +64,9 @@ class ApiService {
           
             const response = await fetch(url, {
                 ...options,
-                headers: this.getHeaders()
+                headers: this.getHeaders(),
+                mode: 'cors', // Explicitly set CORS mode
+                credentials: 'omit' // Don't send cookies
             });
             
             
