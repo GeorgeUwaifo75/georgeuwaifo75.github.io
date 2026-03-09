@@ -44,11 +44,16 @@ class ApiService {
 
     // Main fetch method with retry logic
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-      
+
+//New addition
+        // In your fetchWithRetry method
+                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+                const requestUrl = proxyUrl + url;
+        //End new addition
         try {
        
-          
-            const response = await fetch(url, {
+          //const response = await fetch(url, {
+            const response = await fetch(requestUrl, {   //New addition
                 ...options,
                 headers: this.getHeaders(),
                 mode: 'cors', // Explicitly set CORS mode
