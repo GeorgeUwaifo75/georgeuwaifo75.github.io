@@ -453,7 +453,7 @@ class ApiService {
 
 
 
-
+/*
 async createProduct(productData) {
     try {
         const products = await this.getAllProducts();
@@ -520,7 +520,8 @@ async createProduct(productData) {
         console.error('Error creating product:', error);
         throw error;
     }
-} 
+}
+*/
 
 
 
@@ -717,7 +718,7 @@ async createProductTextOnly(productData) {
     }
 }
 
-// Step 2-5: Upload individual image
+// Step 2-5: Upload individual image - IMPROVED VERSION
 async uploadProductImage(sku, imageIndex, imageData) {
     try {
         const products = await this.getAllProducts();
@@ -727,27 +728,81 @@ async uploadProductImage(sku, imageIndex, imageData) {
             throw new Error('Product not found');
         }
         
-        // Ensure images array exists
+        // Ensure images array exists with proper length
         if (!products[productIndex].images) {
             products[productIndex].images = [];
         }
         
-        // Place image at correct index
+        // Ensure the array is long enough
+        while (products[productIndex].images.length <= imageIndex) {
+            products[productIndex].images.push(null);
+        }
+        
+        // Store the image
         products[productIndex].images[imageIndex] = imageData;
-        products[productIndex].uploadedImages = (products[productIndex].uploadedImages || 0) + 1;
+        
+        // Count actual uploaded images (non-null entries)
+        const uploadedCount = products[productIndex].images.filter(img => img !== null && img !== undefined).length;
+        products[productIndex].uploadedImages = uploadedCount;
         products[productIndex].updatedAt = new Date().toISOString();
         
+        // Save to bin
         await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
         
-        console.log(`✅ Image ${imageIndex + 1}/${products[productIndex].imageCount} uploaded for ${sku}`);
+        console.log(`✅ Image ${imageIndex + 1}/${products[productIndex].imageCount} uploaded for ${sku} (Total: ${uploadedCount}/${products[productIndex].imageCount})`);
         
         return {
-            uploadedImages: products[productIndex].uploadedImages,
+            uploadedImages: uploadedCount,
             totalImages: products[productIndex].imageCount
         };
         
     } catch (error) {
         console.error(`Error uploading image ${imageIndex}:`, error);
+        throw error;
+    }
+}
+
+// Step 6: Mark product as complete - IMPROVED VERSION
+async finalizeProduct(sku) {
+    try {
+        const products = await this.getAllProducts();
+        const productIndex = products.findIndex(p => p.sku === sku);
+        
+        if (productIndex === -1) {
+            throw new Error('Product not found');
+        }
+        
+        const product = products[productIndex];
+        
+        // Count actual images (non-null entries)
+        const actualImages = product.images ? product.images.filter(img => img !== null && img !== undefined) : [];
+        const uploadedCount = actualImages.length;
+        
+        // Verify all images uploaded
+        if (uploadedCount !== product.imageCount) {
+            console.log(`⚠️ Product incomplete: ${uploadedCount}/${product.imageCount} images uploaded`);
+            
+            // Update the uploadedImages count to reflect reality
+            product.uploadedImages = uploadedCount;
+            product.updatedAt = new Date().toISOString();
+            await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+            
+            throw new Error(`Product incomplete: ${uploadedCount}/${product.imageCount} images uploaded`);
+        }
+        
+        // Mark as active and complete
+        product.activityStatus = 'Active';
+        product.uploadComplete = true;
+        product.updatedAt = new Date().toISOString();
+        
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        console.log(`✅ Product ${sku} finalized and active with ${uploadedCount} images`);
+        
+        return product;
+        
+    } catch (error) {
+        console.error('Error finalizing product:', error);
         throw error;
     }
 }
@@ -1107,6 +1162,10 @@ checkAndClearPendingForBin(binName) {
         this.savePendingOperations();
     }
 }
+
+
+
+
 
 //End of New addition
 
