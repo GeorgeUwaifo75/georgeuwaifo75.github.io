@@ -50,9 +50,9 @@ class ApiService {
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-             'X-Master-Key': this.m_apiKey,  // Your master API key
+             'X-Master-Key': this.m_apiKey,  
              'X-Access-Key': this.apiKey,  
-             'X-Bin-Meta': 'false' // Don't include metadata in response
+             'X-Bin-Meta': 'false' 
         };
     }
 
@@ -221,9 +221,7 @@ class ApiService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                   // 'X-Access-Key': this.apiKey  // Fixed: Use X-Master-Key
-                    
-                    'X-Master-Key': this.m_apiKey,  // Your master API key
+                    'X-Master-Key': this.m_apiKey,  
                     'X-Access-Key': this.apiKey,  
                     'X-Bin-Meta': 'false' // Don't include metadata in response
                     
@@ -988,6 +986,10 @@ checkAndClearPendingForBin(binName) {
             console.error('Error loading from localStorage:', e);
         }
     }
+    
+   
+    
+    
 }
 
 const api = new ApiService();
