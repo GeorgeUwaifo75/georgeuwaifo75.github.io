@@ -539,67 +539,22 @@ function showEditProfileForm() {
 }
 
 
-/*
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        console.log('App starting...');
-        
-        // Check if all required functions exist
-        console.log('Checking functions:', {
-            initializeNavigation: typeof initializeNavigation,
-            initializeCategories: typeof initializeCategories,
-            initializeAuthForms: typeof initializeAuthForms,
-            loadCategories: typeof loadCategories
-        });
-        
-         // Initialize EmailJS (add this line)
-        initializeEmailJS();
-        
-        // Initialize admin user
-        await api.initializeAdmin();
-        
-        
-        // ADD THIS: Hide New Ad menu initially (will be shown if user is merchant)
-        const newAdLink = document.getElementById('newAdLink');
-        if (newAdLink) {
-            newAdLink.style.display = 'none';
-        }
-        
-        // Check for existing session
-        const user = auth.checkSession();
-        if (user) {
-            updateUIForUser(user);
-        }
 
-        // Initialize UI components
-        initializeNavigation();
-        initializeCategories();
-        initializeAuthForms(); // Now this exists
-        
-        
-        // ADD THIS: Initialize search
-        initializeSearch();
-        addSearchStyles();
-        
-        // Load categories
-        loadCategories();
-
-        // Hamburger menu toggle
-        const hamburger = document.getElementById('hamburger');
-        if (hamburger) {
-            hamburger.addEventListener('click', () => {
-                document.getElementById('navMenu').classList.toggle('active');
-            });
-        }
-        
-        console.log('App initialized successfully');
-        
-    } catch (error) {
-        console.error('Error initializing app:', error);
-        alert('Error initializing application. Please check the console for details.');
+// Update pending operations indicator
+function updatePendingOperationsIndicator() {
+    const indicator = document.getElementById('pendingOperationsIndicator');
+    const pendingCount = document.getElementById('pendingCount');
+    
+    if (api.requestQueue && api.requestQueue.length > 0) {
+        pendingCount.textContent = api.requestQueue.length;
+        indicator.style.display = 'inline-flex';
+    } else {
+        indicator.style.display = 'none';
     }
-});
-*/
+}
+
+// Call this periodically
+setInterval(updatePendingOperationsIndicator, 5000);
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -1105,6 +1060,7 @@ async function loadProductsByCategory(category) {
     showSection('productsSection');
 }
 
+/*
 function createProductCard(product) {
     const card = document.createElement('div');
     card.className = 'product-card';
@@ -1127,7 +1083,235 @@ function createProductCard(product) {
     
     card.addEventListener('click', () => loadProductDetail(product.sku));
     return card;
+}*/
+
+// Replace your existing createProduct function with this chunked version
+async function createProduct(paymentStatus, productData = null, paymentType = null) {
+    try {
+        let images = [];
+        let name, category, description, price;
+        
+        if (productData) {
+            name = productData.name;
+            category = productData.category;
+            description = productData.description;
+            price = productData.price;
+            images = productData.images;
+        } else {
+            images = await collectImages();
+            if (!images) return null;
+            
+            name = document.getElementById('productName').value;
+            category = document.getElementById('productCategory').value;
+            description = document.getElementById('productDescription').value;
+            price = document.getElementById('productPrice').value;
+        }
+        
+        // Validate inputs
+        if (!name || !category || !description || !price || images.length < 4) {
+            throw new Error('Missing required fields or insufficient images');
+        }
+        
+        // Show progress indicator
+        showUploadProgress(0, images.length, 'Creating product...');
+        
+        // STEP 1: Create product with text data only
+        const textProductData = {
+            name: name,
+            description: description,
+            price: parseFloat(price),
+            category: category,
+            images: images, // Pass images array to know count
+            sellerId: auth.currentUser.userId,
+            sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
+            sellerContact: auth.currentUser.telephone,
+            paymentStatus: paymentStatus,
+            paymentType: paymentType
+        };
+        
+        const product = await api.createProductTextOnly(textProductData);
+        
+        // STEP 2-5: Upload images one by one
+        for (let i = 0; i < images.length; i++) {
+            showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
+            
+            // Compress image if needed (using your existing compressImage function)
+            let imageToUpload = images[i];
+            if (imageToUpload.length > 500000) { // If larger than ~500KB
+                imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+            }
+            
+            await api.uploadProductImage(product.sku, i, imageToUpload);
+            
+            // Small delay between uploads to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // STEP 6: Finalize product
+        const finalizedProduct = await api.finalizeProduct(product.sku);
+        
+        // Hide progress
+        hideUploadProgress();
+        
+        // Update user's advert count
+        const users = await api.getAllUsers();
+        const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+        }
+        
+        console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
+        
+        // Show success message
+        showNotification('✅ Product created successfully!', 'success');
+        
+        return finalizedProduct;
+        
+    } catch (error) {
+        console.error('❌ Error in chunked product creation:', error);
+        hideUploadProgress();
+        
+        if (error.message.includes('incomplete')) {
+            showNotification('⚠️ Product partially uploaded. Check your products list.', 'warning');
+        } else {
+            showNotification('❌ Failed to create product: ' + error.message, 'error');
+        }
+        
+        throw error;
+    }
 }
+
+// Progress indicator functions
+function showUploadProgress(current, total, message) {
+    // Remove existing progress if any
+    hideUploadProgress();
+    
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'uploadProgress';
+    progressDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        z-index: 10000;
+        min-width: 300px;
+        text-align: center;
+    `;
+    
+    const percent = Math.round((current / total) * 100);
+    
+    progressDiv.innerHTML = `
+        <h3 style="margin-bottom: 15px; color: var(--primary-purple);">Uploading Product</h3>
+        <p style="margin-bottom: 10px;">${message}</p>
+        <div style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
+            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, var(--primary-purple), var(--primary-red)); transition: width 0.3s ease;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: #666;">${current}/${total} completed</p>
+    `;
+    
+    document.body.appendChild(progressDiv);
+}
+
+function hideUploadProgress() {
+    const existing = document.getElementById('uploadProgress');
+    if (existing) existing.remove();
+}
+
+
+// Add to app.js - Check for incomplete products on dashboard load
+async function checkIncompleteProducts() {
+    const products = await api.getProductsBySeller(auth.currentUser.userId);
+    const incomplete = products.filter(p => !p.uploadComplete && p.activityStatus === 'Pending');
+    
+    if (incomplete.length > 0) {
+        console.log(`Found ${incomplete.length} incomplete products`);
+        
+        // Show notification with option to resume
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'block';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>⚠️ Incomplete Uploads</h3>
+                <p>You have ${incomplete.length} product(s) with incomplete image uploads.</p>
+                <div style="margin: 20px 0;">
+                    ${incomplete.map(p => `
+                        <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px;">
+                            <strong>${p.name}</strong>
+                            <p style="font-size: 0.9rem; margin: 5px 0;">Uploaded ${p.uploadedImages || 0}/${p.imageCount} images</p>
+                            <button onclick="resumeProductUpload('${p.sku}')" class="btn-small">Resume Upload</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="this.closest('.modal').remove()" class="btn">Close</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+}
+
+// Resume upload for incomplete product
+async function resumeProductUpload(sku) {
+    try {
+        const products = await api.getAllProducts();
+        const product = products.find(p => p.sku === sku);
+        
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Close modal
+        document.querySelector('.modal').remove();
+        
+        // Resume from where it left off
+        const startIndex = product.uploadedImages || 0;
+        const totalImages = product.imageCount || 0;
+        
+        showUploadProgress(startIndex, totalImages, 'Resuming upload...');
+        
+        for (let i = startIndex; i < totalImages; i++) {
+            // Note: You'll need to have the original images stored somewhere
+            // This assumes images are already in the product object
+            if (product.images && product.images[i]) {
+                showUploadProgress(i + 1, totalImages, `Uploading image ${i + 1}/${totalImages}...`);
+                
+                await api.uploadProductImage(sku, i, product.images[i]);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        // Finalize
+        await api.finalizeProduct(sku);
+        hideUploadProgress();
+        
+        showNotification('✅ Product upload completed!', 'success');
+        loadUserDashboard(); // Refresh dashboard
+        
+    } catch (error) {
+        console.error('Error resuming upload:', error);
+        hideUploadProgress();
+        showNotification('❌ Failed to resume upload: ' + error.message, 'error');
+    }
+}
+
+// Add to loadUserDashboard function
+
+/*async function loadUserDashboard() {
+    // ... existing code ...
+    
+    // After loading products, check for incomplete ones
+    await checkIncompleteProducts();
+}*/
+
+
+
+
 
 async function loadProductDetail(sku) {
     try {
@@ -1495,30 +1679,7 @@ function showAuthForm(type) {
     showSection('authSection');
 }
 
-/*
-function updateUIForUser(user) {
-    document.getElementById('userInfo').style.display = 'flex';
-    document.getElementById('displayName').textContent = user.firstName;
-    document.getElementById('signinLink').style.display = 'none';
-    document.getElementById('signupLink').style.display = 'none';
-    
-    // ADD THIS: Show/hide New Ad menu based on user type
-    const newAdLink = document.getElementById('newAdLink');
-    if (newAdLink) {
-        // Show New Ad for merchants (group 1), hide for admins (group 0)
-        newAdLink.style.display = user.userGroup === 1 ? 'inline-block' : 'none';
-    }
-    
-    // Show appropriate dashboard based on user type
-    if (user.userGroup === 0) {
-        loadAdminDashboard();
-        showSection('adminDashboardSection');
-    } else {
-        loadUserDashboard();
-        showSection('userDashboardSection');
-    }
-}
- */
+
 
 function updateUIForUser(user) {
     document.getElementById('userInfo').style.display = 'flex';
@@ -1551,43 +1712,49 @@ async function loadUserDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     const products = await api.getProductsBySeller(auth.currentUser.userId);
     
-    dashboardContent.innerHTML = `
-        <h3>My Products</h3>
-        <div class="table-container">
-            <table>
-                <thead>
+  // In loadUserDashboard function, update the product display
+dashboardContent.innerHTML = `
+    <h3>My Products</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                    <th>Upload</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${products.map(product => {
+                    const uploadStatus = !product.uploadComplete 
+                        ? `<span style="color: orange;">${product.uploadedImages || 0}/${product.imageCount || 0}</span>`
+                        : '<span style="color: green;">Complete</span>';
+                    
+                    return `
                     <tr>
-                        <th>Image</th>
-                        <th>SKU</th>
-                        <th>Name</th>
-                        <th>Price</th>
-                        <th>Status</th>
-                        <th>Payment</th>
-                        <th>Actions</th>
+                        <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
+                        <td>${product.sku}</td>
+                        <td>${product.name}</td>
+                        <td>₦${product.price}</td>
+                        <td>${product.activityStatus}</td>
+                        <td>${uploadStatus}</td>
+                        <td>
+                            ${!product.uploadComplete ? 
+                                `<button onclick="resumeProductUpload('${product.sku}')" class="btn-small" style="background: orange;">Resume</button>` : 
+                                `<button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
+                                 <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>`
+                            }
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    ${products.map(product => `
-                        <tr>
-                            <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
-                            <td>${product.sku}</td>
-                            <td>${product.name}</td>
-                            <td>₦${product.price}</td>
-                            <td>${product.activityStatus}</td>
-                            <td>${product.paymentStatus}</td>
-                            <td>
-                                <button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
-                                <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
-                                ${product.paymentStatus !== 'paid' && auth.currentUser.numberOfAdverts >= 2 ? 
-                                    `<button onclick="payForAdvert('${product.sku}')" class="btn-small" style="background: green;">Pay</button>` : ''}
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-    
+                `}).join('')}
+            </tbody>
+        </table>
+    </div>
+`;
     // Add event listeners for dashboard menu
     document.querySelectorAll('.dashboard-menu li').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -1606,6 +1773,11 @@ async function loadUserDashboard() {
             }
         });
     });
+    
+    
+    
+    // After loading products, check for incomplete ones
+    await checkIncompleteProducts();
 }
 
 
@@ -1915,20 +2087,19 @@ async function processPaidProduct(productDataStr) {
 
 
 // Enhanced createProduct function with better error handling
+// Replace your existing createProduct function with this chunked version
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
         let name, category, description, price;
         
         if (productData) {
-            // Use provided product data
             name = productData.name;
             category = productData.category;
             description = productData.description;
             price = productData.price;
             images = productData.images;
         } else {
-            // Collect from form
             images = await collectImages();
             if (!images) return null;
             
@@ -1943,70 +2114,115 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             throw new Error('Missing required fields or insufficient images');
         }
         
-        const now = new Date();
-        let endDate = null;
+        // Show progress indicator
+        showUploadProgress(0, images.length, 'Creating product...');
         
-        // Calculate end date based on payment status and type
-        if (paymentStatus === 'free') {
-            endDate = new Date();
-            endDate.setDate(endDate.getDate() + 14); // 2 weeks for free products
-        } else if (paymentStatus === 'paid' && paymentType) {
-            endDate = new Date();
-            switch(paymentType) {
-                case 'daily':
-                    endDate.setDate(endDate.getDate() + 1);
-                    break;
-                case 'weekly':
-                    endDate.setDate(endDate.getDate() + 7);
-                    break;
-                case 'monthly':
-                    endDate.setMonth(endDate.getMonth() + 1);
-                    break;
-                default:
-                    endDate.setDate(endDate.getDate() + 7);
-            }
-        }
-        
-        // Prepare product data with complete structure
-        const productDataObj = {
+        // STEP 1: Create product with text data only
+        const textProductData = {
             name: name,
             description: description,
             price: parseFloat(price),
             category: category,
-            images: images,
+            images: images, // Pass images array to know count
             sellerId: auth.currentUser.userId,
             sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
             sellerContact: auth.currentUser.telephone,
             paymentStatus: paymentStatus,
-            paymentType: paymentType,
-            activityStatus: (paymentStatus === 'free' || paymentStatus === 'paid') ? 'Active' : 'Inactive',
-            endDate: endDate ? endDate.toISOString() : null
+            paymentType: paymentType
         };
         
-        console.log('Creating product with data size:', JSON.stringify(productDataObj).length / 1024, 'KB');
+        const product = await api.createProductTextOnly(textProductData);
         
-        // Save to database
-        const createdProduct = await api.createProduct(productDataObj);
+        // STEP 2-5: Upload images one by one
+        for (let i = 0; i < images.length; i++) {
+            showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
+            
+            // Compress image if needed (using your existing compressImage function)
+            let imageToUpload = images[i];
+            if (imageToUpload.length > 500000) { // If larger than ~500KB
+                imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+            }
+            
+            await api.uploadProductImage(product.sku, i, imageToUpload);
+            
+            // Small delay between uploads to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
         
-        console.log('✅ Product created successfully:', createdProduct);
-        return createdProduct;
+        // STEP 6: Finalize product
+        const finalizedProduct = await api.finalizeProduct(product.sku);
+        
+        // Hide progress
+        hideUploadProgress();
+        
+        // Update user's advert count
+        const users = await api.getAllUsers();
+        const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+        }
+        
+        console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
+        
+        // Show success message
+        showNotification('✅ Product created successfully!', 'success');
+        
+        return finalizedProduct;
         
     } catch (error) {
-        console.error('❌ Error in createProduct:', error);
+        console.error('❌ Error in chunked product creation:', error);
+        hideUploadProgress();
         
-        // Show user-friendly error message
-        if (error.message.includes('413') || error.message.includes('Too Large')) {
-            alert('Product images are too large. Please use smaller images or reduce quality.');
-        } else if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
-            alert('Network error. Please check your connection and try again.');
+        if (error.message.includes('incomplete')) {
+            showNotification('⚠️ Product partially uploaded. Check your products list.', 'warning');
         } else {
-            alert('Error creating product: ' + error.message);
+            showNotification('❌ Failed to create product: ' + error.message, 'error');
         }
         
         throw error;
     }
 }
 
+// Progress indicator functions
+function showUploadProgress(current, total, message) {
+    // Remove existing progress if any
+    hideUploadProgress();
+    
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'uploadProgress';
+    progressDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        z-index: 10000;
+        min-width: 300px;
+        text-align: center;
+    `;
+    
+    const percent = Math.round((current / total) * 100);
+    
+    progressDiv.innerHTML = `
+        <h3 style="margin-bottom: 15px; color: var(--primary-purple);">Uploading Product</h3>
+        <p style="margin-bottom: 10px;">${message}</p>
+        <div style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
+            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, var(--primary-purple), var(--primary-red)); transition: width 0.3s ease;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: #666;">${current}/${total} completed</p>
+    `;
+    
+    document.body.appendChild(progressDiv);
+}
+
+function hideUploadProgress() {
+    const existing = document.getElementById('uploadProgress');
+    if (existing) existing.remove();
+}
 
 function showPaymentOptions() {
     const modal = document.createElement('div');
@@ -2177,9 +2393,7 @@ async function deleteProduct(sku) {
 }
 
 // Enhanced image compression with much smaller output
-//async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
-async function compressImage(base64String, maxWidth = 300, maxHeight = 300, quality = 0.3) {
-    
+async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = base64String;
