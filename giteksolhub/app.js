@@ -1086,6 +1086,7 @@ function createProductCard(product) {
 }*/
 
 // Replace your existing createProduct function with this chunked version
+/*
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
@@ -1129,41 +1130,66 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             paymentType: paymentType
         };
         
+        console.log('Creating text product...');
         const product = await api.createProductTextOnly(textProductData);
+        console.log('Text product created:', product);
         
         // STEP 2-5: Upload images one by one
+        let successCount = 0;
+        
         for (let i = 0; i < images.length; i++) {
-            showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
-            
-            // Compress image if needed (using your existing compressImage function)
-            let imageToUpload = images[i];
-            if (imageToUpload.length > 500000) { // If larger than ~500KB
-                imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+            try {
+                showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
+                
+                // Compress image if needed
+                let imageToUpload = images[i];
+                
+                // Check if compression is needed
+                if (imageToUpload.length > 300000) { // If larger than ~300KB
+                    imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+                }
+                
+                await api.uploadProductImage(product.sku, i, imageToUpload);
+                successCount++;
+                
+                // Small delay between uploads to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+            } catch (uploadError) {
+                console.error(`Error uploading image ${i + 1}:`, uploadError);
+                showNotification(`Warning: Image ${i + 1} upload failed, continuing...`, 'warning');
+                // Continue with next image
             }
-            
-            await api.uploadProductImage(product.sku, i, imageToUpload);
-            
-            // Small delay between uploads to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Check if all images were uploaded
+        if (successCount < images.length) {
+            hideUploadProgress();
+            showNotification(`⚠️ Uploaded ${successCount}/${images.length} images. You can resume later.`, 'warning');
+            await loadUserDashboard(); // Refresh to show pending product
+            return product;
         }
         
         // STEP 6: Finalize product
+        console.log('Finalizing product...');
         const finalizedProduct = await api.finalizeProduct(product.sku);
         
         // Hide progress
         hideUploadProgress();
         
         // Update user's advert count
-        const users = await api.getAllUsers();
-        const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
-        if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+        try {
+            const users = await api.getAllUsers();
+            const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
+            if (userIndex !== -1) {
+                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+                await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+            }
+        } catch (countError) {
+            console.error('Error updating user advert count:', countError);
         }
         
         console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
-        
-        // Show success message
         showNotification('✅ Product created successfully!', 'success');
         
         return finalizedProduct;
@@ -1180,7 +1206,8 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         
         throw error;
     }
-}
+}*/
+
 
 // Progress indicator functions
 function showUploadProgress(current, total, message) {
@@ -1255,43 +1282,98 @@ async function checkIncompleteProducts() {
     }
 }
 
-// Resume upload for incomplete product
+// Resume upload for incomplete product - IMPROVED VERSION
 async function resumeProductUpload(sku) {
     try {
+        console.log(`🔄 Resuming upload for product: ${sku}`);
+        
+        // Close modal first
+        const modal = document.querySelector('.modal');
+        if (modal) modal.remove();
+        
+        // Get fresh product data
         const products = await api.getAllProducts();
         const product = products.find(p => p.sku === sku);
         
         if (!product) {
-            alert('Product not found');
+            showNotification('Product not found', 'error');
             return;
         }
         
-        // Close modal
-        document.querySelector('.modal').remove();
+        console.log('Product data:', {
+            sku: product.sku,
+            name: product.name,
+            uploadedImages: product.uploadedImages || 0,
+            imageCount: product.imageCount || 0,
+            imagesCount: product.images ? product.images.length : 0
+        });
         
         // Resume from where it left off
         const startIndex = product.uploadedImages || 0;
         const totalImages = product.imageCount || 0;
         
+        if (startIndex >= totalImages) {
+            // Already complete, just finalize
+            await api.finalizeProduct(sku);
+            showNotification('✅ Product already complete!', 'success');
+            loadUserDashboard();
+            return;
+        }
+        
         showUploadProgress(startIndex, totalImages, 'Resuming upload...');
         
+        // Check if images exist in the product object
+        if (!product.images || product.images.length === 0) {
+            hideUploadProgress();
+            showNotification('❌ No images found to resume. Please recreate the product.', 'error');
+            return;
+        }
+        
+        let successCount = 0;
+        
         for (let i = startIndex; i < totalImages; i++) {
-            // Note: You'll need to have the original images stored somewhere
-            // This assumes images are already in the product object
-            if (product.images && product.images[i]) {
+            try {
                 showUploadProgress(i + 1, totalImages, `Uploading image ${i + 1}/${totalImages}...`);
                 
-                await api.uploadProductImage(sku, i, product.images[i]);
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Get the image from product.images
+                const imageToUpload = product.images[i];
+                
+                if (!imageToUpload) {
+                    console.warn(`⚠️ Image at index ${i} is missing`);
+                    continue;
+                }
+                
+                // Upload the image
+                await api.uploadProductImage(sku, i, imageToUpload);
+                successCount++;
+                
+                // Small delay to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+            } catch (uploadError) {
+                console.error(`Error uploading image ${i + 1}:`, uploadError);
+                showNotification(`Failed to upload image ${i + 1}`, 'warning');
+                // Continue with next image instead of stopping
             }
         }
         
-        // Finalize
-        await api.finalizeProduct(sku);
         hideUploadProgress();
         
-        showNotification('✅ Product upload completed!', 'success');
-        loadUserDashboard(); // Refresh dashboard
+        if (successCount > 0) {
+            // Try to finalize
+            try {
+                await api.finalizeProduct(sku);
+                showNotification('✅ Product upload completed successfully!', 'success');
+            } catch (finalizeError) {
+                console.error('Finalize error:', finalizeError);
+                showNotification(`⚠️ Uploaded ${successCount} images but product not complete. Please try again.`, 'warning');
+            }
+        } else {
+            showNotification('❌ No images were uploaded successfully', 'error');
+        }
+        
+        // Refresh dashboard
+        await loadUserDashboard();
         
     } catch (error) {
         console.error('Error resuming upload:', error);
@@ -2088,6 +2170,7 @@ async function processPaidProduct(productDataStr) {
 
 // Enhanced createProduct function with better error handling
 // Replace your existing createProduct function with this chunked version
+// Replace your existing chunked createProduct function with this improved version
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
@@ -2131,41 +2214,66 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             paymentType: paymentType
         };
         
+        console.log('Creating text product...');
         const product = await api.createProductTextOnly(textProductData);
+        console.log('Text product created:', product);
         
         // STEP 2-5: Upload images one by one
+        let successCount = 0;
+        
         for (let i = 0; i < images.length; i++) {
-            showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
-            
-            // Compress image if needed (using your existing compressImage function)
-            let imageToUpload = images[i];
-            if (imageToUpload.length > 500000) { // If larger than ~500KB
-                imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+            try {
+                showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
+                
+                // Compress image if needed
+                let imageToUpload = images[i];
+                
+                // Check if compression is needed
+                if (imageToUpload.length > 300000) { // If larger than ~300KB
+                    imageToUpload = await compressImage(images[i], 400, 400, 0.3);
+                }
+                
+                await api.uploadProductImage(product.sku, i, imageToUpload);
+                successCount++;
+                
+                // Small delay between uploads to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+            } catch (uploadError) {
+                console.error(`Error uploading image ${i + 1}:`, uploadError);
+                showNotification(`Warning: Image ${i + 1} upload failed, continuing...`, 'warning');
+                // Continue with next image
             }
-            
-            await api.uploadProductImage(product.sku, i, imageToUpload);
-            
-            // Small delay between uploads to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Check if all images were uploaded
+        if (successCount < images.length) {
+            hideUploadProgress();
+            showNotification(`⚠️ Uploaded ${successCount}/${images.length} images. You can resume later.`, 'warning');
+            await loadUserDashboard(); // Refresh to show pending product
+            return product;
         }
         
         // STEP 6: Finalize product
+        console.log('Finalizing product...');
         const finalizedProduct = await api.finalizeProduct(product.sku);
         
         // Hide progress
         hideUploadProgress();
         
         // Update user's advert count
-        const users = await api.getAllUsers();
-        const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
-        if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+        try {
+            const users = await api.getAllUsers();
+            const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
+            if (userIndex !== -1) {
+                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+                await api.updateBin(CONFIG.BINS.ALLUSERS, users);
+            }
+        } catch (countError) {
+            console.error('Error updating user advert count:', countError);
         }
         
         console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
-        
-        // Show success message
         showNotification('✅ Product created successfully!', 'success');
         
         return finalizedProduct;
