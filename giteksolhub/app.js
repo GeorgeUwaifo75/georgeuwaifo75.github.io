@@ -1609,27 +1609,8 @@ async function loadUserDashboard() {
 }
 
 
-// New helper function to collect images
-/*
-async function collectImages() {
-    const previewContainers = document.querySelectorAll('#imagePreview div');
-    const images = [];
-    
-    for (const container of previewContainers) {
-        const img = container.querySelector('img');
-        if (img) {
-            images.push(img.src);
-        }
-    }
-    
-    if (images.length < 4) {
-        alert(`Please upload at least 4 images. Currently have ${images.length}`);
-        return null;
-    }
-    
-    return images;
-}*/
 
+// Updated collectImages function with strict size validation
 async function collectImages() {
     const previewContainers = document.querySelectorAll('#imagePreview div');
     const images = [];
@@ -1649,13 +1630,13 @@ async function collectImages() {
         return null;
     }
     
-    // Check total payload size (JSONBin.io limit is ~10MB, leave margin)
-    if (totalSize > 9) {
-        alert(`Total image size (${totalSize.toFixed(1)}MB) exceeds the limit. Please use smaller images or lower quality.`);
+    // Strict size check (JSONBin.io limit is 10MB, leave safety margin)
+    if (totalSize > 8) {
+        alert(`Total image size (${totalSize.toFixed(1)}MB) exceeds the safe limit of 8MB. Please use smaller images or lower quality.`);
         return null;
     }
     
-    console.log(`Total payload size: ${totalSize.toFixed(2)}MB`);
+    console.log(`✅ Total payload size: ${totalSize.toFixed(2)}MB - OK`);
     return images;
 }
 
@@ -1792,10 +1773,7 @@ function showAddProductForm() {
                 <input type="file" id="productImages" multiple accept="image/*" onchange="handleImageUpload(this)">
                 <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem;"></div>
                 <small id="imageCount" style="color: red;">0 of 4 images uploaded</small>
-                <!-- ADD THIS: Size warning element -->
-                <div id="sizeWarning" style="color: orange; margin-top: 5px; font-size: 0.85rem; display: none;"></div>
-                
-                
+                <small id="sizeWarning" style="color: orange; display: block; margin-top: 5px;"></small>
             </div>
             <button type="submit" class="btn" id="submitProductBtn">Add Product</button>
         </form>
@@ -1813,6 +1791,13 @@ function showAddProductForm() {
         e.preventDefault();
         
         const submitBtn = document.getElementById('submitProductBtn');
+        
+        // Check if button is disabled (images too large)
+        if (submitBtn.disabled) {
+            alert('Please reduce image sizes before submitting.');
+            return;
+        }
+        
         submitBtn.disabled = true;
         submitBtn.textContent = 'Processing...';
         
@@ -1873,7 +1858,7 @@ function showAddProductForm() {
             
         } catch (error) {
             console.error('Error in form submission:', error);
-            alert('Error creating product: ' + error.message);
+            // Error message already shown in createProduct
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Add Product';
@@ -1929,7 +1914,7 @@ async function processPaidProduct(productDataStr) {
 }
 
 
-// Fixed createProduct function with complete data structure
+// Enhanced createProduct function with better error handling
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
@@ -1978,7 +1963,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
                     endDate.setMonth(endDate.getMonth() + 1);
                     break;
                 default:
-                    endDate.setDate(endDate.getDate() + 7); // Default to 1 week
+                    endDate.setDate(endDate.getDate() + 7);
             }
         }
         
@@ -1998,16 +1983,26 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             endDate: endDate ? endDate.toISOString() : null
         };
         
-        console.log('Creating product with data:', productDataObj);
+        console.log('Creating product with data size:', JSON.stringify(productDataObj).length / 1024, 'KB');
         
         // Save to database
         const createdProduct = await api.createProduct(productDataObj);
         
-        console.log('Product created successfully:', createdProduct);
+        console.log('✅ Product created successfully:', createdProduct);
         return createdProduct;
         
     } catch (error) {
-        console.error('Error in createProduct:', error);
+        console.error('❌ Error in createProduct:', error);
+        
+        // Show user-friendly error message
+        if (error.message.includes('413') || error.message.includes('Too Large')) {
+            alert('Product images are too large. Please use smaller images or reduce quality.');
+        } else if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+            alert('Network error. Please check your connection and try again.');
+        } else {
+            alert('Error creating product: ' + error.message);
+        }
+        
         throw error;
     }
 }
@@ -2181,8 +2176,8 @@ async function deleteProduct(sku) {
     }
 }
 
-/*
-async function compressImage(base64String, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+// Enhanced image compression with much smaller output
+async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = base64String;
@@ -2193,7 +2188,8 @@ async function compressImage(base64String, maxWidth = 800, maxHeight = 800, qual
             let width = img.width;
             let height = img.height;
             
-            // Calculate new dimensions while maintaining aspect ratio
+            // More aggressive resizing for product images
+            // Max dimension 400px (reduced from 800)
             if (width > height) {
                 if (width > maxWidth) {
                     height = Math.round(height * (maxWidth / width));
@@ -2206,52 +2202,9 @@ async function compressImage(base64String, maxWidth = 800, maxHeight = 800, qual
                 }
             }
             
-            canvas.width = width;
-            canvas.height = height;
-            
-            // Draw resized image
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Convert to compressed JPEG
-            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-            resolve(compressedBase64);
-        };
-        
-        img.onerror = (error) => {
-            reject(error);
-        };
-    });
-}*/
-// Enhanced image compression with better defaults
-async function compressImage(base64String, maxWidth = 800, maxHeight = 800, quality = 0.6) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.src = base64String;
-        
-        img.onload = () => {
-            // Create canvas for resizing
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            
-            // More aggressive resizing for large images
-            if (width > height) {
-                if (width > maxWidth) {
-                    height = Math.round(height * (maxWidth / width));
-                    width = maxWidth;
-                }
-            } else {
-                if (height > maxHeight) {
-                    width = Math.round(width * (maxHeight / height));
-                    height = maxHeight;
-                }
-            }
-            
-            // Further reduce if image is still large (over 1MP)
-            const megaPixels = (width * height) / 1000000;
-            if (megaPixels > 0.5) { // If over 0.5 megapixels
-                const scale = Math.sqrt(0.5 / megaPixels);
+            // Further reduce if image is still large
+            if (width * height > 100000) { // > 0.1 megapixel
+                const scale = Math.sqrt(100000 / (width * height));
                 width = Math.round(width * scale);
                 height = Math.round(height * scale);
             }
@@ -2263,12 +2216,8 @@ async function compressImage(base64String, maxWidth = 800, maxHeight = 800, qual
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Convert to compressed JPEG with quality based on size
-            let finalQuality = quality;
-            if (megaPixels > 1) finalQuality = 0.5;
-            if (megaPixels > 2) finalQuality = 0.4;
-            
-            const compressedBase64 = canvas.toDataURL('image/jpeg', finalQuality);
+            // Convert to compressed JPEG with lower quality
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
             resolve(compressedBase64);
         };
         
@@ -2278,7 +2227,7 @@ async function compressImage(base64String, maxWidth = 800, maxHeight = 800, qual
     });
 }
 
-// Enhanced image upload handler with size monitoring
+// Enhanced image upload handler with size validation
 async function handleImageUpload(input) {
     const preview = document.getElementById('imagePreview');
     preview.innerHTML = '';
@@ -2294,13 +2243,8 @@ async function handleImageUpload(input) {
     const compressedImages = [];
     let totalSize = 0;
     
-    for (let i = 0; i < files.length; i++) {
+    for (let i = 0; i < Math.min(files.length, 4); i++) { // Only process up to 4 files
         const file = files[i];
-        
-        // Check file size first (warn if too large)
-        if (file.size > 5 * 1024 * 1024) { // 5MB
-            console.log(`Image ${file.name} is large (${(file.size/1024/1024).toFixed(1)}MB). Will compress aggressively.`);
-        }
         
         // Read file as base64
         const base64 = await new Promise((resolve) => {
@@ -2313,16 +2257,20 @@ async function handleImageUpload(input) {
             // Calculate original size
             const originalSize = (base64.length * 0.75) / 1024 / 1024; // Approximate MB
             
-            // Compress image with dynamic settings based on size
-            let compressed;
-            if (originalSize > 2) {
-                compressed = await compressImage(base64, 600, 600, 0.4); // More compression for large images
-            } else if (originalSize > 1) {
-                compressed = await compressImage(base64, 700, 700, 0.5);
-            } else {
-                compressed = await compressImage(base64, 800, 800, 0.6);
+            // Determine compression level based on file size
+            let quality = 0.4;
+            let maxDimension = 400;
+            
+            if (originalSize > 3) {
+                quality = 0.3;
+                maxDimension = 350;
+            } else if (originalSize > 1.5) {
+                quality = 0.35;
+                maxDimension = 375;
             }
             
+            // Compress image
+            const compressed = await compressImage(base64, maxDimension, maxDimension, quality);
             compressedImages.push(compressed);
             
             // Calculate compressed size
@@ -2368,13 +2316,24 @@ async function handleImageUpload(input) {
         imageCount.textContent = `${compressedImages.length} of 4 images uploaded (Total: ${totalSize.toFixed(1)}MB)`;
         imageCount.style.color = compressedImages.length >= 4 ? 'green' : 'red';
         
-        // Show warning if total size is still large
+        // Block submission if total size is too large
         if (totalSize > 8) {
-            const sizeWarning = document.getElementById('sizeWarning') || document.createElement('div');
-            sizeWarning.id = 'sizeWarning';
-            sizeWarning.style.cssText = 'color: orange; margin-top: 5px; font-size: 0.85rem;';
-            sizeWarning.innerHTML = `⚠️ Total size (${totalSize.toFixed(1)}MB) is approaching the limit. Consider using smaller images.`;
-            preview.appendChild(sizeWarning);
+            imageCount.style.color = 'red';
+            imageCount.textContent += ' - TOO LARGE! Use smaller images.';
+            
+            // Disable submit button
+            const submitBtn = document.getElementById('submitProductBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.title = 'Images too large. Please use smaller images.';
+            }
+        } else {
+            // Enable submit button
+            const submitBtn = document.getElementById('submitProductBtn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.title = '';
+            }
         }
     }
     
