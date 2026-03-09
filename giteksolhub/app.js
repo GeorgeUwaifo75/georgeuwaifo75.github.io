@@ -1060,339 +1060,6 @@ async function loadProductsByCategory(category) {
     showSection('productsSection');
 }
 
-/*
-function createProductCard(product) {
-    const card = document.createElement('div');
-    card.className = 'product-card';
-    
-    const mainImage = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/250x200?text=No+Image';
-    
-    card.innerHTML = `
-        <div class="product-images">
-            <img src="${mainImage}" alt="${product.name}" class="product-main-image">
-            <span class="image-count">${product.images ? product.images.length : 0} photos</span>
-            ${product.chats && product.chats.length > 0 ? 
-                `<span class="chat-notification">${product.chats.filter(c => !c.read).length}</span>` : ''}
-        </div>
-        <div class="product-info">
-            <div class="product-name">${product.name}</div>
-            <div class="product-price">₦${product.price}</div>
-            <div class="product-seller">Seller: ${product.sellerId}</div>
-        </div>
-    `;
-    
-    card.addEventListener('click', () => loadProductDetail(product.sku));
-    return card;
-}*/
-
-// Replace your existing createProduct function with this chunked version
-/*
-async function createProduct(paymentStatus, productData = null, paymentType = null) {
-    try {
-        let images = [];
-        let name, category, description, price;
-        
-        if (productData) {
-            name = productData.name;
-            category = productData.category;
-            description = productData.description;
-            price = productData.price;
-            images = productData.images;
-        } else {
-            images = await collectImages();
-            if (!images) return null;
-            
-            name = document.getElementById('productName').value;
-            category = document.getElementById('productCategory').value;
-            description = document.getElementById('productDescription').value;
-            price = document.getElementById('productPrice').value;
-        }
-        
-        // Validate inputs
-        if (!name || !category || !description || !price || images.length < 4) {
-            throw new Error('Missing required fields or insufficient images');
-        }
-        
-        // Show progress indicator
-        showUploadProgress(0, images.length, 'Creating product...');
-        
-        // STEP 1: Create product with text data only
-        const textProductData = {
-            name: name,
-            description: description,
-            price: parseFloat(price),
-            category: category,
-            images: images, // Pass images array to know count
-            sellerId: auth.currentUser.userId,
-            sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
-            sellerContact: auth.currentUser.telephone,
-            paymentStatus: paymentStatus,
-            paymentType: paymentType
-        };
-        
-        console.log('Creating text product...');
-        const product = await api.createProductTextOnly(textProductData);
-        console.log('Text product created:', product);
-        
-        // STEP 2-5: Upload images one by one
-        let successCount = 0;
-        
-        for (let i = 0; i < images.length; i++) {
-            try {
-                showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
-                
-                // Compress image if needed
-                let imageToUpload = images[i];
-                
-                // Check if compression is needed
-                if (imageToUpload.length > 300000) { // If larger than ~300KB
-                    imageToUpload = await compressImage(images[i], 400, 400, 0.3);
-                }
-                
-                await api.uploadProductImage(product.sku, i, imageToUpload);
-                successCount++;
-                
-                // Small delay between uploads to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 600));
-                
-            } catch (uploadError) {
-                console.error(`Error uploading image ${i + 1}:`, uploadError);
-                showNotification(`Warning: Image ${i + 1} upload failed, continuing...`, 'warning');
-                // Continue with next image
-            }
-        }
-        
-        // Check if all images were uploaded
-        if (successCount < images.length) {
-            hideUploadProgress();
-            showNotification(`⚠️ Uploaded ${successCount}/${images.length} images. You can resume later.`, 'warning');
-            await loadUserDashboard(); // Refresh to show pending product
-            return product;
-        }
-        
-        // STEP 6: Finalize product
-        console.log('Finalizing product...');
-        const finalizedProduct = await api.finalizeProduct(product.sku);
-        
-        // Hide progress
-        hideUploadProgress();
-        
-        // Update user's advert count
-        try {
-            const users = await api.getAllUsers();
-            const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
-            if (userIndex !== -1) {
-                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-                await api.updateBin(CONFIG.BINS.ALLUSERS, users);
-            }
-        } catch (countError) {
-            console.error('Error updating user advert count:', countError);
-        }
-        
-        console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
-        showNotification('✅ Product created successfully!', 'success');
-        
-        return finalizedProduct;
-        
-    } catch (error) {
-        console.error('❌ Error in chunked product creation:', error);
-        hideUploadProgress();
-        
-        if (error.message.includes('incomplete')) {
-            showNotification('⚠️ Product partially uploaded. Check your products list.', 'warning');
-        } else {
-            showNotification('❌ Failed to create product: ' + error.message, 'error');
-        }
-        
-        throw error;
-    }
-}*/
-
-
-// Progress indicator functions
-function showUploadProgress(current, total, message) {
-    // Remove existing progress if any
-    hideUploadProgress();
-    
-    const progressDiv = document.createElement('div');
-    progressDiv.id = 'uploadProgress';
-    progressDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        min-width: 300px;
-        text-align: center;
-    `;
-    
-    const percent = Math.round((current / total) * 100);
-    
-    progressDiv.innerHTML = `
-        <h3 style="margin-bottom: 15px; color: var(--primary-purple);">Uploading Product</h3>
-        <p style="margin-bottom: 10px;">${message}</p>
-        <div style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
-            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, var(--primary-purple), var(--primary-red)); transition: width 0.3s ease;"></div>
-        </div>
-        <p style="font-size: 0.9rem; color: #666;">${current}/${total} completed</p>
-    `;
-    
-    document.body.appendChild(progressDiv);
-}
-
-function hideUploadProgress() {
-    const existing = document.getElementById('uploadProgress');
-    if (existing) existing.remove();
-}
-
-
-// Add to app.js - Check for incomplete products on dashboard load
-async function checkIncompleteProducts() {
-    const products = await api.getProductsBySeller(auth.currentUser.userId);
-    const incomplete = products.filter(p => !p.uploadComplete && p.activityStatus === 'Pending');
-    
-    if (incomplete.length > 0) {
-        console.log(`Found ${incomplete.length} incomplete products`);
-        
-        // Show notification with option to resume
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <h3>⚠️ Incomplete Uploads</h3>
-                <p>You have ${incomplete.length} product(s) with incomplete image uploads.</p>
-                <div style="margin: 20px 0;">
-                    ${incomplete.map(p => `
-                        <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px;">
-                            <strong>${p.name}</strong>
-                            <p style="font-size: 0.9rem; margin: 5px 0;">Uploaded ${p.uploadedImages || 0}/${p.imageCount} images</p>
-                            <button onclick="resumeProductUpload('${p.sku}')" class="btn-small">Resume Upload</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <button onclick="this.closest('.modal').remove()" class="btn">Close</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-}
-
-// Resume upload for incomplete product - IMPROVED VERSION
-async function resumeProductUpload(sku) {
-    try {
-        console.log(`🔄 Resuming upload for product: ${sku}`);
-        
-        // Close modal first
-        const modal = document.querySelector('.modal');
-        if (modal) modal.remove();
-        
-        // Get fresh product data
-        const products = await api.getAllProducts();
-        const product = products.find(p => p.sku === sku);
-        
-        if (!product) {
-            showNotification('Product not found', 'error');
-            return;
-        }
-        
-        console.log('Product data:', {
-            sku: product.sku,
-            name: product.name,
-            uploadedImages: product.uploadedImages || 0,
-            imageCount: product.imageCount || 0,
-            imagesCount: product.images ? product.images.length : 0
-        });
-        
-        // Resume from where it left off
-        const startIndex = product.uploadedImages || 0;
-        const totalImages = product.imageCount || 0;
-        
-        if (startIndex >= totalImages) {
-            // Already complete, just finalize
-            await api.finalizeProduct(sku);
-            showNotification('✅ Product already complete!', 'success');
-            loadUserDashboard();
-            return;
-        }
-        
-        showUploadProgress(startIndex, totalImages, 'Resuming upload...');
-        
-        // Check if images exist in the product object
-        if (!product.images || product.images.length === 0) {
-            hideUploadProgress();
-            showNotification('❌ No images found to resume. Please recreate the product.', 'error');
-            return;
-        }
-        
-        let successCount = 0;
-        
-        for (let i = startIndex; i < totalImages; i++) {
-            try {
-                showUploadProgress(i + 1, totalImages, `Uploading image ${i + 1}/${totalImages}...`);
-                
-                // Get the image from product.images
-                const imageToUpload = product.images[i];
-                
-                if (!imageToUpload) {
-                    console.warn(`⚠️ Image at index ${i} is missing`);
-                    continue;
-                }
-                
-                // Upload the image
-                await api.uploadProductImage(sku, i, imageToUpload);
-                successCount++;
-                
-                // Small delay to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 800));
-                
-            } catch (uploadError) {
-                console.error(`Error uploading image ${i + 1}:`, uploadError);
-                showNotification(`Failed to upload image ${i + 1}`, 'warning');
-                // Continue with next image instead of stopping
-            }
-        }
-        
-        hideUploadProgress();
-        
-        if (successCount > 0) {
-            // Try to finalize
-            try {
-                await api.finalizeProduct(sku);
-                showNotification('✅ Product upload completed successfully!', 'success');
-            } catch (finalizeError) {
-                console.error('Finalize error:', finalizeError);
-                showNotification(`⚠️ Uploaded ${successCount} images but product not complete. Please try again.`, 'warning');
-            }
-        } else {
-            showNotification('❌ No images were uploaded successfully', 'error');
-        }
-        
-        // Refresh dashboard
-        await loadUserDashboard();
-        
-    } catch (error) {
-        console.error('Error resuming upload:', error);
-        hideUploadProgress();
-        showNotification('❌ Failed to resume upload: ' + error.message, 'error');
-    }
-}
-
-// Add to loadUserDashboard function
-
-/*async function loadUserDashboard() {
-    // ... existing code ...
-    
-    // After loading products, check for incomplete ones
-    await checkIncompleteProducts();
-}*/
-
-
-
 
 
 async function loadProductDetail(sku) {
@@ -1794,7 +1461,7 @@ async function loadUserDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     const products = await api.getProductsBySeller(auth.currentUser.userId);
     
-  // In loadUserDashboard function, update the product display
+ // In loadUserDashboard function, simplify the product display
 dashboardContent.innerHTML = `
     <h3>My Products</h3>
     <div class="table-container">
@@ -1806,33 +1473,25 @@ dashboardContent.innerHTML = `
                     <th>Name</th>
                     <th>Price</th>
                     <th>Status</th>
-                    <th>Upload</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${products.map(product => {
-                    const uploadStatus = !product.uploadComplete 
-                        ? `<span style="color: orange;">${product.uploadedImages || 0}/${product.imageCount || 0}</span>`
-                        : '<span style="color: green;">Complete</span>';
-                    
-                    return `
+                ${products.map(product => `
                     <tr>
                         <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
                         <td>${product.sku}</td>
                         <td>${product.name}</td>
                         <td>₦${product.price}</td>
                         <td>${product.activityStatus}</td>
-                        <td>${uploadStatus}</td>
                         <td>
-                            ${!product.uploadComplete ? 
-                                `<button onclick="resumeProductUpload('${product.sku}')" class="btn-small" style="background: orange;">Resume</button>` : 
-                                `<button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
-                                 <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>`
-                            }
+                            <button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
+                            <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
+                            ${product.paymentStatus !== 'paid' && auth.currentUser.numberOfAdverts >= 2 ? 
+                                `<button onclick="payForAdvert('${product.sku}')" class="btn-small" style="background: green;">Pay</button>` : ''}
                         </td>
                     </tr>
-                `}).join('')}
+                `).join('')}
             </tbody>
         </table>
     </div>
@@ -1884,13 +1543,13 @@ async function collectImages() {
         return null;
     }
     
-    // Strict size check (JSONBin.io limit is 10MB, leave safety margin)
-    if (totalSize > 8) {
-        alert(`Total image size (${totalSize.toFixed(1)}MB) exceeds the safe limit of 8MB. Please use smaller images or lower quality.`);
-        return null;
+    // Warn if total size is large (but don't block, compression will help)
+    if (totalSize > 5) {
+        console.log(`⚠️ Large image set: ${totalSize.toFixed(1)}MB - will compress aggressively`);
+        showNotification('Large images detected. They will be compressed.', 'warning');
     }
     
-    console.log(`✅ Total payload size: ${totalSize.toFixed(2)}MB - OK`);
+    console.log(`📸 Collected ${images.length} images, total size: ${totalSize.toFixed(2)}MB`);
     return images;
 }
 
@@ -2168,9 +1827,7 @@ async function processPaidProduct(productDataStr) {
 }
 
 
-// Enhanced createProduct function with better error handling
-// Replace your existing createProduct function with this chunked version
-// Replace your existing chunked createProduct function with this improved version
+// Single-process createProduct function
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
@@ -2197,16 +1854,31 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             throw new Error('Missing required fields or insufficient images');
         }
         
-        // Show progress indicator
-        showUploadProgress(0, images.length, 'Creating product...');
+        // Show loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading-spinner';
+        loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); z-index: 10000;';
+        loadingDiv.innerHTML = 'Creating product...';
+        document.body.appendChild(loadingDiv);
         
-        // STEP 1: Create product with text data only
-        const textProductData = {
+        // Compress all images before creating the product
+        const compressedImages = [];
+        for (let i = 0; i < images.length; i++) {
+            // Update loading message
+            loadingDiv.innerHTML = `Compressing image ${i+1}/${images.length}...`;
+            
+            // Compress each image aggressively
+            const compressed = await compressImage(images[i], 400, 400, 0.4);
+            compressedImages.push(compressed);
+        }
+        
+        // Prepare complete product data
+        const completeProductData = {
             name: name,
             description: description,
             price: parseFloat(price),
             category: category,
-            images: images, // Pass images array to know count
+            images: compressedImages,
             sellerId: auth.currentUser.userId,
             sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
             sellerContact: auth.currentUser.telephone,
@@ -2214,76 +1886,35 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             paymentType: paymentType
         };
         
-        console.log('Creating text product...');
-        const product = await api.createProductTextOnly(textProductData);
-        console.log('Text product created:', product);
+        // Calculate final size
+        const finalSize = JSON.stringify(completeProductData).length / (1024 * 1024);
+        console.log(`Final payload size: ${finalSize.toFixed(2)}MB`);
         
-        // STEP 2-5: Upload images one by one
-        let successCount = 0;
-        
-        for (let i = 0; i < images.length; i++) {
-            try {
-                showUploadProgress(i + 1, images.length, `Uploading image ${i + 1}/${images.length}...`);
-                
-                // Compress image if needed
-                let imageToUpload = images[i];
-                
-                // Check if compression is needed
-                if (imageToUpload.length > 300000) { // If larger than ~300KB
-                    imageToUpload = await compressImage(images[i], 400, 400, 0.3);
-                }
-                
-                await api.uploadProductImage(product.sku, i, imageToUpload);
-                successCount++;
-                
-                // Small delay between uploads to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 600));
-                
-            } catch (uploadError) {
-                console.error(`Error uploading image ${i + 1}:`, uploadError);
-                showNotification(`Warning: Image ${i + 1} upload failed, continuing...`, 'warning');
-                // Continue with next image
-            }
+        if (finalSize > 9) {
+            loadingDiv.remove();
+            throw new Error('Product data too large. Please use smaller images or lower quality.');
         }
         
-        // Check if all images were uploaded
-        if (successCount < images.length) {
-            hideUploadProgress();
-            showNotification(`⚠️ Uploaded ${successCount}/${images.length} images. You can resume later.`, 'warning');
-            await loadUserDashboard(); // Refresh to show pending product
-            return product;
-        }
+        // Create product in one request
+        loadingDiv.innerHTML = 'Saving product...';
+        const product = await api.createProduct(completeProductData);
         
-        // STEP 6: Finalize product
-        console.log('Finalizing product...');
-        const finalizedProduct = await api.finalizeProduct(product.sku);
+        loadingDiv.remove();
         
-        // Hide progress
-        hideUploadProgress();
-        
-        // Update user's advert count
-        try {
-            const users = await api.getAllUsers();
-            const userIndex = users.findIndex(u => u.userId === auth.currentUser.userId);
-            if (userIndex !== -1) {
-                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-                await api.updateBin(CONFIG.BINS.ALLUSERS, users);
-            }
-        } catch (countError) {
-            console.error('Error updating user advert count:', countError);
-        }
-        
-        console.log('✅ Product created successfully via chunked upload:', finalizedProduct);
+        console.log('✅ Product created successfully:', product);
         showNotification('✅ Product created successfully!', 'success');
         
-        return finalizedProduct;
+        return product;
         
     } catch (error) {
-        console.error('❌ Error in chunked product creation:', error);
-        hideUploadProgress();
+        console.error('❌ Error creating product:', error);
         
-        if (error.message.includes('incomplete')) {
-            showNotification('⚠️ Product partially uploaded. Check your products list.', 'warning');
+        // Remove loading if it exists
+        const loadingDiv = document.querySelector('.loading-spinner');
+        if (loadingDiv) loadingDiv.remove();
+        
+        if (error.message.includes('413') || error.message.includes('too large')) {
+            showNotification('❌ Images too large. Please use smaller images or lower quality.', 'error');
         } else {
             showNotification('❌ Failed to create product: ' + error.message, 'error');
         }
@@ -2292,45 +1923,8 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
     }
 }
 
-// Progress indicator functions
-function showUploadProgress(current, total, message) {
-    // Remove existing progress if any
-    hideUploadProgress();
-    
-    const progressDiv = document.createElement('div');
-    progressDiv.id = 'uploadProgress';
-    progressDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        min-width: 300px;
-        text-align: center;
-    `;
-    
-    const percent = Math.round((current / total) * 100);
-    
-    progressDiv.innerHTML = `
-        <h3 style="margin-bottom: 15px; color: var(--primary-purple);">Uploading Product</h3>
-        <p style="margin-bottom: 10px;">${message}</p>
-        <div style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
-            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, var(--primary-purple), var(--primary-red)); transition: width 0.3s ease;"></div>
-        </div>
-        <p style="font-size: 0.9rem; color: #666;">${current}/${total} completed</p>
-    `;
-    
-    document.body.appendChild(progressDiv);
-}
 
-function hideUploadProgress() {
-    const existing = document.getElementById('uploadProgress');
-    if (existing) existing.remove();
-}
+
 
 function showPaymentOptions() {
     const modal = document.createElement('div');
