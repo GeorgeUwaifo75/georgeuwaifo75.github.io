@@ -2177,7 +2177,9 @@ async function deleteProduct(sku) {
 }
 
 // Enhanced image compression with much smaller output
-async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
+//async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
+async function compressImage(base64String, maxWidth = 300, maxHeight = 300, quality = 0.3) {
+    
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = base64String;
