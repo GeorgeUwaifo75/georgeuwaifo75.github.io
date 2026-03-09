@@ -30,7 +30,21 @@ class ApiService {
         this.retryCount = 0;
         this.MAX_RETRIES = 3;
         this.RETRY_DELAY = 2000; // 2 seconds
+        
+        
+        // Load pending operations from localStorage
+        this.loadPendingOperations();
+        
+        // Process queue every 30 seconds
+        setInterval(() => {
+            if (this.requestQueue.length > 0 && !this.isProcessingQueue) {
+                this.processQueue();
+            }
+        }, 30000);
+        
+        
     }
+
 
     // Headers for JSONBin.io requests - FIXED
     getHeaders() {
@@ -44,16 +58,12 @@ class ApiService {
 
     // Main fetch method with retry logic
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-
-//New addition
-        // In your fetchWithRetry method
-                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-                const requestUrl = proxyUrl + url;
-        //End new addition
+     
+      
         try {
-       
-          const response = await fetch(url, {
-           // const response = await fetch(requestUrl, {   //New addition
+        
+          
+            const response = await fetch(url, {
                 ...options,
                 headers: this.getHeaders(),
                 mode: 'cors', // Explicitly set CORS mode
@@ -211,8 +221,13 @@ class ApiService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': this.m_apiKey, //New addition
-                    'X-Access-Key': this.apiKey 
+                   // 'X-Access-Key': this.apiKey  // Fixed: Use X-Master-Key
+                    
+                    'X-Master-Key': this.m_apiKey,  // Your master API key
+                    'X-Access-Key': this.apiKey,  
+                    'X-Bin-Meta': 'false' // Don't include metadata in response
+                    
+                    
                 },
                 body: JSON.stringify(initialData)
             });
@@ -436,12 +451,14 @@ class ApiService {
 
    // In api.js, update the createProduct method to handle size errors better
 
+
+
+/*
 async createProduct(productData) {
     try {
         const products = await this.getAllProducts();
         
         const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        
         const now = new Date();
         let endDate = new Date();
         
@@ -451,8 +468,7 @@ async createProduct(productData) {
             endDate = null;
         }
         
-        // Check payload size before sending
-        const testPayload = {
+        const newProduct = {
             sku: sku,
             name: productData.name,
             description: productData.description,
@@ -474,42 +490,39 @@ async createProduct(productData) {
             viewCount: 0
         };
         
-        const payloadSize = JSON.stringify(testPayload).length;
-        const payloadSizeMB = payloadSize / (1024 * 1024);
-        
-        console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
-        
-        if (payloadSizeMB > 9) {
-            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
-        }
-        
-        // Complete product data structure
-        const newProduct = testPayload;
-        
+        // Add to local products array
         products.push(newProduct);
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
         
-        // Update user's advert count
-        const users = await this.getAllUsers();
-        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-        if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+        // Try to update on server, will queue if fails
+        const metadata = {
+            userMessage: 'Your product will be saved when connection is restored.'
+        };
+        
+        const saved = await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products, metadata);
+        
+        if (saved) {
+            // Update user's advert count
+            const users = await this.getAllUsers();
+            const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+            if (userIndex !== -1) {
+                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+                await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
+                    userMessage: 'Your account will be updated when connection is restored.'
+                });
+            }
+            
+            console.log('✅ Product created/queued:', newProduct);
         }
         
-        console.log('✅ Product created:', newProduct);
         return newProduct;
+        
     } catch (error) {
         console.error('Error creating product:', error);
-        
-        // Re-throw with more specific message
-        if (error.message.includes('413') || error.message.includes('Too Large')) {
-            throw new Error('Product images are too large. Please compress them further.');
-        }
-        
         throw error;
     }
-}
+} */
+
+
 
     async updateProduct(sku, updatedData) {
         const products = await this.getAllProducts();
@@ -648,6 +661,455 @@ async createProduct(productData) {
             console.error('Error initializing admin:', error);
         }
     }
+
+// Add these methods to your ApiService class in api.js
+
+// Step 1: Create product with text data only
+async createProductTextOnly(productData) {
+    try {
+        const products = await this.getAllProducts();
+        
+        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        const now = new Date();
+        let endDate = new Date();
+        
+        if (productData.paymentStatus === 'free') {
+            endDate.setDate(endDate.getDate() + 14);
+        } else {
+            endDate = null;
+        }
+        
+        // Create product WITHOUT images first
+        const newProduct = {
+            sku: sku,
+            name: productData.name,
+            description: productData.description,
+            price: parseFloat(productData.price),
+            category: productData.category,
+            images: [], // Empty initially
+            imageCount: productData.images.length, // Store how many images to expect
+            uploadedImages: 0, // Track upload progress
+            sellerId: productData.sellerId,
+            sellerName: productData.sellerName || '',
+            sellerContact: productData.sellerContact || '',
+            activityStatus: 'Pending', // Mark as pending until all images uploaded
+            paymentStatus: productData.paymentStatus || 'free',
+            paymentType: productData.paymentType || null,
+            dateAdvertised: now.toISOString(),
+            endDate: productData.endDate || null,
+            chats: [],
+            unreadChatCount: 0,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            viewCount: 0,
+            uploadComplete: false // Flag to indicate all images uploaded
+        };
+        
+        products.push(newProduct);
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        console.log(`✅ Product text data created: ${sku}`);
+        return newProduct;
+        
+    } catch (error) {
+        console.error('Error creating product text:', error);
+        throw error;
+    }
+}
+
+// Step 2-5: Upload individual image
+async uploadProductImage(sku, imageIndex, imageData) {
+    try {
+        const products = await this.getAllProducts();
+        const productIndex = products.findIndex(p => p.sku === sku);
+        
+        if (productIndex === -1) {
+            throw new Error('Product not found');
+        }
+        
+        // Ensure images array exists
+        if (!products[productIndex].images) {
+            products[productIndex].images = [];
+        }
+        
+        // Place image at correct index
+        products[productIndex].images[imageIndex] = imageData;
+        products[productIndex].uploadedImages = (products[productIndex].uploadedImages || 0) + 1;
+        products[productIndex].updatedAt = new Date().toISOString();
+        
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        console.log(`✅ Image ${imageIndex + 1}/${products[productIndex].imageCount} uploaded for ${sku}`);
+        
+        return {
+            uploadedImages: products[productIndex].uploadedImages,
+            totalImages: products[productIndex].imageCount
+        };
+        
+    } catch (error) {
+        console.error(`Error uploading image ${imageIndex}:`, error);
+        throw error;
+    }
+}
+
+// Step 6: Mark product as complete
+async finalizeProduct(sku) {
+    try {
+        const products = await this.getAllProducts();
+        const productIndex = products.findIndex(p => p.sku === sku);
+        
+        if (productIndex === -1) {
+            throw new Error('Product not found');
+        }
+        
+        // Verify all images uploaded
+        if (products[productIndex].uploadedImages !== products[productIndex].imageCount) {
+            throw new Error(`Product incomplete: ${products[productIndex].uploadedImages}/${products[productIndex].imageCount} images uploaded`);
+        }
+        
+        // Mark as active and complete
+        products[productIndex].activityStatus = 'Active';
+        products[productIndex].uploadComplete = true;
+        products[productIndex].updatedAt = new Date().toISOString();
+        
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        console.log(`✅ Product ${sku} finalized and active`);
+        
+        return products[productIndex];
+        
+    } catch (error) {
+        console.error('Error finalizing product:', error);
+        throw error;
+    }
+}
+
+// Optional: Check upload status
+async getProductUploadStatus(sku) {
+    try {
+        const products = await this.getAllProducts();
+        const product = products.find(p => p.sku === sku);
+        
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+        return {
+            sku: product.sku,
+            uploadedImages: product.uploadedImages || 0,
+            totalImages: product.imageCount || 0,
+            complete: product.uploadComplete || false,
+            active: product.activityStatus === 'Active'
+        };
+        
+    } catch (error) {
+        console.error('Error getting upload status:', error);
+        throw error;
+    }
+}
+
+
+//New loadPendingOperations
+savePendingOperations() {
+    try {
+        localStorage.setItem('pendingOperations', JSON.stringify({
+            queue: this.requestQueue,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.error('Error saving pending operations:', e);
+    }
+}
+
+// Load pending operations from localStorage
+loadPendingOperations() {
+    try {
+        const saved = localStorage.getItem('pendingOperations');
+        if (saved) {
+            const data = JSON.parse(saved);
+            // Only load operations less than 24 hours old
+            if (Date.now() - data.timestamp < 86400000) {
+                this.requestQueue = data.queue || [];
+                console.log(`📦 Loaded ${this.requestQueue.length} pending operations from storage`);
+            } else {
+                localStorage.removeItem('pendingOperations');
+            }
+        }
+    } catch (e) {
+        console.error('Error loading pending operations:', e);
+    }
+}
+
+// Enhanced queue operation with better tracking
+queueOperation(binName, data, metadata = {}) {
+    const operation = {
+        id: 'op-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+        binName,
+        data: JSON.parse(JSON.stringify(data)), // Deep copy
+        timestamp: Date.now(),
+        attempts: 0,
+        maxAttempts: 5,
+        metadata: {
+            ...metadata,
+            userMessage: metadata.userMessage || 'Your changes will be saved automatically when connection is restored.'
+        }
+    };
+    
+    this.requestQueue.push(operation);
+    this.savePendingOperations();
+    
+    // Show user notification
+    this.showPendingOperationNotification(operation);
+    
+    if (!this.isProcessingQueue) {
+        this.processQueue();
+    }
+    
+    return operation.id;
+}
+
+// Show notification for pending operations
+showPendingOperationNotification(operation) {
+    const notification = document.createElement('div');
+    notification.id = `pending-${operation.id}`;
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: #ff9800;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+        max-width: 350px;
+    `;
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-clock" style="font-size: 1.2rem;"></i>
+            <div>
+                <strong>Pending Save</strong>
+                <p style="margin: 5px 0 0; font-size: 0.85rem;">${operation.metadata.userMessage}</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        const notif = document.getElementById(`pending-${operation.id}`);
+        if (notif) notif.remove();
+    }, 5000);
+}
+
+// Enhanced queue processing with exponential backoff
+async processQueue() {
+    if (this.requestQueue.length === 0) {
+        this.isProcessingQueue = false;
+        return;
+    }
+    
+    this.isProcessingQueue = true;
+    
+    // Sort queue by timestamp (oldest first)
+    this.requestQueue.sort((a, b) => a.timestamp - b.timestamp);
+    
+    while (this.requestQueue.length > 0) {
+        const operation = this.requestQueue[0]; // Peek at first item
+        
+        // Skip if operation is too old
+        if (Date.now() - operation.timestamp > 86400000) { // 24 hours
+            console.log(`⚠️ Dropping expired operation ${operation.id}`);
+            this.requestQueue.shift();
+            this.savePendingOperations();
+            continue;
+        }
+        
+        // Increment attempt counter
+        operation.attempts++;
+        
+        // Calculate backoff delay (exponential)
+        const backoffDelay = Math.min(1000 * Math.pow(2, operation.attempts), 300000); // Max 5 minutes
+        
+        try {
+            console.log(`🔄 Processing queued operation ${operation.id} (attempt ${operation.attempts})...`);
+            
+            // Get current full data
+            const fullData = await this.getFullData();
+            
+            // Update the specific bin
+            fullData[operation.binName] = operation.data;
+            
+            // Save back to JSONBin.io
+            const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
+                method: 'PUT',
+                body: JSON.stringify(fullData)
+            }, 1); // Only retry once in queue
+            
+            if (updateResponse.ok) {
+                console.log(`✅ Successfully synced ${operation.binName} from queue (ID: ${operation.id})`);
+                this.lastFetchTime[operation.binName] = Date.now();
+                
+                // Remove from queue
+                this.requestQueue.shift();
+                this.savePendingOperations();
+                
+                // Show success notification
+                this.showQueueSuccessNotification(operation);
+            } else {
+                throw new Error(`HTTP error: ${updateResponse.status}`);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Queue processing error for ${operation.id}:`, error);
+            
+            // Check if we should retry
+            if (operation.attempts >= operation.maxAttempts) {
+                console.log(`⚠️ Operation ${operation.id} failed after ${operation.attempts} attempts. Dropping.`);
+                this.requestQueue.shift();
+                this.showQueueFailedNotification(operation);
+            } else {
+                // Move to end of queue for retry
+                this.requestQueue.shift();
+                this.requestQueue.push(operation);
+                
+                console.log(`⏳ Operation ${operation.id} will retry in ${backoffDelay/1000}s (attempt ${operation.attempts}/${operation.maxAttempts})`);
+            }
+            
+            this.savePendingOperations();
+            
+            // Wait before next attempt
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        }
+        
+        // Wait between operations
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    this.isProcessingQueue = false;
+    console.log('✅ Queue processing complete');
+}
+
+// Show success notification for queued operation
+showQueueSuccessNotification(operation) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+    `;
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-check-circle" style="font-size: 1.2rem;"></i>
+            <span>${operation.metadata.userMessage || 'Changes saved successfully!'}</span>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.remove(), 4000);
+}
+
+// Show failure notification for queued operation
+showQueueFailedNotification(operation) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #f44336;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+    `;
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 1.2rem;"></i>
+            <div>
+                <strong>Save Failed</strong>
+                <p style="margin: 5px 0 0; font-size: 0.85rem;">Please try again later.</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.remove(), 5000);
+}
+
+// Update the updateBin method to use the enhanced queue
+async updateBin(binName, data, metadata = {}) {
+    // Update cache immediately for responsive UI
+    this.localCache[binName] = data;
+    
+    try {
+        // Get current full data
+        const fullData = await this.getFullData();
+        
+        // Update the specific bin
+        fullData[binName] = data;
+        
+        // Save back to JSONBin.io using PUT
+        const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
+            method: 'PUT',
+            body: JSON.stringify(fullData)
+        });
+        
+        if (updateResponse.ok) {
+            this.lastFetchTime[binName] = Date.now();
+            console.log(`✅ Successfully updated ${binName} on JSONBin.io`);
+            
+            // Check if there are any pending operations for this bin
+            this.checkAndClearPendingForBin(binName);
+            
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error(`Error updating ${binName}:`, error);
+        
+        // Check for rate limit or network errors
+        if (error.message.includes('429') || error.message.includes('Failed to fetch')) {
+            console.log(`⏳ Rate limit or network error. Queuing operation for later.`);
+            
+            // Queue the operation with metadata
+            this.queueOperation(binName, data, {
+                ...metadata,
+                userMessage: metadata.userMessage || 'Your changes will be saved when connection improves.'
+            });
+            
+            return true; // Return true to indicate local save succeeded
+        }
+        
+        throw error;
+    }
+}
+
+// Check and clear pending operations for a bin that just succeeded
+checkAndClearPendingForBin(binName) {
+    const pendingForBin = this.requestQueue.filter(op => op.binName === binName);
+    
+    if (pendingForBin.length > 0) {
+        console.log(`🧹 Clearing ${pendingForBin.length} pending operations for ${binName}`);
+        
+        // Remove all pending operations for this bin
+        this.requestQueue = this.requestQueue.filter(op => op.binName !== binName);
+        this.savePendingOperations();
+    }
+}
+
+//End of New addition
+
 
     // Load from localStorage on startup (backup only)
     loadFromLocalStorage() {
