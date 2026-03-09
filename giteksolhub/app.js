@@ -600,7 +600,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         addSearchStyles();
         
         
-        testPreflight();//New
+       // testPreflight();//New
 
 // Hamburger menu toggle - DROPDOWN STYLE
 const hamburger = document.getElementById('hamburger');
@@ -955,6 +955,7 @@ function goToHome() {
 }
 
 
+
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
     const dropdown = document.getElementById('categoriesDropdown');
@@ -1004,26 +1005,101 @@ function initializeCategories() {
 
     // Load category counts
     updateCategoryCounts();
-}
-
-
+} 
 
 /*
-async function updateCategoryCounts() {
-    const products = await api.getAllProducts();
+function initializeCategories() {
+    const categoriesGrid = document.getElementById('categoriesGrid');
+    const dropdown = document.getElementById('categoriesDropdown');
     
+    if (!categoriesGrid) {
+        console.error('Categories grid not found!');
+        return;
+    }
+    
+    // Clear existing content
+    categoriesGrid.innerHTML = '';
+    dropdown.innerHTML = '';
+    
+    // Sample category images
+    const categoryImages = {
+        'All Business types': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png',
+        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
+        'Computer Services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
+        'Household Products': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
+        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
+        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
+        'Automobiles': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
+        'Food services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20services.png',
+        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/furniture%20business.png',
+        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/props%20and%20real%20estate.png' 
+    };
+
     CATEGORIES.forEach(category => {
-        const count = products.filter(p => p.category === category && p.activityStatus === 'Active').length;
+        // Add to grid
+        const card = document.createElement('div');
+        card.className = 'category-card';
         
-        // Create a safe ID by replacing spaces and special characters
-        const safeCategoryId = category.replace(/[&\s]+/g, '-');
-        const countElement = document.getElementById(`count-${safeCategoryId}`);
+        // Create a safe ID for the count element
+        const safeCategoryId = category.replace(/[&\s]+/g, '-').toLowerCase();
         
-        if (countElement) {
-            countElement.textContent = `${count} ads`;
-        }
+        card.innerHTML = `
+            <img src="${categoryImages[category] || 'https://via.placeholder.com/200x150?text=Category'}" 
+                 alt="${category}" 
+                 class="category-image"
+                 onerror="this.src='https://via.placeholder.com/200x150?text=Category'">
+            <div class="category-info">
+                <div class="category-name">${category}</div>
+                <div class="category-count" id="count-${safeCategoryId}">Loading...</div>
+                <span class="notification-badge" id="notif-${safeCategoryId}" style="display: none;">0</span>
+            </div>
+        `;
+        
+        // Add click event listener - THIS IS THE KEY PART
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log(`Category clicked: ${category}`);
+            loadProductsByCategory(category);
+        });
+        
+        categoriesGrid.appendChild(card);
+
+        // Add to dropdown
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="#" class="dropdown-item" data-category="${category}">${category}</a>`;
+        
+        const link = li.querySelector('a');
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log(`Dropdown category clicked: ${category}`);
+            loadProductsByCategory(category);
+            
+            // Close mobile menu if open
+            if (window.innerWidth <= 768) {
+                const navMenu = document.getElementById('navMenu');
+                const hamburger = document.getElementById('hamburger');
+                if (navMenu) navMenu.classList.remove('active');
+                if (hamburger) {
+                    const icon = hamburger.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                }
+            }
+        });
+        
+        dropdown.appendChild(li);
     });
-}*/
+
+    // Load category counts
+    updateCategoryCounts();
+}
+*/
+
+
 
 async function updateCategoryCounts() {
     const products = await api.getAllProducts();
@@ -1040,6 +1116,31 @@ async function updateCategoryCounts() {
         }
     });
 }
+
+function createProductCard(product) {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    
+    const mainImage = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/250x200?text=No+Image';
+    
+    card.innerHTML = `
+        <div class="product-images">
+            <img src="${mainImage}" alt="${product.name}" class="product-main-image">
+            <span class="image-count">${product.images ? product.images.length : 0} photos</span>
+            ${product.chats && product.chats.length > 0 ? 
+                `<span class="chat-notification">${product.chats.filter(c => !c.read).length}</span>` : ''}
+        </div>
+        <div class="product-info">
+            <div class="product-name">${product.name}</div>
+            <div class="product-price">₦${product.price}</div>
+            <div class="product-seller">Seller: ${product.sellerId}</div>
+        </div>
+    `;
+    
+    card.addEventListener('click', () => loadProductDetail(product.sku));
+    return card;
+}
+
 
 async function loadProductsByCategory(category) {
     const products = await api.getProductsByCategory(category);
@@ -1062,6 +1163,52 @@ async function loadProductsByCategory(category) {
     
     showSection('productsSection');
 }
+
+
+/*
+async function loadProductsByCategory(category) {
+    console.log(`Loading products for category: ${category}`);
+    
+    try {
+        // Show loading indicator
+        const productsGrid = document.getElementById('productsGrid');
+        const categoryTitle = document.getElementById('currentCategoryTitle');
+        
+        if (!productsGrid || !categoryTitle) {
+            console.error('Required elements not found');
+            return;
+        }
+        
+        categoryTitle.textContent = category;
+        productsGrid.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
+        
+        // Get products for this category
+        const products = await api.getProductsByCategory(category);
+        console.log(`Found ${products.length} products in ${category}`);
+        
+        // Clear loading indicator
+        productsGrid.innerHTML = '';
+        
+        if (products.length === 0) {
+            productsGrid.innerHTML = '<p class="text-center">No products in this category yet.</p>';
+        } else {
+            // Sort by date (newest first)
+            products.sort((a, b) => new Date(b.dateAdvertised) - new Date(a.dateAdvertised));
+            
+            products.forEach(product => {
+                const card = createProductCard(product);
+                productsGrid.appendChild(card);
+            });
+        }
+        
+        // Show the products section
+        showSection('productsSection');
+        
+    } catch (error) {
+        console.error('Error loading products by category:', error);
+        alert('Error loading products. Please try again.');
+    }
+}*/
 
 
 
@@ -2262,7 +2409,7 @@ async function handleImageUpload(input) {
 }
 
 
-async function handleImageUpload(input) {
+/*async function handleImageUpload(input) {
     const preview = document.getElementById('imagePreview');
     preview.innerHTML = '';
     const files = Array.from(input.files);
@@ -2338,7 +2485,8 @@ async function handleImageUpload(input) {
     }
     
     return compressedImages;
-}
+}*/
+
 
 async function loadAdminDashboard() {
     const adminContent = document.getElementById('adminContent');
