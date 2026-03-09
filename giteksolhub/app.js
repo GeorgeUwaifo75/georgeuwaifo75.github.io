@@ -598,6 +598,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Initialize search
         initializeSearch();
         addSearchStyles();
+        
+        
+        testPreflight();//New
 
 // Hamburger menu toggle - DROPDOWN STYLE
 const hamburger = document.getElementById('hamburger');
@@ -2711,6 +2714,28 @@ function showAboutModal() {
     `;
     document.body.appendChild(modal);
 }
+
+
+async function testPreflight() {
+    try {
+        const response = await fetch('https://api.jsonbin.io/v3/b/69a99281d0ea881f40f1dc8d', {
+            method: 'OPTIONS',
+            headers: {
+                'Origin': window.location.origin,
+                'Access-Control-Request-Method': 'PUT',
+                'Access-Control-Request-Headers': 'content-type,x-master-key,x-access-key,x-bin-meta'
+            }
+        });
+        console.log('Preflight response status:', response.status);
+        console.log('Preflight response headers:', [...response.headers.entries()]);
+    } catch (error) {
+        console.error('Preflight failed:', error);
+    }
+}
+// Call this function after your app initializes
+// testPreflight(); 
+
+
 
 // Make functions globally available
 window.showAuthForm = showAuthForm;
