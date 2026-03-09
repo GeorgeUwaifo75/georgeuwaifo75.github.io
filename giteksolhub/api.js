@@ -44,23 +44,9 @@ class ApiService {
 
     // Main fetch method with retry logic
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-     
-    /*  
-    // Use a CORS proxy when running on GitHub Pages
-    const isGitHubPages = window.location.hostname.includes('github.io');
-    const proxyUrl = isGitHubPages ? 'https://cors-anywhere.herokuapp.com/' : '';
-    const requestUrl = proxyUrl + url;
-     */
-     
       
         try {
-        
-          /*
-          const response = await fetch(requestUrl, {
-            ...options,
-            headers: this.getHeaders()
-           });*/
-           
+       
           
             const response = await fetch(url, {
                 ...options,
@@ -220,7 +206,8 @@ class ApiService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Access-Key': this.apiKey  // Fixed: Use X-Master-Key
+                    'X-Master-Key': this.m_apiKey, //New addition
+                    'X-Access-Key': this.apiKey 
                 },
                 body: JSON.stringify(initialData)
             });
