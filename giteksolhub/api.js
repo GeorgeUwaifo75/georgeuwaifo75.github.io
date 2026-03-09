@@ -43,7 +43,33 @@ class ApiService {
         }, 30000);
         
         
+     //New additions   
+        // List of CORS proxies in order of preference
+    this.proxyUrls = [
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?'
+    ];
+    this.currentProxyIndex = 0;
+    
+    // Track proxy usage
+    this.proxyUsage = {
+        'https://cors-anywhere.herokuapp.com/': { used: 0, lastReset: Date.now() },
+        'https://api.allorigins.win/raw?url=': { used: 0, lastReset: Date.now() },
+        'https://corsproxy.io/?': { used: 0, lastReset: Date.now() }
+    };
+    
+    // Rotate proxies every minute to avoid rate limits
+    setInterval(() => this.rotateProxy(), 60000);
+        
+  //End new additions      
+        
     }
+
+
+
+
+
 
 
     // Headers for JSONBin.io requests - FIXED
@@ -51,12 +77,14 @@ class ApiService {
         return {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
-             'X-Access-Key': this.apiKey,  
+             //'X-Access-Key': this.apiKey,  
              'X-Bin-Meta': 'false' 
         };
     }
 
     // Main fetch method with retry logic
+    
+    /*
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
      
       
@@ -107,7 +135,114 @@ class ApiService {
             }
             throw error;
         }
+    } */
+ 
+
+//New additions 
+ 
+ // Rotate to next proxy
+rotateProxy() {
+    this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
+    console.log(`🔄 Switched to proxy: ${this.proxyUrls[this.currentProxyIndex]}`);
+}
+
+// Get current proxy URL
+getProxyUrl() {
+    const proxy = this.proxyUrls[this.currentProxyIndex];
+    
+    // Reset usage counter if more than a minute has passed
+    const now = Date.now();
+    if (now - this.proxyUsage[proxy].lastReset > 60000) {
+        this.proxyUsage[proxy].used = 0;
+        this.proxyUsage[proxy].lastReset = now;
     }
+    
+    // If this proxy has been used too much, try the next one
+    if (this.proxyUsage[proxy].used > 30) { // 30 requests per minute limit
+        this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
+        return this.getProxyUrl(); // Recursively try next proxy
+    }
+    
+    this.proxyUsage[proxy].used++;
+    return proxy;
+}
+ 
+ 
+    
+    // Updated fetchWithRetry method
+async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
+    // Use proxy for all requests from GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const proxyUrl = isGitHubPages ? this.getProxyUrl() : '';
+    const requestUrl = proxyUrl + url;
+    
+    console.log(`📡 Request via ${proxyUrl ? 'proxy' : 'direct'}: ${url.substring(0, 50)}...`);
+    
+    try {
+        const response = await fetch(requestUrl, {
+            ...options,
+            headers: this.getHeaders(),
+            mode: 'cors',
+            credentials: 'omit'
+        });
+        
+        // If we get a 429 (rate limit), rotate proxy and retry
+        if (response.status === 429) {
+            console.log('⚠️ Rate limit hit, switching proxy...');
+            this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
+            if (retries > 0) {
+                return this.fetchWithRetry(url, options, retries - 1);
+            }
+        }
+        
+        // Check rate limit headers
+        const remaining = response.headers.get('X-RateLimit-Remaining');
+        const reset = response.headers.get('X-RateLimit-Reset');
+        
+        if (remaining) {
+            this.rateLimitRemaining = parseInt(remaining);
+            if (reset) {
+                this.rateLimitReset = parseInt(reset) * 1000;
+            }
+            this.saveRateLimitInfo();
+        }
+        
+        if (!response.ok) {
+            if (response.status === 429 && retries > 0) {
+                const retryAfter = response.headers.get('Retry-After') || this.RETRY_DELAY / 1000;
+                console.log(`⏳ Rate limit reached. Waiting ${retryAfter} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                return this.fetchWithRetry(url, options, retries - 1);
+            }
+            if (response.status === 404 && retries > 0) {
+                return response;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return response;
+    } catch (error) {
+        console.error(`Fetch error with proxy ${proxyUrl}:`, error);
+        
+        // If this proxy failed, try the next one
+        if (isGitHubPages && retries > 0) {
+            console.log('🔄 Proxy failed, trying next...');
+            this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
+            return this.fetchWithRetry(url, options, retries - 1);
+        }
+        
+        if (retries > 0) {
+            console.log(`🔄 Retrying... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+            return this.fetchWithRetry(url, options, retries - 1);
+        }
+        throw error;
+    }
+}
+
+
+//End new additions
+
 
     // Get bin data with caching
     async getBin(binName) {
@@ -222,7 +357,7 @@ class ApiService {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Master-Key': this.m_apiKey,  
-                    'X-Access-Key': this.apiKey,  
+                    //'X-Access-Key': this.apiKey,  
                     'X-Bin-Meta': 'false' // Don't include metadata in response
                     
                     
@@ -437,10 +572,47 @@ class ApiService {
         return products.filter(p => p.sellerId === userId);
     }
 
+/*
     async getProductsByCategory(category) {
         const products = await this.getAllProducts();
         return products.filter(p => p.category === category && p.activityStatus === 'Active');
     }
+    */
+    
+    async getProductsByCategory(category) {
+    try {
+        const products = await this.getAllProducts();
+        
+        // Filter products that are:
+        // 1. In the specified category
+        // 2. Active (not pending, not inactive)
+        // 3. Have a valid end date (not expired)
+        const now = new Date();
+        
+        const filtered = products.filter(p => {
+            // Check category match
+            if (p.category !== category) return false;
+            
+            // Check if active
+            if (p.activityStatus !== 'Active') return false;
+            
+            // Check if not expired
+            if (p.endDate) {
+                const endDate = new Date(p.endDate);
+                if (endDate < now) return false;
+            }
+            
+            return true;
+        });
+        
+        console.log(`getProductsByCategory(${category}): found ${filtered.length} products`);
+        return filtered;
+        
+    } catch (error) {
+        console.error('Error in getProductsByCategory:', error);
+        return [];
+    }
+}
 
     async getProductBySku(sku) {
         const products = await this.getAllProducts();
