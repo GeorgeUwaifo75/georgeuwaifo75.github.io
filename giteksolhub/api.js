@@ -453,7 +453,7 @@ class ApiService {
 
 
 
-/*
+
 async createProduct(productData) {
     try {
         const products = await this.getAllProducts();
@@ -520,7 +520,7 @@ async createProduct(productData) {
         console.error('Error creating product:', error);
         throw error;
     }
-} */
+} 
 
 
 
