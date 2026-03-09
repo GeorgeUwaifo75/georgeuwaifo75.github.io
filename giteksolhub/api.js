@@ -52,8 +52,8 @@ class ApiService {
         //End new addition
         try {
        
-          //const response = await fetch(url, {
-            const response = await fetch(requestUrl, {   //New addition
+          const response = await fetch(url, {
+           // const response = await fetch(requestUrl, {   //New addition
                 ...options,
                 headers: this.getHeaders(),
                 mode: 'cors', // Explicitly set CORS mode
