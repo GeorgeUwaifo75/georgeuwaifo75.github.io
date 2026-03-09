@@ -41,13 +41,25 @@ class ApiService {
 
     // Main fetch method with retry logic
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-     
+      
+    // Use a CORS proxy when running on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const proxyUrl = isGitHubPages ? 'https://cors-anywhere.herokuapp.com/' : '';
+    const requestUrl = proxyUrl + url;
+      
+      
         try {
-         
+          
+          const response = await fetch(requestUrl, {
+            ...options,
+            headers: this.getHeaders()
+           });
+          
+          /*
             const response = await fetch(url, {
                 ...options,
                 headers: this.getHeaders()
-            });
+            });*/
             
             
             // Check rate limit headers
@@ -422,62 +434,82 @@ class ApiService {
         return products.find(p => p.sku === sku);
     }
 
-    async createProduct(productData) {
-        try {
-            const products = await this.getAllProducts();
-            
-            const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-            
-            const now = new Date();
-            let endDate = new Date();
-            
-            if (productData.paymentStatus === 'free') {
-                endDate.setDate(endDate.getDate() + 14);
-            } else {
-                endDate = null;
-            }
-            
-            // Complete product data structure
-              const newProduct = {
-                  sku: sku,
-                  name: productData.name,
-                  description: productData.description,
-                  price: parseFloat(productData.price),
-                  category: productData.category,
-                  images: productData.images || [],
-                  sellerId: productData.sellerId,
-                  sellerName: productData.sellerName || '',
-                  sellerContact: productData.sellerContact || '',
-                  activityStatus: productData.activityStatus || 'Active',
-                  paymentStatus: productData.paymentStatus || 'free',
-                  paymentType: productData.paymentType || null,
-                  dateAdvertised: now.toISOString(),
-                  endDate: productData.endDate || null,
-                  chats: [],
-                  unreadChatCount: 0,
-                  createdAt: now.toISOString(),
-                  updatedAt: now.toISOString(),
-                  viewCount: 0
-              };
-            
-            products.push(newProduct);
-            await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-            
-            // Update user's advert count
-            const users = await this.getAllUsers();
-            const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-            if (userIndex !== -1) {
-                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-                await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-            }
-            
-            console.log('✅ Product created:', newProduct);
-            return newProduct;
-        } catch (error) {
-            console.error('Error creating product:', error);
-            throw error;
+   // In api.js, update the createProduct method to handle size errors better
+
+async createProduct(productData) {
+    try {
+        const products = await this.getAllProducts();
+        
+        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        
+        const now = new Date();
+        let endDate = new Date();
+        
+        if (productData.paymentStatus === 'free') {
+            endDate.setDate(endDate.getDate() + 14);
+        } else {
+            endDate = null;
         }
+        
+        // Check payload size before sending
+        const testPayload = {
+            sku: sku,
+            name: productData.name,
+            description: productData.description,
+            price: parseFloat(productData.price),
+            category: productData.category,
+            images: productData.images || [],
+            sellerId: productData.sellerId,
+            sellerName: productData.sellerName || '',
+            sellerContact: productData.sellerContact || '',
+            activityStatus: productData.activityStatus || 'Active',
+            paymentStatus: productData.paymentStatus || 'free',
+            paymentType: productData.paymentType || null,
+            dateAdvertised: now.toISOString(),
+            endDate: productData.endDate || null,
+            chats: [],
+            unreadChatCount: 0,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            viewCount: 0
+        };
+        
+        const payloadSize = JSON.stringify(testPayload).length;
+        const payloadSizeMB = payloadSize / (1024 * 1024);
+        
+        console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
+        
+        if (payloadSizeMB > 9) {
+            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
+        }
+        
+        // Complete product data structure
+        const newProduct = testPayload;
+        
+        products.push(newProduct);
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        // Update user's advert count
+        const users = await this.getAllUsers();
+        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+        }
+        
+        console.log('✅ Product created:', newProduct);
+        return newProduct;
+    } catch (error) {
+        console.error('Error creating product:', error);
+        
+        // Re-throw with more specific message
+        if (error.message.includes('413') || error.message.includes('Too Large')) {
+            throw new Error('Product images are too large. Please compress them further.');
+        }
+        
+        throw error;
     }
+}
 
     async updateProduct(sku, updatedData) {
         const products = await this.getAllProducts();
