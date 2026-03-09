@@ -449,11 +449,8 @@ class ApiService {
         return products.find(p => p.sku === sku);
     }
 
-   // In api.js, update the createProduct method to handle size errors better
-
-
-
-/*
+ 
+// In api.js - Keep only this single createProduct method
 async createProduct(productData) {
     try {
         const products = await this.getAllProducts();
@@ -468,7 +465,8 @@ async createProduct(productData) {
             endDate = null;
         }
         
-        const newProduct = {
+        // Check payload size before sending
+        const testPayload = {
             sku: sku,
             name: productData.name,
             description: productData.description,
@@ -478,11 +476,11 @@ async createProduct(productData) {
             sellerId: productData.sellerId,
             sellerName: productData.sellerName || '',
             sellerContact: productData.sellerContact || '',
-            activityStatus: productData.activityStatus || 'Active',
+            activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
             paymentStatus: productData.paymentStatus || 'free',
             paymentType: productData.paymentType || null,
             dateAdvertised: now.toISOString(),
-            endDate: productData.endDate || null,
+            endDate: endDate ? endDate.toISOString() : null,
             chats: [],
             unreadChatCount: 0,
             createdAt: now.toISOString(),
@@ -490,30 +488,29 @@ async createProduct(productData) {
             viewCount: 0
         };
         
-        // Add to local products array
-        products.push(newProduct);
+        const payloadSize = JSON.stringify(testPayload).length;
+        const payloadSizeMB = payloadSize / (1024 * 1024);
         
-        // Try to update on server, will queue if fails
-        const metadata = {
-            userMessage: 'Your product will be saved when connection is restored.'
-        };
+        console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
         
-        const saved = await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products, metadata);
-        
-        if (saved) {
-            // Update user's advert count
-            const users = await this.getAllUsers();
-            const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-            if (userIndex !== -1) {
-                users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-                await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
-                    userMessage: 'Your account will be updated when connection is restored.'
-                });
-            }
-            
-            console.log('✅ Product created/queued:', newProduct);
+        if (payloadSizeMB > 9) {
+            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
         }
         
+        const newProduct = testPayload;
+        
+        products.push(newProduct);
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        
+        // Update user's advert count
+        const users = await this.getAllUsers();
+        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+        }
+        
+        console.log('✅ Product created:', newProduct);
         return newProduct;
         
     } catch (error) {
@@ -521,9 +518,6 @@ async createProduct(productData) {
         throw error;
     }
 }
-*/
-
-
 
     async updateProduct(sku, updatedData) {
         const products = await this.getAllProducts();
@@ -665,203 +659,6 @@ async createProduct(productData) {
 
 // Add these methods to your ApiService class in api.js
 
-// Step 1: Create product with text data only
-async createProductTextOnly(productData) {
-    try {
-        const products = await this.getAllProducts();
-        
-        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        const now = new Date();
-        let endDate = new Date();
-        
-        if (productData.paymentStatus === 'free') {
-            endDate.setDate(endDate.getDate() + 14);
-        } else {
-            endDate = null;
-        }
-        
-        // Create product WITHOUT images first
-        const newProduct = {
-            sku: sku,
-            name: productData.name,
-            description: productData.description,
-            price: parseFloat(productData.price),
-            category: productData.category,
-            images: [], // Empty initially
-            imageCount: productData.images.length, // Store how many images to expect
-            uploadedImages: 0, // Track upload progress
-            sellerId: productData.sellerId,
-            sellerName: productData.sellerName || '',
-            sellerContact: productData.sellerContact || '',
-            activityStatus: 'Pending', // Mark as pending until all images uploaded
-            paymentStatus: productData.paymentStatus || 'free',
-            paymentType: productData.paymentType || null,
-            dateAdvertised: now.toISOString(),
-            endDate: productData.endDate || null,
-            chats: [],
-            unreadChatCount: 0,
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-            viewCount: 0,
-            uploadComplete: false // Flag to indicate all images uploaded
-        };
-        
-        products.push(newProduct);
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-        
-        console.log(`✅ Product text data created: ${sku}`);
-        return newProduct;
-        
-    } catch (error) {
-        console.error('Error creating product text:', error);
-        throw error;
-    }
-}
-
-// Step 2-5: Upload individual image - IMPROVED VERSION
-async uploadProductImage(sku, imageIndex, imageData) {
-    try {
-        const products = await this.getAllProducts();
-        const productIndex = products.findIndex(p => p.sku === sku);
-        
-        if (productIndex === -1) {
-            throw new Error('Product not found');
-        }
-        
-        // Ensure images array exists with proper length
-        if (!products[productIndex].images) {
-            products[productIndex].images = [];
-        }
-        
-        // Ensure the array is long enough
-        while (products[productIndex].images.length <= imageIndex) {
-            products[productIndex].images.push(null);
-        }
-        
-        // Store the image
-        products[productIndex].images[imageIndex] = imageData;
-        
-        // Count actual uploaded images (non-null entries)
-        const uploadedCount = products[productIndex].images.filter(img => img !== null && img !== undefined).length;
-        products[productIndex].uploadedImages = uploadedCount;
-        products[productIndex].updatedAt = new Date().toISOString();
-        
-        // Save to bin
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-        
-        console.log(`✅ Image ${imageIndex + 1}/${products[productIndex].imageCount} uploaded for ${sku} (Total: ${uploadedCount}/${products[productIndex].imageCount})`);
-        
-        return {
-            uploadedImages: uploadedCount,
-            totalImages: products[productIndex].imageCount
-        };
-        
-    } catch (error) {
-        console.error(`Error uploading image ${imageIndex}:`, error);
-        throw error;
-    }
-}
-
-// Step 6: Mark product as complete - IMPROVED VERSION
-async finalizeProduct(sku) {
-    try {
-        const products = await this.getAllProducts();
-        const productIndex = products.findIndex(p => p.sku === sku);
-        
-        if (productIndex === -1) {
-            throw new Error('Product not found');
-        }
-        
-        const product = products[productIndex];
-        
-        // Count actual images (non-null entries)
-        const actualImages = product.images ? product.images.filter(img => img !== null && img !== undefined) : [];
-        const uploadedCount = actualImages.length;
-        
-        // Verify all images uploaded
-        if (uploadedCount !== product.imageCount) {
-            console.log(`⚠️ Product incomplete: ${uploadedCount}/${product.imageCount} images uploaded`);
-            
-            // Update the uploadedImages count to reflect reality
-            product.uploadedImages = uploadedCount;
-            product.updatedAt = new Date().toISOString();
-            await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-            
-            throw new Error(`Product incomplete: ${uploadedCount}/${product.imageCount} images uploaded`);
-        }
-        
-        // Mark as active and complete
-        product.activityStatus = 'Active';
-        product.uploadComplete = true;
-        product.updatedAt = new Date().toISOString();
-        
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-        
-        console.log(`✅ Product ${sku} finalized and active with ${uploadedCount} images`);
-        
-        return product;
-        
-    } catch (error) {
-        console.error('Error finalizing product:', error);
-        throw error;
-    }
-}
-
-// Step 6: Mark product as complete
-async finalizeProduct(sku) {
-    try {
-        const products = await this.getAllProducts();
-        const productIndex = products.findIndex(p => p.sku === sku);
-        
-        if (productIndex === -1) {
-            throw new Error('Product not found');
-        }
-        
-        // Verify all images uploaded
-        if (products[productIndex].uploadedImages !== products[productIndex].imageCount) {
-            throw new Error(`Product incomplete: ${products[productIndex].uploadedImages}/${products[productIndex].imageCount} images uploaded`);
-        }
-        
-        // Mark as active and complete
-        products[productIndex].activityStatus = 'Active';
-        products[productIndex].uploadComplete = true;
-        products[productIndex].updatedAt = new Date().toISOString();
-        
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-        
-        console.log(`✅ Product ${sku} finalized and active`);
-        
-        return products[productIndex];
-        
-    } catch (error) {
-        console.error('Error finalizing product:', error);
-        throw error;
-    }
-}
-
-// Optional: Check upload status
-async getProductUploadStatus(sku) {
-    try {
-        const products = await this.getAllProducts();
-        const product = products.find(p => p.sku === sku);
-        
-        if (!product) {
-            throw new Error('Product not found');
-        }
-        
-        return {
-            sku: product.sku,
-            uploadedImages: product.uploadedImages || 0,
-            totalImages: product.imageCount || 0,
-            complete: product.uploadComplete || false,
-            active: product.activityStatus === 'Active'
-        };
-        
-    } catch (error) {
-        console.error('Error getting upload status:', error);
-        throw error;
-    }
-}
 
 
 //New loadPendingOperations
