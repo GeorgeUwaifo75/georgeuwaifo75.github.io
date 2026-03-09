@@ -1960,6 +1960,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             paymentType: paymentType
         };
         
+        /*
         // Calculate final size
         const finalSize = JSON.stringify(completeProductData).length / (1024 * 1024);
         console.log(`Final payload size: ${finalSize.toFixed(2)}MB`);
@@ -1967,7 +1968,29 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         if (finalSize > 9) {
             loadingDiv.remove();
             throw new Error('Product data too large. Please use smaller images or lower quality.');
+        }*/
+        
+        // Calculate final size with overhead
+        const productString = JSON.stringify(completeProductData);
+        const finalSizeMB = productString.length / (1024 * 1024);
+        
+        console.log(`📦 Final payload size: ${finalSizeMB.toFixed(2)}MB`);
+        
+        // JSONBin.io limit is 10MB, but be safe with 8MB
+        if (finalSizeMB > 8) {
+            loadingDiv.remove();
+            throw new Error(`Payload too large (${finalSizeMB.toFixed(2)}MB). Please use smaller images or lower quality.`);
         }
+        
+        if (finalSizeMB > 5) {
+            console.warn(`⚠️ Large payload: ${finalSizeMB.toFixed(2)}MB`);
+            // Show warning but continue
+            if (loadingDiv) {
+                loadingDiv.innerHTML += '<br><small>Large file - may take a moment...</small>';
+            }
+        }
+        
+        
         
         // Create product in one request
         loadingDiv.innerHTML = 'Saving product...';
@@ -1979,6 +2002,8 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         showNotification('✅ Product created successfully!', 'success');
         
         return product;
+        
+        
         
     } catch (error) {
         console.error('❌ Error creating product:', error);
@@ -2169,7 +2194,7 @@ async function deleteProduct(sku) {
 }
 
 // Enhanced image compression with much smaller output
-async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
+/*async function compressImage(base64String, maxWidth = 400, maxHeight = 400, quality = 0.4) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = base64String;
@@ -2217,6 +2242,400 @@ async function compressImage(base64String, maxWidth = 400, maxHeight = 400, qual
             reject(error);
         };
     });
+}*/
+// Ultra-aggressive image compression to ensure small payload
+async function compressImage(base64String, maxWidth = 300, maxHeight = 300, quality = 0.3) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = base64String;
+        
+        img.onload = () => {
+            // Create canvas for resizing
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Much more aggressive resizing
+            // Target max dimension 300px (reduced from 400)
+            if (width > height) {
+                if (width > maxWidth) {
+                    height = Math.round(height * (maxWidth / width));
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width = Math.round(width * (maxHeight / height));
+                    height = maxHeight;
+                }
+            }
+            
+            // If still too large, scale down further
+            let targetPixels = 60000; // Target ~60,000 pixels (about 245x245)
+            let currentPixels = width * height;
+            
+            if (currentPixels > targetPixels) {
+                const scale = Math.sqrt(targetPixels / currentPixels);
+                width = Math.round(width * scale);
+                height = Math.round(height * scale);
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw resized image
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Convert to compressed JPEG with very low quality
+            // Use lower quality for larger images
+            let finalQuality = quality;
+            if (currentPixels > 100000) {
+                finalQuality = 0.25; // 25% quality for large images
+            } else if (currentPixels > 50000) {
+                finalQuality = 0.3; // 30% quality for medium images
+            }
+            
+            const compressedBase64 = canvas.toDataURL('image/jpeg', finalQuality);
+            
+            // Log compression results for debugging
+            const originalSize = (base64String.length * 0.75) / 1024;
+            const newSize = (compressedBase64.length * 0.75) / 1024;
+            console.log(`📸 Image compressed: ${originalSize.toFixed(0)}KB → ${newSize.toFixed(0)}KB (${Math.round((1-newSize/originalSize)*100)}% reduction)`);
+            
+            resolve(compressedBase64);
+        };
+        
+        img.onerror = (error) => {
+            reject(error);
+        };
+    });
+}
+
+// Enhanced image upload handler with strict size limits
+async function handleImageUpload(input) {
+    const preview = document.getElementById('imagePreview');
+    preview.innerHTML = '';
+    const files = Array.from(input.files);
+    
+    // Show loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-spinner';
+    loadingDiv.style.cssText = 'text-align: center; padding: 20px;';
+    loadingDiv.innerHTML = 'Compressing images...';
+    preview.appendChild(loadingDiv);
+    
+    const compressedImages = [];
+    let totalSize = 0;
+    let warningMessage = '';
+    
+    for (let i = 0; i < Math.min(files.length, 4); i++) {
+        const file = files[i];
+        
+        // Read file as base64
+        const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+        
+        try {
+            // Calculate original size
+            const originalSizeKB = (base64.length * 0.75) / 1024;
+            
+            // Determine compression level based on original size
+            let maxDim = 300;
+            let qual = 0.3;
+            
+            if (originalSizeKB > 500) { // > 500KB
+                maxDim = 250;
+                qual = 0.2;
+                warningMessage = 'Some images were heavily compressed';
+            } else if (originalSizeKB > 200) { // > 200KB
+                maxDim = 280;
+                qual = 0.25;
+            }
+            
+            // Compress image
+            const compressed = await compressImage(base64, maxDim, maxDim, qual);
+            compressedImages.push(compressed);
+            
+            // Calculate compressed size
+            const newSizeKB = (compressed.length * 0.75) / 1024;
+            totalSize += newSizeKB;
+            
+            // Show preview with size info
+            const img = document.createElement('img');
+            img.src = compressed;
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.style.margin = '5px';
+            img.style.border = '2px solid #ddd';
+            img.style.borderRadius = '5px';
+            
+            // Show file size info with color coding
+            const sizeInfo = document.createElement('small');
+            sizeInfo.style.cssText = 'display: block; color: #666; font-size: 10px;';
+            
+            // Color code based on size
+            let color = 'green';
+            if (newSizeKB > 100) color = 'orange';
+            if (newSizeKB > 200) color = 'red';
+            
+            sizeInfo.innerHTML = `<span style="color:${color}">${Math.round(newSizeKB)}KB</span> (was ${Math.round(originalSizeKB)}KB)`;
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'display: inline-block; text-align: center; margin: 5px;';
+            container.appendChild(img);
+            container.appendChild(sizeInfo);
+            
+            preview.appendChild(container);
+            
+        } catch (error) {
+            console.error('Error compressing image:', error);
+            alert(`Error compressing image ${file.name}. Please try another image.`);
+        }
+    }
+    
+    // Remove loading indicator
+    if (loadingDiv.parentNode) {
+        loadingDiv.remove();
+    }
+    
+    // Calculate total size in MB for payload check
+    const totalSizeMB = totalSize / 1024;
+    
+    // Update image count and show total size
+    const imageCount = document.getElementById('imageCount');
+    if (imageCount) {
+        let statusText = `${compressedImages.length} of 4 images uploaded (Total: ${totalSizeMB.toFixed(2)}MB)`;
+        
+        if (compressedImages.length < 4) {
+            imageCount.style.color = 'red';
+            imageCount.textContent = `${compressedImages.length} of 4 images uploaded - NEEDS ${4-compressedImages.length} MORE`;
+        } else {
+            // Check total size against JSONBin.io limit (10MB)
+            if (totalSizeMB > 8) {
+                imageCount.style.color = 'red';
+                statusText += ' - ⚠️ TOO LARGE!';
+                
+                // Show warning
+                const sizeWarning = document.getElementById('sizeWarning');
+                if (sizeWarning) {
+                    sizeWarning.innerHTML = '⚠️ Total size exceeds 8MB. Images may fail to upload. Try smaller images.';
+                    sizeWarning.style.display = 'block';
+                }
+                
+                // Disable submit button
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.title = 'Images too large. Please use smaller images.';
+                }
+            } else if (totalSizeMB > 5) {
+                imageCount.style.color = 'orange';
+                statusText += ' - ⚠️ Large size';
+                
+                // Enable submit button but warn
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.title = 'Images are large but should work';
+                }
+                
+                if (warningMessage) {
+                    const sizeWarning = document.getElementById('sizeWarning');
+                    if (sizeWarning) {
+                        sizeWarning.innerHTML = `⚠️ ${warningMessage}`;
+                        sizeWarning.style.display = 'block';
+                    }
+                }
+            } else {
+                imageCount.style.color = 'green';
+                
+                // Enable submit button
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.title = '';
+                }
+                
+                // Hide warning
+                const sizeWarning = document.getElementById('sizeWarning');
+                if (sizeWarning) {
+                    sizeWarning.style.display = 'none';
+                }
+            }
+            
+            imageCount.textContent = statusText;
+        }
+    }
+    
+    return compressedImages;
+}
+
+
+// Enhanced image upload handler with strict size limits
+async function handleImageUpload(input) {
+    const preview = document.getElementById('imagePreview');
+    preview.innerHTML = '';
+    const files = Array.from(input.files);
+    
+    // Show loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-spinner';
+    loadingDiv.style.cssText = 'text-align: center; padding: 20px;';
+    loadingDiv.innerHTML = 'Compressing images...';
+    preview.appendChild(loadingDiv);
+    
+    const compressedImages = [];
+    let totalSize = 0;
+    let warningMessage = '';
+    
+    for (let i = 0; i < Math.min(files.length, 4); i++) {
+        const file = files[i];
+        
+        // Read file as base64
+        const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+        
+        try {
+            // Calculate original size
+            const originalSizeKB = (base64.length * 0.75) / 1024;
+            
+            // Determine compression level based on original size
+            let maxDim = 300;
+            let qual = 0.3;
+            
+            if (originalSizeKB > 500) { // > 500KB
+                maxDim = 250;
+                qual = 0.2;
+                warningMessage = 'Some images were heavily compressed';
+            } else if (originalSizeKB > 200) { // > 200KB
+                maxDim = 280;
+                qual = 0.25;
+            }
+            
+            // Compress image
+            const compressed = await compressImage(base64, maxDim, maxDim, qual);
+            compressedImages.push(compressed);
+            
+            // Calculate compressed size
+            const newSizeKB = (compressed.length * 0.75) / 1024;
+            totalSize += newSizeKB;
+            
+            // Show preview with size info
+            const img = document.createElement('img');
+            img.src = compressed;
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.style.margin = '5px';
+            img.style.border = '2px solid #ddd';
+            img.style.borderRadius = '5px';
+            
+            // Show file size info with color coding
+            const sizeInfo = document.createElement('small');
+            sizeInfo.style.cssText = 'display: block; color: #666; font-size: 10px;';
+            
+            // Color code based on size
+            let color = 'green';
+            if (newSizeKB > 100) color = 'orange';
+            if (newSizeKB > 200) color = 'red';
+            
+            sizeInfo.innerHTML = `<span style="color:${color}">${Math.round(newSizeKB)}KB</span> (was ${Math.round(originalSizeKB)}KB)`;
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'display: inline-block; text-align: center; margin: 5px;';
+            container.appendChild(img);
+            container.appendChild(sizeInfo);
+            
+            preview.appendChild(container);
+            
+        } catch (error) {
+            console.error('Error compressing image:', error);
+            alert(`Error compressing image ${file.name}. Please try another image.`);
+        }
+    }
+    
+    // Remove loading indicator
+    if (loadingDiv.parentNode) {
+        loadingDiv.remove();
+    }
+    
+    // Calculate total size in MB for payload check
+    const totalSizeMB = totalSize / 1024;
+    
+    // Update image count and show total size
+    const imageCount = document.getElementById('imageCount');
+    if (imageCount) {
+        let statusText = `${compressedImages.length} of 4 images uploaded (Total: ${totalSizeMB.toFixed(2)}MB)`;
+        
+        if (compressedImages.length < 4) {
+            imageCount.style.color = 'red';
+            imageCount.textContent = `${compressedImages.length} of 4 images uploaded - NEEDS ${4-compressedImages.length} MORE`;
+        } else {
+            // Check total size against JSONBin.io limit (10MB)
+            if (totalSizeMB > 8) {
+                imageCount.style.color = 'red';
+                statusText += ' - ⚠️ TOO LARGE!';
+                
+                // Show warning
+                const sizeWarning = document.getElementById('sizeWarning');
+                if (sizeWarning) {
+                    sizeWarning.innerHTML = '⚠️ Total size exceeds 8MB. Images may fail to upload. Try smaller images.';
+                    sizeWarning.style.display = 'block';
+                }
+                
+                // Disable submit button
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.title = 'Images too large. Please use smaller images.';
+                }
+            } else if (totalSizeMB > 5) {
+                imageCount.style.color = 'orange';
+                statusText += ' - ⚠️ Large size';
+                
+                // Enable submit button but warn
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.title = 'Images are large but should work';
+                }
+                
+                if (warningMessage) {
+                    const sizeWarning = document.getElementById('sizeWarning');
+                    if (sizeWarning) {
+                        sizeWarning.innerHTML = `⚠️ ${warningMessage}`;
+                        sizeWarning.style.display = 'block';
+                    }
+                }
+            } else {
+                imageCount.style.color = 'green';
+                
+                // Enable submit button
+                const submitBtn = document.getElementById('submitProductBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.title = '';
+                }
+                
+                // Hide warning
+                const sizeWarning = document.getElementById('sizeWarning');
+                if (sizeWarning) {
+                    sizeWarning.style.display = 'none';
+                }
+            }
+            
+            imageCount.textContent = statusText;
+        }
+    }
+    
+    return compressedImages;
 }
 
 // Enhanced image upload handler with size validation
