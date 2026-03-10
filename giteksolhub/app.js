@@ -1963,7 +1963,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             paymentType: paymentType
         };
         
-        /*
+        
         // Calculate final size
         const finalSize = JSON.stringify(completeProductData).length / (1024 * 1024);
         console.log(`Final payload size: ${finalSize.toFixed(2)}MB`);
@@ -1971,9 +1971,10 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         if (finalSize > 9) {
             loadingDiv.remove();
             throw new Error('Product data too large. Please use smaller images or lower quality.');
-        }*/
+        }
         
         // Calculate final size with overhead
+        /*
         const productString = JSON.stringify(completeProductData);
         const finalSizeMB = productString.length / (1024 * 1024);
         
@@ -1991,7 +1992,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             if (loadingDiv) {
                 loadingDiv.innerHTML += '<br><small>Large file - may take a moment...</small>';
             }
-        }
+        } */
         
         
         
