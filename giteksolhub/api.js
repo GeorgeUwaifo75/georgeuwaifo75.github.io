@@ -75,10 +75,10 @@ class ApiService {
     // Headers for JSONBin.io requests - FIXED
     getHeaders() {
         return {
-            'Content-Type': 'application/json',
-             'X-Master-Key': this.m_apiKey,  
-             'X-Access-Key': this.apiKey,  
-             'X-Bin-Meta': 'false' 
+           // 'Content-Type': 'application/json',
+             'X-Master-Key': this.m_apiKey  //,  
+            // 'X-Access-Key': this.apiKey,  
+             //'X-Bin-Meta': 'false' 
         };
     }
 
@@ -355,10 +355,10 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
             const response = await fetch('https://api.jsonbin.io/v3/b', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': this.m_apiKey,  
-                    'X-Access-Key': this.apiKey,  
-                    'X-Bin-Meta': 'false' // Don't include metadata in response
+                    //'Content-Type': 'application/json',
+                    'X-Master-Key': this.m_apiKey //,  
+                    //'X-Access-Key': this.apiKey,  
+                    //'X-Bin-Meta': 'false' // Don't include metadata in response
                     
                     
                 },
