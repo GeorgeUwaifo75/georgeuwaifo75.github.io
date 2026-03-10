@@ -73,14 +73,24 @@ class ApiService {
 
 
     // Headers for JSONBin.io requests - FIXED
+    /*
     getHeaders() {
         return {
             'Content-Type': 'application/json',
-             'X-Master-Key': this.m_apiKey  //,  
-            // 'X-Access-Key': this.apiKey,  
-             //'X-Bin-Meta': 'false' 
+             'X-Master-Key': this.m_apiKey,  
+             'X-Access-Key': this.apiKey,  
+             'X-Bin-Meta': 'false' 
+        };
+    }*/
+
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+             'X-Master-Key': this.m_apiKey,  
+             'X-Bin-Meta': 'false' 
         };
     }
+
 
     // Main fetch method with retry logic
     
@@ -350,15 +360,25 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
             allpayments: []
         };
         
+        /*
+         headers: {
+                    'Content-Type': 'application/json',
+                    'X-Master-Key': this.m_apiKey,  
+                    'X-Access-Key': this.apiKey,  
+                    'X-Bin-Meta': 'false' // Don't include metadata in response
+                    
+                    
+                }
+        */
+        
         try {
             // For JSONBin.io, we need to create a new bin first
             const response = await fetch('https://api.jsonbin.io/v3/b', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': this.m_apiKey //,  
-                    //'X-Access-Key': this.apiKey,  
-                    //'X-Bin-Meta': 'false' // Don't include metadata in response
+                    'X-Master-Key': this.m_apiKey,  
+                    'X-Bin-Meta': 'false' // Don't include metadata in response
                     
                     
                 },
