@@ -1902,6 +1902,7 @@ async function processPaidProduct(productDataStr) {
 
 
 // Single-process createProduct function
+
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let images = [];
@@ -1942,7 +1943,9 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             loadingDiv.innerHTML = `Compressing image ${i+1}/${images.length}...`;
             
             // Compress each image aggressively
-            const compressed = await compressImage(images[i], 400, 400, 0.4);
+           // const compressed = await compressImage(images[i], 400, 400, 0.4);
+            
+            const compressed = await compressImage(images[i], 300, 300, 0.3);
             compressedImages.push(compressed);
         }
         
@@ -2021,7 +2024,6 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         throw error;
     }
 }
-
 
 
 
