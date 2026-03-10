@@ -68,17 +68,17 @@ class ApiService {
 
 
     // Headers for JSONBin.io requests - FIXED
-     getHeaders() {
+    getHeaders() {
         return {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
-             //'X-Access-Key': this.apiKey,  
+            // 'X-Access-Key': this.apiKey,  
              'X-Bin-Meta': 'false' 
         };
     }
 
 
-    
+
  // Rotate to next proxy
 rotateProxy() {
     this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
@@ -289,6 +289,7 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
             allpayments: []
         };
         
+      
         
         try {
             // For JSONBin.io, we need to create a new bin first
@@ -297,8 +298,9 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
                  headers: {
                     'Content-Type': 'application/json',
                     'X-Master-Key': this.m_apiKey,  
-                   // 'X-Access-Key': this.apiKey,  
+                    //'X-Access-Key': this.apiKey,  
                     'X-Bin-Meta': 'false' // Don't include metadata in response
+                    
                     
                 },
                 body: JSON.stringify(initialData)
