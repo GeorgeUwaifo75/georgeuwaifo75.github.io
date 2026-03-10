@@ -70,10 +70,20 @@
                 <!-- ADD THIS: New Ad menu item -->
             <li class="nav-item"><a href="#" class="nav-link" id="newAdLink"><i class="fas fa-plus-circle"></i> New Ad</a></li>
             </ul>
+            
+            
+            
             <div class="user-info" id="userInfo" style="display: none;">
                 <span id="displayName"></span>
                 <button id="logoutBtn" class="btn-small">Logout</button>
             </div>
+            
+            <!-- Pending Operations Indicator -->
+            <div id="pendingOperationsIndicator" style="display: none; margin-left: 10px;">
+                <i class="fas fa-sync fa-spin" style="color: #ff9800;"></i>
+                <span id="pendingCount">0</span> pending
+            </div>
+            
         </div>
     </nav>
 
@@ -154,11 +164,44 @@
     
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     
+    <!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    
+    <script src="firebase.js"></script>
+    
     <script src="api.js"></script>
     <script src="auth.js"></script>
     <script src="products.js"></script>
     <script src="payments.js"></script>
     <script src="app.js"></script>
+    
+    
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+      // TODO: Add SDKs for Firebase products that you want to use
+      // https://firebase.google.com/docs/web/setup#available-libraries
+    
+      // Your web app's Firebase configuration
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyBj9wQ04hnfPjowVvEa_yf8_Fq3VXVaH5I",
+        authDomain: "giteksolhub-project.firebaseapp.com",
+        projectId: "giteksolhub-project",
+        storageBucket: "giteksolhub-project.firebasestorage.app",
+        messagingSenderId: "917911843059",
+        appId: "1:917911843059:web:0aa2438be6605d1f400786",
+        measurementId: "G-8KSR2PBVC4"
+      };
+    
+      // Initialize Firebase
+       //const app = initializeApp(firebaseConfig);
+       //const analytics = getAnalytics(app);
+    </script>
+    
+    
 </body>
 </html>
 
