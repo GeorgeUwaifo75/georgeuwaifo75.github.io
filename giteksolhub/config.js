@@ -16,6 +16,20 @@ const CONFIG = {
         SERVICE_ID: 'service_78wp8b9', // Your email service ID
         TEMPLATE_ID: 'template_06fjijo' // Your template ID
     }
+    
+    ,
+    // Add Firebase configuration
+    FIREBASE: {
+        apiKey: "AIzaSyBj9wQ04hnfPjowVvEa_yf8_Fq3VXVaH5I",
+        authDomain: "giteksolhub-project.firebaseapp.com",
+        projectId: "giteksolhub-project",
+        storageBucket: "giteksolhub-project.firebasestorage.app",
+        messagingSenderId: "917911843059",
+        appId: "1:917911843059:web:0aa2438be6605d1f400786"
+    }
+
+
+    
 };
 
 const CATEGORIES = [
