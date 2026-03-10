@@ -67,11 +67,6 @@ class ApiService {
     }
 
 
-
-
-
-
-
     // Headers for JSONBin.io requests - FIXED
      getHeaders() {
         return {
@@ -83,64 +78,7 @@ class ApiService {
     }
 
 
-    // Main fetch method with retry logic
     
-    /*
-    async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-     
-      
-        try {
-        
-          
-            const response = await fetch(url, {
-                ...options,
-                headers: this.getHeaders(),
-                mode: 'cors', // Explicitly set CORS mode
-                credentials: 'omit' // Don't send cookies
-            });
-            
-            
-            // Check rate limit headers
-            const remaining = response.headers.get('X-RateLimit-Remaining');
-            const reset = response.headers.get('X-RateLimit-Reset');
-            
-            if (remaining) {
-                this.rateLimitRemaining = parseInt(remaining);
-                if (reset) {
-                    this.rateLimitReset = parseInt(reset) * 1000;
-                }
-                this.saveRateLimitInfo();
-            }
-            
-            if (!response.ok) {
-                if (response.status === 429 && retries > 0) {
-                    // Rate limit exceeded
-                    const retryAfter = response.headers.get('Retry-After') || this.RETRY_DELAY / 1000;
-                    console.log(`⏳ Rate limit reached. Waiting ${retryAfter} seconds...`);
-                    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-                    return this.fetchWithRetry(url, options, retries - 1);
-                }
-                if (response.status === 404 && retries > 0) {
-                    // Bin not found - might need creation
-                    return response;
-                }
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            return response;
-        } catch (error) {
-            if (retries > 0) {
-                console.log(`🔄 Retrying... (${retries} attempts left)`);
-                await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
-                return this.fetchWithRetry(url, options, retries - 1);
-            }
-            throw error;
-        }
-    } */
- 
-
-//New additions 
- 
  // Rotate to next proxy
 rotateProxy() {
     this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
