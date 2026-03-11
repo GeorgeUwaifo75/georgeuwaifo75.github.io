@@ -73,7 +73,10 @@ class ApiService {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
              'X-Access-Key': this.apiKey,  //Comment out if you have errors
-             'X-Bin-Meta': 'false' 
+             'X-Bin-Meta': 'false' ,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
         };
     }
 
