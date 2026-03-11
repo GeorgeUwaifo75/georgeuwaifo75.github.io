@@ -72,7 +72,7 @@ class ApiService {
         return {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
-            // 'X-Access-Key': this.apiKey,  //Comment out if you have errors
+             'X-Access-Key': this.apiKey,  //Comment out if you have errors
              'X-Bin-Meta': 'false' ,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
@@ -324,7 +324,7 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
                  headers: {
                     'Content-Type': 'application/json',
                     'X-Master-Key': this.m_apiKey,  
-                   // 'X-Access-Key': this.apiKey,  
+                    'X-Access-Key': this.apiKey,  
                     'X-Bin-Meta': 'false' // Don't include metadata in response
                     
                     
