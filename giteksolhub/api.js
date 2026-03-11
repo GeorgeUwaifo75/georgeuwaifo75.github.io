@@ -72,7 +72,7 @@ class ApiService {
         return {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
-            // 'X-Access-Key': this.apiKey,  
+             'X-Access-Key': this.apiKey,  
              'X-Bin-Meta': 'false' 
         };
     }
@@ -298,7 +298,7 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
                  headers: {
                     'Content-Type': 'application/json',
                     'X-Master-Key': this.m_apiKey,  
-                    //'X-Access-Key': this.apiKey,  
+                    'X-Access-Key': this.apiKey,  
                     'X-Bin-Meta': 'false' // Don't include metadata in response
                     
                     
