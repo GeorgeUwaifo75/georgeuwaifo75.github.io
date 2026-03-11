@@ -154,8 +154,9 @@ class ApiService {
             const separator = url.includes('?') ? '&' : '?';
             requestUrl = `${url}${separator}_t=${Date.now()}`;
         }
-        
-        const isGitHubPages = window.location.hostname.includes('github.io');
+
+        const isGitHubPages = window.location.hostname.includes('fleethub.io');
+        //const isGitHubPages = window.location.hostname.includes('github.io');
         const proxyUrl = isGitHubPages ? this.getProxyUrl() : '';
         const finalUrl = proxyUrl + requestUrl;
         
