@@ -113,8 +113,23 @@ getProxyUrl() {
     
     // Updated fetchWithRetry method
 async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
+
+   // Add cache-busting timestamp to URL for GET requests
+    let requestUrl = url;
+    if (!options.method || options.method === 'GET') {
+        const separator = url.includes('?') ? '&' : '?';
+        requestUrl = `${url}${separator}_t=${Date.now()}`;
+    }
+
     // Use proxy for all requests from GitHub Pages
     const isGitHubPages = window.location.hostname.includes('github.io');
+    const proxyUrl = isGitHubPages ? this.getProxyUrl() : '';
+    const finalUrl = proxyUrl + requestUrl;
+    
+    console.log(`📡 Request via ${proxyUrl ? 'proxy' : 'direct'}: ${url.substring(0, 50)}...`);
+    
+    // Use proxy for all requests from GitHub Pages
+   /* const isGitHubPages = window.location.hostname.includes('github.io');
     const proxyUrl = isGitHubPages ? this.getProxyUrl() : '';
     const requestUrl = proxyUrl + url;
     
@@ -126,8 +141,16 @@ async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
             headers: this.getHeaders(),
             mode: 'cors',
             credentials: 'omit'
+        });*/
+ try {
+        const response = await fetch(finalUrl, {
+            ...options,
+            headers: this.getHeaders(),
+            mode: 'cors',
+            credentials: 'omit'
         });
-        
+
+    
         // If we get a 429 (rate limit), rotate proxy and retry
         if (response.status === 429) {
             console.log('⚠️ Rate limit hit, switching proxy...');
