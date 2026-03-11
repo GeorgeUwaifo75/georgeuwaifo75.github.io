@@ -28,6 +28,62 @@ class FirebaseService {
         }
     }
 
+    // Compress image before upload
+    async compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // Calculate new dimensions while maintaining aspect ratio
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round(height * (maxWidth / width));
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round(width * (maxHeight / height));
+                            height = maxHeight;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Convert to blob
+                    canvas.toBlob((blob) => {
+                        // Create a new File from the blob
+                        const compressedFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        
+                        // Log compression stats
+                        const originalSizeKB = file.size / 1024;
+                        const compressedSizeKB = compressedFile.size / 1024;
+                        console.log(`📸 Compressed: ${originalSizeKB.toFixed(0)}KB → ${compressedSizeKB.toFixed(0)}KB (${Math.round((1-compressedSizeKB/originalSizeKB)*100)}% reduction)`);
+                        
+                        resolve(compressedFile);
+                    }, 'image/jpeg', quality);
+                };
+                
+                img.onerror = reject;
+            };
+            reader.onerror = reject;
+        });
+    }
+
     // Upload a single image to Firebase Storage
     async uploadImage(file, path) {
         try {
@@ -35,6 +91,9 @@ class FirebaseService {
                 this.initialize();
             }
 
+            // Compress the image first
+            const compressedFile = await this.compressImage(file, 800, 800, 0.8);
+            
             // Create a unique filename
             const timestamp = Date.now();
             const randomString = Math.random().toString(36).substring(2, 15);
@@ -44,8 +103,13 @@ class FirebaseService {
             // Create storage reference
             const storageRef = this.storage.ref(fullPath);
             
-            // Upload file
-            const snapshot = await storageRef.put(file);
+            // Upload file with metadata
+            const metadata = {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000',
+            };
+            
+            const snapshot = await storageRef.put(compressedFile, metadata);
             
             // Get download URL
             const downloadURL = await snapshot.ref.getDownloadURL();
@@ -67,7 +131,7 @@ class FirebaseService {
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                const path = `${productSku}/image-${i + 1}`;
+                const path = `${productSku}`;
                 
                 // Upload and collect promise
                 const uploadPromise = this.uploadImage(file, path)
@@ -77,6 +141,9 @@ class FirebaseService {
                     });
                 
                 uploadPromises.push(uploadPromise);
+                
+                // Small delay between uploads to avoid overwhelming
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
             // Wait for all uploads to complete
@@ -87,31 +154,6 @@ class FirebaseService {
             
         } catch (error) {
             console.error('Error uploading multiple images:', error);
-            throw error;
-        }
-    }
-
-    // Upload from File objects (from input)
-    async uploadImagesFromFileList(fileList, productSku) {
-        const files = Array.from(fileList);
-        return this.uploadMultipleImages(files, productSku);
-    }
-
-    // Upload from base64 strings (if you still want compression before upload)
-    async uploadBase64Image(base64String, path) {
-        try {
-            // Convert base64 to blob
-            const response = await fetch(base64String);
-            const blob = await response.blob();
-            
-            // Create a File object from blob
-            const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
-            
-            // Upload the file
-            return this.uploadImage(file, path);
-            
-        } catch (error) {
-            console.error('Error uploading base64 image:', error);
             throw error;
         }
     }
