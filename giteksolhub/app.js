@@ -1,6 +1,20 @@
 // app.js
 let pendingProductData = null; // Store product data while processing payment
 
+
+// Debounce function to prevent rapid successive calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // ============ EMAILJS INTEGRATION ============
 
 // Initialize EmailJS (call this once when app starts)
@@ -123,12 +137,22 @@ function initializeSearch() {
     searchBtn.addEventListener('click', performSearch);
     
     // Search on Enter key
+    // In initializeSearch function, replace the input event listener:
+      searchInput.addEventListener('input', debounce(() => {
+          if (searchInput.value.trim().length >= 2) {
+              performSearch();
+          }
+      }, 500));
+    
+    /*
+    // Search on Enter key
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             performSearch();
         }
     });
+    */
     
     // Real-time search with debounce (optional)
     let debounceTimeout;
