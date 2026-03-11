@@ -2958,7 +2958,7 @@ function showAboutModal() {
 
 async function testPreflight() {
     try {
-        const response = await fetch('https://api.jsonbin.io/v3/b/69a99281d0ea881f40f1dc8d', {
+        const response = await fetch('https://api.jsonbin.io/v3/b/69b1d79bc3097a1dd5194d91', {
             method: 'OPTIONS',
             headers: {
                 'Origin': window.location.origin,
