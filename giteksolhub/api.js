@@ -72,7 +72,7 @@ class ApiService {
         return {
             'Content-Type': 'application/json',
              'X-Master-Key': this.m_apiKey,  
-             'X-Access-Key': this.apiKey,  
+             'X-Access-Key': this.apiKey,  //Comment out if you have errors
              'X-Bin-Meta': 'false' 
         };
     }
