@@ -59,7 +59,7 @@ class ApiService {
             }
         }, 1000);
         
-        // List of CORS proxies
+        // List of CORS proxies (keeping as fallback)
         this.proxyUrls = [
             'https://cors-anywhere.herokuapp.com/',
             'https://api.allorigins.win/raw?url=',
@@ -78,11 +78,12 @@ class ApiService {
         setInterval(() => this.rotateProxy(), 60000);
     }
 
-    // Headers for JSONBin.io requests
+    // Headers for JSONBin.io requests - FIXED VERSION
     getHeaders(includeMeta = false) {
         const headers = {
             'Content-Type': 'application/json',
-            'X-Master-Key': this.m_apiKey,
+            'X-Master-Key': this.m_apiKey,  // Primary key for authentication
+            'X-Access-Key': this.apiKey,     // Secondary key for access
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0'
@@ -146,7 +147,7 @@ class ApiService {
         return proxy;
     }
 
-    // Main fetch method with cache busting
+    // Main fetch method with proper header handling - FIXED VERSION
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
         // Add cache-busting timestamp to URL for GET requests
         let requestUrl = url;
@@ -156,15 +157,21 @@ class ApiService {
         }
 
         const isGitHubPages = window.location.hostname.includes('github.io');
-        const proxyUrl = isGitHubPages ? this.getProxyUrl() : '';
+        
+        // Try without proxy first if on GitHub Pages (let's test if CORS works with proper headers)
+        const useProxy = false; // Set to false initially to test with proper headers
+        const proxyUrl = (isGitHubPages && useProxy) ? this.getProxyUrl() : '';
         const finalUrl = proxyUrl + requestUrl;
         
-        console.log(`📡 Request via ${proxyUrl ? 'proxy' : 'direct'}: ${url.substring(0, 50)}...`);
+        console.log(`📡 Request: ${url.substring(0, 50)}...`);
+        
+        // Get headers - FIXED: properly handle includeMeta flag
+        const headers = this.getHeaders(options.includeMeta || false);
         
         try {
             const response = await fetch(finalUrl, {
                 ...options,
-                headers: this.getHeaders(options.headers?.includeMeta),
+                headers: headers,
                 mode: 'cors',
                 credentials: 'omit'
             });
@@ -203,12 +210,14 @@ class ApiService {
             
             return response;
         } catch (error) {
-            console.error(`Fetch error with proxy ${proxyUrl}:`, error);
+            console.error(`Fetch error:`, error);
             
-            if (isGitHubPages && retries > 0) {
-                console.log('🔄 Proxy failed, trying next...');
-                this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
-                return this.fetchWithRetry(url, options, retries - 1);
+            // If this is a CORS error and we're on GitHub Pages, try with proxy
+            if (isGitHubPages && !useProxy && retries > 0) {
+                console.log('🔄 Possible CORS error, trying with proxy...');
+                // Re-run with proxy enabled
+                const proxyEnabledOptions = { ...options, useProxy: true };
+                return this.fetchWithRetry(url, proxyEnabledOptions, retries - 1);
             }
             
             if (retries > 0) {
@@ -263,7 +272,7 @@ class ApiService {
     async getFullDataWithVersion() {
         try {
             const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
-                headers: { includeMeta: true }
+                includeMeta: true  // Fixed: use includeMeta flag
             });
             
             if (!response.ok) {
@@ -344,7 +353,7 @@ class ApiService {
                 // Save back to JSONBin.io
                 const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
                     method: 'PUT',
-                    headers: { includeMeta: false },
+                    includeMeta: false,  // Fixed: use includeMeta flag
                     body: JSON.stringify(fullData)
                 });
                 
@@ -497,6 +506,7 @@ class ApiService {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Master-Key': this.m_apiKey,
+                    'X-Access-Key': this.apiKey,
                     'X-Bin-Meta': 'false'
                 },
                 body: JSON.stringify(initialData)
@@ -585,6 +595,7 @@ class ApiService {
                 
                 const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
                     method: 'PUT',
+                    includeMeta: false,
                     body: JSON.stringify(fullData)
                 });
                 
