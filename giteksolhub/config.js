@@ -33,14 +33,14 @@ const CONFIG = {
 };
 
 const CATEGORIES = [
-    'All Business types', // Changed from 'Supermarkets'
+    'Businesses and Outlets', // Changed from 'All Business types'
     'Computing and Electronics',
-    'Computer Services',
-    'Household Products',
+    'Professional services', // Changed from 'Computer Services'
+    'Household and Fashion', // Changed from 'Household Products'
     'Wholesale food commodities',
     'Printing and Publishing',
-    'Automobiles',
-    'Food services',
+    'Automobiles and Machines', // Changed from 'Automobiles'
+    'Food and Well-being', // Changed from 'Food services'
     'Rentals and Properties',
     'Furniture and others'
 ];
