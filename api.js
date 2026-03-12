@@ -754,6 +754,7 @@ class ApiService {
         return products.find(p => p.sku === sku);
     }
 
+/*
     async createProduct(productData) {
         const products = await this.getAllProducts(true);
         
@@ -814,6 +815,93 @@ class ApiService {
         console.log('✅ Product created:', newProduct);
         return newProduct;
     }
+    */
+// In api.js - Update createProduct method to include state
+
+async createProduct(productData) {
+    const products = await this.getAllProducts(true);
+    
+    const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+    const now = new Date();
+    let endDate = new Date();
+    
+    if (productData.paymentStatus === 'free') {
+        endDate.setDate(endDate.getDate() + 14);
+    } else {
+        endDate = null;
+    }
+    
+    // Updated testPayload to include state (with backward compatibility)
+    const testPayload = {
+        sku: sku,
+        name: productData.name,
+        description: productData.description,
+        price: parseFloat(productData.price),
+        category: productData.category,
+        state: productData.state || 'Not specified', // NEW: Nigerian state field with default
+        images: productData.images || [],
+        sellerId: productData.sellerId,
+        sellerName: productData.sellerName || '',
+        sellerContact: productData.sellerContact || '',
+        activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
+        paymentStatus: productData.paymentStatus || 'free',
+        paymentType: productData.paymentType || null,
+        dateAdvertised: now.toISOString(),
+        endDate: endDate ? endDate.toISOString() : null,
+        chats: [],
+        unreadChatCount: 0,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        viewCount: 0
+    };
+    
+    const payloadSize = JSON.stringify(testPayload).length;
+    const payloadSizeMB = payloadSize / (1024 * 1024);
+    
+    console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
+    
+    if (payloadSizeMB > 9) {
+        throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
+    }
+    
+    const newProduct = testPayload;
+    products.push(newProduct);
+    
+    await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+    
+    const users = await this.getAllUsers(true);
+    const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+    if (userIndex !== -1) {
+        users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+        await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+    }
+    
+    console.log('✅ Product created:', newProduct);
+    return newProduct;
+}
+
+// Update validateData to be backward compatible
+validateData(binName, data) {
+    if (binName === 'allusers') {
+        return data.every(user => 
+            user.userId && 
+            user.email && 
+            typeof user.userGroup === 'number'
+        );
+    }
+    
+    if (binName === 'allproducts') {
+        return data.every(product => 
+            product.sku && 
+            product.name && 
+            product.price &&
+            Array.isArray(product.images)
+            // State is optional for backward compatibility
+        );
+    }
+    
+    return true;
+}    
 
     async updateProduct(sku, updatedData) {
         const products = await this.getAllProducts(true);
