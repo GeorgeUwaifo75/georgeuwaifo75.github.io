@@ -1254,10 +1254,17 @@ async function loadProductDetail(sku) {
                     </div>
                 </div>
                 
+                
+
                 <div class="product-meta">
                     <div class="meta-item">
                         <div class="meta-label">Category</div>
                         <div class="meta-value">${product.category}</div>
+                    </div>
+                    <!-- ADD THIS NEW META-ITEM FOR STATE -->
+                    <div class="meta-item">
+                        <div class="meta-label">Location</div>
+                        <div class="meta-value">${product.state || 'Nigeria'}</div>
                     </div>
                     <div class="meta-item">
                         <div class="meta-label">Listed on</div>
@@ -1284,6 +1291,12 @@ async function loadProductDetail(sku) {
                             <i class="fas fa-user"></i>
                             <span>${seller ? seller.firstName + ' ' + seller.lastName : product.sellerName || 'Unknown'}</span>
                         </div>
+                        
+                        <div class="seller-detail-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>${product.state || 'Nigeria'}</span>
+                        </div>
+                        
                         <div class="seller-detail-item">
                             <i class="fas fa-phone"></i>
                             <span>${seller ? seller.telephone : product.sellerContact || 'N/A'}</span>
@@ -1799,7 +1812,7 @@ async function showPaymentTypeSelection() {
 }
 
 
-
+/*
 function showAddProductForm() {
     const dashboardContent = document.getElementById('dashboardContent');
     
@@ -1882,6 +1895,137 @@ function showAddProductForm() {
                 description: document.getElementById('productDescription').value,
                 price: document.getElementById('productPrice').value,
                 images: imageFiles // Pass the actual File objects
+            };
+            
+            if (userAdvertCount < 2) {
+                // Free advert - first or second product
+                console.log('Creating free product...');
+                const product = await createProduct('free', productData);
+                
+                if (product) {
+                    alert('✅ Product added successfully as free advert! It will be active for 14 days.');
+                    loadUserDashboard();
+                }
+            } else {
+                // Paid advert - third product onwards
+                console.log('Free adverts used up (2/2), showing payment options...');
+                
+                // Store product data temporarily
+                pendingProductData = productData;
+                
+                // Show payment type selection
+                showPaymentTypeSelection();
+            }
+            
+        } catch (error) {
+            console.error('Error in form submission:', error);
+            alert('Error: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Add Product';
+        }
+    });
+}*/
+
+function showAddProductForm() {
+    const dashboardContent = document.getElementById('dashboardContent');
+    
+    dashboardContent.innerHTML = `
+        <h3>Add New Product</h3>
+        <form id="addProductForm" class="form-container" style="max-width: none;">
+            <div class="form-group">
+                <label for="productName">Product Name</label>
+                <input type="text" id="productName" required>
+            </div>
+            <div class="form-group">
+                <label for="productCategory">Category</label>
+                <select id="productCategory" required>
+                    ${CATEGORIES.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="productState">Location (Nigerian State) <span style="color: red;">*</span></label>
+                <select id="productState" required>
+                    <option value="">Select State</option>
+                    ${NIGERIAN_STATES.map(state => `<option value="${state}">${state}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="productDescription">Description</label>
+                <textarea id="productDescription" rows="4" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="productPrice">Price (₦)</label>
+                <input type="number" id="productPrice" required>
+            </div>
+            <div class="form-group">
+                <label for="productImages">Images (at least 4)</label>
+                <input type="file" id="productImages" multiple accept="image/*" onchange="handleImageUpload(this)">
+                <div id="imagePreview" class="product-images-grid" style="margin-top: 1rem;"></div>
+                <small id="imageCount" style="color: red;">0 of 4 images selected</small>
+                <small id="sizeWarning" style="color: orange; display: block; margin-top: 5px;"></small>
+            </div>
+            <button type="submit" class="btn" id="submitProductBtn">Add Product</button>
+        </form>
+    `;
+    
+    // Update image count
+    document.getElementById('productImages').addEventListener('change', function() {
+        const count = this.files.length;
+        const imageCount = document.getElementById('imageCount');
+        imageCount.textContent = `${count} of 4 images selected`;
+        imageCount.style.color = count >= 4 ? 'green' : 'red';
+    });
+    
+    document.getElementById('addProductForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('submitProductBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+        
+        try {
+            // Check if user is logged in
+            if (!auth.currentUser) {
+                alert('Please login first');
+                return;
+            }
+            
+            // Check image count
+            const fileInput = document.getElementById('productImages');
+            if (!fileInput.files || fileInput.files.length < 4) {
+                alert(`Please select at least 4 images. Currently have ${fileInput.files.length}`);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Add Product';
+                return;
+            }
+            
+            // Validate state selection
+            const selectedState = document.getElementById('productState').value;
+            if (!selectedState) {
+                alert('Please select a Nigerian state');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Add Product';
+                return;
+            }
+            
+            // Get user's existing products count
+            const userProducts = await api.getProductsBySeller(auth.currentUser.userId);
+            const userAdvertCount = userProducts.length;
+            
+            console.log(`User has ${userAdvertCount} existing products`);
+            
+            // Get the actual File objects
+            const imageFiles = Array.from(fileInput.files).slice(0, 4);
+            
+            // Prepare product data with state
+            const productData = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                state: selectedState,
+                description: document.getElementById('productDescription').value,
+                price: document.getElementById('productPrice').value,
+                images: imageFiles
             };
             
             if (userAdvertCount < 2) {
@@ -2073,15 +2217,16 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
 }
 */
 
-// Updated createProduct function with Firebase Storage
+// Updated createProduct function with Firebase Storage and state
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let imageFiles = [];
-        let name, category, description, price;
+        let name, category, description, price, state;
         
         if (productData) {
             name = productData.name;
             category = productData.category;
+            state = productData.state;
             description = productData.description;
             price = productData.price;
             imageFiles = productData.images || [];
@@ -2094,12 +2239,13 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             
             name = document.getElementById('productName').value;
             category = document.getElementById('productCategory').value;
+            state = document.getElementById('productState').value;
             description = document.getElementById('productDescription').value;
             price = document.getElementById('productPrice').value;
         }
         
-        // Validate inputs
-        if (!name || !category || !description || !price) {
+        // Validate inputs including state
+        if (!name || !category || !state || !description || !price) {
             throw new Error('Missing required fields');
         }
         
@@ -2131,7 +2277,8 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
             description: description,
             price: parseFloat(price),
             category: category,
-            images: imageUrls, // Store only the URLs
+            state: state, // NEW: Include state
+            images: imageUrls,
             sellerId: auth.currentUser.userId,
             sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
             sellerContact: auth.currentUser.telephone,
@@ -2141,7 +2288,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         
         // Calculate payload size (should be tiny now!)
         const finalSizeKB = JSON.stringify(completeProductData).length / 1024;
-        console.log(`📦 Final payload: ${finalSizeKB.toFixed(2)}KB (only URLs)`);
+        console.log(`📦 Final payload: ${finalSizeKB.toFixed(2)}KB (with state)`);
         
         // This should always pass now since URLs are tiny
         if (finalSizeKB > 95) {
@@ -2157,7 +2304,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         
         loadingDiv.remove();
         
-        console.log('✅ Product created successfully with Firebase images:', product);
+        console.log('✅ Product created successfully with Firebase images and state:', product);
         showNotification('✅ Product created successfully!', 'success');
         
         return product;
@@ -2165,7 +2312,6 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
     } catch (error) {
         console.error('❌ Error creating product:', error);
         
-        // Remove loading if it exists
         const loadingDiv = document.querySelector('.loading-spinner');
         if (loadingDiv) loadingDiv.remove();
         
@@ -2173,7 +2319,6 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         throw error;
     }
 }
-
 
 
 function showPaymentOptions() {
