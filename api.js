@@ -1,4 +1,4 @@
-// api.js - Using JSONBin.io for storage with data integrity safeguards
+// api.js - Using JSONBin.io for storage with HIGH-INTEGRITY safeguards
 class ApiService {
     constructor() {
         this.m_apiKey = CONFIG.JSONBIN_M_API_KEY;
@@ -6,7 +6,7 @@ class ApiService {
         this.baseUrl = 'https://api.jsonbin.io/v3';
         this.mainBinId = CONFIG.JSONBIN_MAIN_BIN_ID;
         
-        // State management
+        // State management with version tracking
         this.localCache = {
             allusers: null,
             allproducts: null,
@@ -19,20 +19,14 @@ class ApiService {
         };
         this.CACHE_DURATION = 30000; // 30 seconds cache
         
-        // Queue for offline operations
-        this.requestQueue = [];
-        this.isProcessingQueue = false;
-        
-        // Write queue for sequential processing
+        // Write queue with priority and locking
         this.writeQueue = [];
         this.isProcessingWrites = false;
-        
-        // Rate limit tracking
-        this.rateLimitRemaining = 10;
-        this.rateLimitReset = Date.now() + 60000;
-        this.retryCount = 0;
-        this.MAX_RETRIES = 3;
-        this.RETRY_DELAY = 2000; // 2 seconds
+        this.writeLocks = {
+            allusers: false,
+            allproducts: false,
+            allpayments: false
+        };
         
         // Version tracking for optimistic concurrency control
         this.binVersions = {
@@ -41,25 +35,34 @@ class ApiService {
             allpayments: 0
         };
         
-        // Load pending operations from localStorage
-        this.loadPendingOperations();
+        // Pending writes by bin (for deduplication)
+        this.pendingWrites = {
+            allusers: null,
+            allproducts: null,
+            allpayments: null
+        };
+        
+        // Rate limit tracking
+        this.rateLimitRemaining = 10;
+        this.rateLimitReset = Date.now() + 60000;
+        this.retryCount = 0;
+        this.MAX_RETRIES = 5; // Increased for better reliability
+        this.RETRY_DELAY = 2000;
+        
+        // Load persisted state
         this.loadVersionInfo();
+        this.loadPendingOperations();
         
-        // Process queue every 30 seconds
-        setInterval(() => {
-            if (this.requestQueue.length > 0 && !this.isProcessingQueue) {
-                this.processQueue();
-            }
-        }, 30000);
+        // Process write queue continuously
+        setInterval(() => this.processWriteQueue(), 1000);
         
-        // Process write queue every second
-        setInterval(() => {
-            if (this.writeQueue.length > 0 && !this.isProcessingWrites) {
-                this.processWriteQueue();
-            }
-        }, 1000);
+        // Auto-save pending operations every 30 seconds
+        setInterval(() => this.savePendingOperations(), 30000);
         
-        // List of CORS proxies (keeping as fallback)
+        // Health check every 5 minutes
+        setInterval(() => this.performHealthCheck(), 300000);
+        
+        // List of CORS proxies (fallback)
         this.proxyUrls = [
             'https://cors-anywhere.herokuapp.com/',
             'https://api.allorigins.win/raw?url=',
@@ -74,16 +77,15 @@ class ApiService {
             'https://corsproxy.io/?': { used: 0, lastReset: Date.now() }
         };
         
-        // Rotate proxies every minute
         setInterval(() => this.rotateProxy(), 60000);
     }
 
-    // Headers for JSONBin.io requests - FIXED VERSION
+    // Headers for JSONBin.io requests
     getHeaders(includeMeta = false) {
         const headers = {
             'Content-Type': 'application/json',
-            'X-Master-Key': this.m_apiKey,  // Primary key for authentication
-            'X-Access-Key': this.apiKey,     // Secondary key for access
+            'X-Master-Key': this.m_apiKey,
+            'X-Access-Key': this.apiKey,
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0'
@@ -96,7 +98,8 @@ class ApiService {
         return headers;
     }
 
-    // Version tracking methods
+    // ============ VERSION TRACKING ============
+
     saveVersionInfo() {
         try {
             localStorage.setItem('binVersions', JSON.stringify({
@@ -113,8 +116,7 @@ class ApiService {
             const saved = localStorage.getItem('binVersions');
             if (saved) {
                 const data = JSON.parse(saved);
-                // Only use if less than 1 hour old
-                if (Date.now() - data.timestamp < 3600000) {
+                if (Date.now() - data.timestamp < 3600000) { // 1 hour
                     this.binVersions = data.versions;
                 }
             }
@@ -123,7 +125,8 @@ class ApiService {
         }
     }
 
-    // Proxy management
+    // ============ PROXY MANAGEMENT ============
+
     rotateProxy() {
         this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyUrls.length;
         console.log(`🔄 Switched to proxy: ${this.proxyUrls[this.currentProxyIndex]}`);
@@ -147,9 +150,9 @@ class ApiService {
         return proxy;
     }
 
-    // Main fetch method with proper header handling - FIXED VERSION
+    // ============ CORE FETCH WITH RETRY ============
+
     async fetchWithRetry(url, options = {}, retries = this.MAX_RETRIES) {
-        // Add cache-busting timestamp to URL for GET requests
         let requestUrl = url;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
@@ -157,15 +160,12 @@ class ApiService {
         }
 
         const isGitHubPages = window.location.hostname.includes('github.io');
-        
-        // Try without proxy first if on GitHub Pages (let's test if CORS works with proper headers)
-        const useProxy = false; // Set to false initially to test with proper headers
+        const useProxy = false; // Try without proxy first
         const proxyUrl = (isGitHubPages && useProxy) ? this.getProxyUrl() : '';
         const finalUrl = proxyUrl + requestUrl;
         
         console.log(`📡 Request: ${url.substring(0, 50)}...`);
         
-        // Get headers - FIXED: properly handle includeMeta flag
         const headers = this.getHeaders(options.includeMeta || false);
         
         try {
@@ -212,10 +212,8 @@ class ApiService {
         } catch (error) {
             console.error(`Fetch error:`, error);
             
-            // If this is a CORS error and we're on GitHub Pages, try with proxy
             if (isGitHubPages && !useProxy && retries > 0) {
                 console.log('🔄 Possible CORS error, trying with proxy...');
-                // Re-run with proxy enabled
                 const proxyEnabledOptions = { ...options, useProxy: true };
                 return this.fetchWithRetry(url, proxyEnabledOptions, retries - 1);
             }
@@ -229,7 +227,38 @@ class ApiService {
         }
     }
 
-    // Get bin data with caching
+    // ============ GET FULL DATA WITH VERSION ============
+
+    async getFullDataWithVersion() {
+        try {
+            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
+                includeMeta: true
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return {
+                record: data.record,
+                version: data.metadata.version
+            };
+        } catch (error) {
+            console.error('Error fetching full data:', error);
+            return {
+                record: {
+                    allusers: [],
+                    allproducts: [],
+                    allpayments: []
+                },
+                version: 0
+            };
+        }
+    }
+
+    // ============ GET BIN DATA WITH CACHING ============
+
     async getBin(binName, forceRefresh = false) {
         if (!forceRefresh && this.localCache[binName] && 
             (Date.now() - this.lastFetchTime[binName]) < this.CACHE_DURATION) {
@@ -268,52 +297,49 @@ class ApiService {
         }
     }
 
-    // Get full data with version info
-    async getFullDataWithVersion() {
-        try {
-            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
-                includeMeta: true  // Fixed: use includeMeta flag
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Failed to fetch: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            return {
-                record: data.record,
-                version: data.metadata.version
-            };
-        } catch (error) {
-            console.error('Error fetching full data:', error);
-            return {
-                record: {
-                    allusers: [],
-                    allproducts: [],
-                    allpayments: []
-                },
-                version: 0
-            };
-        }
-    }
+    // ============ HIGH-INTEGRITY WRITE QUEUE ============
 
-    // Queue write operations to prevent race conditions
-    queueWriteOperation(binName, data, metadata = {}) {
+    async updateBin(binName, data, metadata = {}) {
+        // Validate data first
+        if (!this.validateData(binName, data)) {
+            console.error(`❌ Data validation failed for ${binName}`);
+            throw new Error(`Invalid data structure for ${binName}`);
+        }
+        
+        // Update cache immediately for responsive UI
+        this.localCache[binName] = data;
+        
+        // Create a promise that will resolve when the write is complete
         return new Promise((resolve, reject) => {
-            const operation = {
-                id: 'write-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-                binName,
-                data: JSON.parse(JSON.stringify(data)),
-                timestamp: Date.now(),
-                metadata,
-                resolve,
-                reject,
-                attempts: 0,
-                maxAttempts: 3
-            };
-            
-            this.writeQueue.push(operation);
-            console.log(`📝 Queued write operation ${operation.id} for ${binName}`);
+            // If there's already a pending write for this bin, merge the data
+            if (this.pendingWrites[binName]) {
+                console.log(`🔄 Merging with pending write for ${binName}`);
+                this.pendingWrites[binName].data = this.mergeData(
+                    this.pendingWrites[binName].data, 
+                    data, 
+                    binName
+                );
+                this.pendingWrites[binName].timestamp = Date.now();
+                this.pendingWrites[binName].resolve = resolve;
+                this.pendingWrites[binName].reject = reject;
+            } else {
+                // Create new pending write
+                const operation = {
+                    id: 'write-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    binName,
+                    data: JSON.parse(JSON.stringify(data)),
+                    timestamp: Date.now(),
+                    resolve,
+                    reject,
+                    attempts: 0,
+                    maxAttempts: 5,
+                    metadata
+                };
+                
+                this.pendingWrites[binName] = operation;
+                this.writeQueue.push(operation);
+                console.log(`📝 Queued write operation ${operation.id} for ${binName}`);
+            }
             
             if (!this.isProcessingWrites) {
                 this.processWriteQueue();
@@ -321,7 +347,6 @@ class ApiService {
         });
     }
 
-    // Process write queue sequentially
     async processWriteQueue() {
         if (this.writeQueue.length === 0 || this.isProcessingWrites) {
             return;
@@ -329,22 +354,49 @@ class ApiService {
         
         this.isProcessingWrites = true;
         
+        // Sort queue by timestamp (oldest first)
+        this.writeQueue.sort((a, b) => a.timestamp - b.timestamp);
+        
         while (this.writeQueue.length > 0) {
             const operation = this.writeQueue[0];
+            
+            // Skip if too old (> 5 minutes)
+            if (Date.now() - operation.timestamp > 300000) {
+                console.log(`⚠️ Dropping expired operation ${operation.id}`);
+                this.writeQueue.shift();
+                if (this.pendingWrites[operation.binName] === operation) {
+                    this.pendingWrites[operation.binName] = null;
+                }
+                operation.reject(new Error('Operation expired'));
+                continue;
+            }
             
             try {
                 console.log(`🔄 Processing write operation ${operation.id} for ${operation.binName}...`);
                 
-                // Get current full data with version info
+                // Acquire lock for this bin
+                if (this.writeLocks[operation.binName]) {
+                    console.log(`⏳ ${operation.binName} is locked, will retry later`);
+                    // Move to end of queue
+                    this.writeQueue.shift();
+                    this.writeQueue.push(operation);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    continue;
+                }
+                
+                this.writeLocks[operation.binName] = true;
+                
+                // Get current data with version
                 const { record: fullData, version: currentVersion } = await this.getFullDataWithVersion();
                 
-                // Check version mismatch
+                // Check if our version matches
                 if (this.binVersions[operation.binName] && 
                     this.binVersions[operation.binName] !== currentVersion) {
                     console.warn(`⚠️ Version mismatch for ${operation.binName}. Local: ${this.binVersions[operation.binName]}, Remote: ${currentVersion}`);
                     
-                    // Intelligent merge based on bin type
-                    const mergedData = this.mergeData(fullData[operation.binName] || [], operation.data, operation.binName);
+                    // Intelligent merge
+                    const existingData = fullData[operation.binName] || [];
+                    const mergedData = this.mergeData(existingData, operation.data, operation.binName);
                     fullData[operation.binName] = mergedData;
                 } else {
                     fullData[operation.binName] = operation.data;
@@ -353,21 +405,28 @@ class ApiService {
                 // Save back to JSONBin.io
                 const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
                     method: 'PUT',
-                    includeMeta: false,  // Fixed: use includeMeta flag
+                    includeMeta: false,
                     body: JSON.stringify(fullData)
                 });
                 
                 if (updateResponse.ok) {
+                    // Update version tracking
                     this.binVersions[operation.binName] = currentVersion + 1;
                     this.lastFetchTime[operation.binName] = Date.now();
                     this.saveVersionInfo();
                     
                     console.log(`✅ Successfully processed write operation ${operation.id}`);
                     
+                    // Remove from queue and resolve
                     this.writeQueue.shift();
+                    if (this.pendingWrites[operation.binName] === operation) {
+                        this.pendingWrites[operation.binName] = null;
+                    }
                     operation.resolve(true);
                     
-                    this.checkAndClearPendingForBin(operation.binName);
+                    // Show success notification
+                    this.showQueueSuccessNotification(operation);
+                    
                 } else {
                     throw new Error(`HTTP error: ${updateResponse.status}`);
                 }
@@ -380,14 +439,23 @@ class ApiService {
                 if (operation.attempts >= operation.maxAttempts) {
                     console.error(`⚠️ Operation ${operation.id} failed after ${operation.attempts} attempts`);
                     this.writeQueue.shift();
+                    if (this.pendingWrites[operation.binName] === operation) {
+                        this.pendingWrites[operation.binName] = null;
+                    }
                     operation.reject(error);
+                    this.showQueueFailedNotification(operation);
                 } else {
+                    // Move to end of queue for retry
                     this.writeQueue.shift();
                     this.writeQueue.push(operation);
                     console.log(`⏳ Operation ${operation.id} will retry later (attempt ${operation.attempts}/${operation.maxAttempts})`);
                 }
+            } finally {
+                // Release lock
+                this.writeLocks[operation.binName] = false;
             }
             
+            // Small delay between operations
             await new Promise(resolve => setTimeout(resolve, 500));
         }
         
@@ -395,7 +463,8 @@ class ApiService {
         console.log('✅ Write queue processing complete');
     }
 
-    // Intelligent data merging
+    // ============ INTELLIGENT DATA MERGING ============
+
     mergeData(existingData, newData, binName) {
         if (binName === 'allusers') {
             return this.mergeUserData(existingData, newData);
@@ -409,15 +478,23 @@ class ApiService {
 
     mergeUserData(existing, incoming) {
         const userMap = new Map();
+        
+        // Index existing users
         existing.forEach(user => userMap.set(user.userId, user));
         
+        // Merge incoming users
         incoming.forEach(user => {
             if (userMap.has(user.userId)) {
                 const existingUser = userMap.get(user.userId);
+                // Merge, preferring non-empty values and latest timestamps
                 userMap.set(user.userId, {
                     ...existingUser,
                     ...user,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: new Date().toISOString(),
+                    // Ensure critical fields are preserved
+                    password: user.password || existingUser.password,
+                    email: user.email || existingUser.email,
+                    userGroup: user.userGroup !== undefined ? user.userGroup : existingUser.userGroup
                 });
             } else {
                 userMap.set(user.userId, user);
@@ -429,8 +506,11 @@ class ApiService {
 
     mergeProductData(existing, incoming) {
         const productMap = new Map();
+        
+        // Index existing products
         existing.forEach(product => productMap.set(product.sku, product));
         
+        // Merge incoming products
         incoming.forEach(product => {
             if (productMap.has(product.sku)) {
                 const existingProduct = productMap.get(product.sku);
@@ -449,31 +529,49 @@ class ApiService {
 
     mergePaymentData(existing, incoming) {
         const paymentMap = new Map();
-        existing.forEach(payment => paymentMap.set(payment.reference || `${payment.productSKU}-${payment.userID}`, payment));
+        
+        // Use reference as key, or create composite key
+        existing.forEach(payment => {
+            const key = payment.reference || `${payment.productSKU}-${payment.userID}-${payment.paymentDate}`;
+            paymentMap.set(key, payment);
+        });
         
         incoming.forEach(payment => {
-            const key = payment.reference || `${payment.productSKU}-${payment.userID}`;
+            const key = payment.reference || `${payment.productSKU}-${payment.userID}-${payment.paymentDate}`;
             paymentMap.set(key, payment);
         });
         
         return Array.from(paymentMap.values());
     }
 
-    // Validate data before write
+    // ============ DATA VALIDATION ============
+
     validateData(binName, data) {
+        if (!Array.isArray(data)) {
+            console.error(`❌ Data for ${binName} is not an array`);
+            return false;
+        }
+        
         if (binName === 'allusers') {
             return data.every(user => 
+                user && 
                 user.userId && 
+                typeof user.userId === 'string' &&
                 user.email && 
+                typeof user.email === 'string' &&
                 typeof user.userGroup === 'number'
             );
         }
         
         if (binName === 'allproducts') {
             return data.every(product => 
+                product && 
                 product.sku && 
+                typeof product.sku === 'string' &&
                 product.name && 
-                product.price &&
+                typeof product.name === 'string' &&
+                product.price && 
+                typeof product.price === 'number' &&
                 Array.isArray(product.images)
             );
         }
@@ -481,18 +579,334 @@ class ApiService {
         return true;
     }
 
-    // Update bin with queuing
-    async updateBin(binName, data, metadata = {}) {
-        if (!this.validateData(binName, data)) {
-            console.error(`❌ Data validation failed for ${binName}`);
-            throw new Error(`Invalid data structure for ${binName}`);
-        }
-        
-        this.localCache[binName] = data;
-        return this.queueWriteOperation(binName, data, metadata);
+    // ============ HIGH-INTEGRITY USER METHODS ============
+
+    async getAllUsers(forceRefresh = false) {
+        return await this.getBin(CONFIG.BINS.ALLUSERS, forceRefresh);
     }
 
-    // Create initial bin
+    async getUserByUserId(userId) {
+        const users = await this.getAllUsers();
+        return users.find(u => u.userId === userId);
+    }
+
+    async getUserByEmail(email) {
+        const users = await this.getAllUsers();
+        return users.find(u => u.email === email);
+    }
+
+    async createUser(userData) {
+        // Validate user data
+        if (!userData.userId || !userData.email || !userData.password) {
+            throw new Error('Missing required user fields');
+        }
+        
+        // Get fresh data
+        const users = await this.getAllUsers(true);
+        
+        // Check for existing user
+        const existingUser = users.find(u => 
+            u.email === userData.email || u.userId === userData.userId
+        );
+        
+        if (existingUser) {
+            throw new Error('User already exists');
+        }
+        
+        // Add new user
+        users.push(userData);
+        
+        // Update with version tracking
+        await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
+            userMessage: 'Creating new user account...'
+        });
+        
+        return userData;
+    }
+
+    async updateUser(userId, updatedData) {
+        // Get fresh data
+        const users = await this.getAllUsers(true);
+        const index = users.findIndex(u => u.userId === userId);
+        
+        if (index === -1) {
+            throw new Error('User not found');
+        }
+        
+        // Update user data
+        users[index] = {
+            ...users[index],
+            ...updatedData,
+            updatedAt: new Date().toISOString()
+        };
+        
+        // Update with version tracking
+        await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
+            userMessage: 'Updating user profile...'
+        });
+        
+        return users[index];
+    }
+
+    async deleteUser(userId) {
+        // Prevent admin deletion
+        if (userId === 'admin01') {
+            throw new Error('Cannot delete admin user');
+        }
+        
+        // Get fresh data
+        const users = await this.getAllUsers(true);
+        const filtered = users.filter(u => u.userId !== userId);
+        
+        // Update with version tracking
+        await this.updateBin(CONFIG.BINS.ALLUSERS, filtered, {
+            userMessage: 'Deleting user account...'
+        });
+    }
+
+    // ============ PRODUCT METHODS ============
+
+    async getAllProducts(forceRefresh = false) {
+        return await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
+    }
+
+    async getProductsBySeller(userId) {
+        const products = await this.getAllProducts();
+        return products.filter(p => p.sellerId === userId);
+    }
+
+    async getProductsByCategory(category) {
+        try {
+            const products = await this.getAllProducts();
+            const now = new Date();
+            
+            return products.filter(p => {
+                if (p.category !== category) return false;
+                if (p.activityStatus !== 'Active') return false;
+                if (p.endDate) {
+                    const endDate = new Date(p.endDate);
+                    if (endDate < now) return false;
+                }
+                return true;
+            });
+        } catch (error) {
+            console.error('Error in getProductsByCategory:', error);
+            return [];
+        }
+    }
+
+    async getProductBySku(sku) {
+        const products = await this.getAllProducts();
+        return products.find(p => p.sku === sku);
+    }
+
+    async createProduct(productData) {
+        const products = await this.getAllProducts(true);
+        
+        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        const now = new Date();
+        let endDate = new Date();
+        
+        if (productData.paymentStatus === 'free') {
+            endDate.setDate(endDate.getDate() + 14);
+        } else {
+            endDate = null;
+        }
+        
+        const newProduct = {
+            sku: sku,
+            name: productData.name,
+            description: productData.description,
+            price: parseFloat(productData.price),
+            category: productData.category,
+            state: productData.state || 'Not specified',
+            images: productData.images || [],
+            sellerId: productData.sellerId,
+            sellerName: productData.sellerName || '',
+            sellerContact: productData.sellerContact || '',
+            activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
+            paymentStatus: productData.paymentStatus || 'free',
+            paymentType: productData.paymentType || null,
+            dateAdvertised: now.toISOString(),
+            endDate: endDate ? endDate.toISOString() : null,
+            chats: [],
+            unreadChatCount: 0,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            viewCount: 0
+        };
+        
+        // Check payload size
+        const payloadSizeMB = JSON.stringify(newProduct).length / (1024 * 1024);
+        if (payloadSizeMB > 9) {
+            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB)`);
+        }
+        
+        products.push(newProduct);
+        
+        // Update products bin
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products, {
+            userMessage: 'Creating new product...'
+        });
+        
+        // Update user's advert count
+        const users = await this.getAllUsers(true);
+        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
+                userMessage: 'Updating advert count...'
+            });
+        }
+        
+        console.log('✅ Product created:', newProduct);
+        return newProduct;
+    }
+
+    async updateProduct(sku, updatedData) {
+        const products = await this.getAllProducts(true);
+        const index = products.findIndex(p => p.sku === sku);
+        
+        if (index === -1) {
+            throw new Error('Product not found');
+        }
+        
+        products[index] = {
+            ...products[index],
+            ...updatedData,
+            updatedAt: new Date().toISOString()
+        };
+        
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+        return products[index];
+    }
+
+    async deleteProduct(sku) {
+        const products = await this.getAllProducts(true);
+        const filtered = products.filter(p => p.sku !== sku);
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, filtered);
+    }
+
+    async deactivateExpiredProduct(sku) {
+        const products = await this.getAllProducts(true);
+        const product = products.find(p => p.sku === sku);
+        
+        if (product && product.activityStatus === 'Active') {
+            product.activityStatus = 'Inactive';
+            await this.updateProduct(sku, { activityStatus: 'Inactive' });
+        }
+    }
+
+    // ============ PAYMENT METHODS ============
+
+    async getAllPayments(forceRefresh = false) {
+        return await this.getBin(CONFIG.BINS.ALLPAYMENTS, forceRefresh);
+    }
+
+    async createPayment(paymentData) {
+        const payments = await this.getAllPayments(true);
+        payments.push({
+            productSKU: paymentData.productSKU,
+            userID: paymentData.userID,
+            payAmount: paymentData.payAmount,
+            paymentDate: new Date().toISOString(),
+            reference: paymentData.reference
+        });
+        
+        await this.updateBin(CONFIG.BINS.ALLPAYMENTS, payments);
+        return paymentData;
+    }
+
+    // ============ CHAT METHODS ============
+
+    async addChatMessage(sku, message, senderId, senderName) {
+        const products = await this.getAllProducts(true);
+        const product = products.find(p => p.sku === sku);
+        
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+        if (!product.chats) product.chats = [];
+        
+        const chatMessage = {
+            id: 'chat-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+            sender: senderId,
+            senderName: senderName,
+            message: message,
+            timestamp: new Date().toISOString(),
+            read: false
+        };
+        
+        product.chats.push(chatMessage);
+        
+        if (senderId !== product.sellerId) {
+            product.unreadChatCount = (product.unreadChatCount || 0) + 1;
+        }
+        
+        await this.updateProduct(sku, { 
+            chats: product.chats,
+            unreadChatCount: product.unreadChatCount 
+        });
+        
+        return chatMessage;
+    }
+
+    async markChatAsRead(sku, userId) {
+        const products = await this.getAllProducts(true);
+        const product = products.find(p => p.sku === sku);
+        
+        if (product && product.chats) {
+            product.chats.forEach(chat => {
+                if (chat.sender !== userId) {
+                    chat.read = true;
+                }
+            });
+            
+            if (userId === product.sellerId) {
+                product.unreadChatCount = 0;
+            }
+            
+            await this.updateProduct(sku, { 
+                chats: product.chats,
+                unreadChatCount: product.unreadChatCount 
+            });
+        }
+    }
+
+    // ============ INITIALIZATION ============
+
+    async initializeAdmin() {
+        try {
+            const users = await this.getAllUsers(true);
+            const adminExists = users.find(u => u.userId === 'admin01');
+            
+            if (!adminExists) {
+                const adminUser = {
+                    userId: 'admin01',
+                    password: '12345@',
+                    email: 'admin@giteksol.com',
+                    firstName: 'Admin',
+                    lastName: 'User',
+                    telephone: '09038197586',
+                    userGroup: 0,
+                    dateOfRegistration: new Date().toISOString(),
+                    userActivityStatus: 1,
+                    numberOfAdverts: 0,
+                    dailyPayValue: 300,
+                    weeklyPayValue: 1000,
+                    monthlyPayValue: 2800
+                };
+                
+                users.push(adminUser);
+                await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+                console.log('✅ Admin user created');
+            }
+        } catch (error) {
+            console.error('Error initializing admin:', error);
+        }
+    }
+
     async createInitialBin() {
         const initialData = {
             allusers: [],
@@ -525,6 +939,55 @@ class ApiService {
         }
         return false;
     }
+
+    // ============ PENDING OPERATIONS MANAGEMENT ============
+
+    savePendingOperations() {
+        try {
+            localStorage.setItem('pendingOperations', JSON.stringify({
+                queue: this.writeQueue.map(op => ({
+                    id: op.id,
+                    binName: op.binName,
+                    data: op.data,
+                    timestamp: op.timestamp,
+                    attempts: op.attempts,
+                    metadata: op.metadata
+                })),
+                pendingWrites: Object.keys(this.pendingWrites).reduce((acc, key) => {
+                    if (this.pendingWrites[key]) {
+                        acc[key] = {
+                            id: this.pendingWrites[key].id,
+                            binName: this.pendingWrites[key].binName,
+                            timestamp: this.pendingWrites[key].timestamp
+                        };
+                    }
+                    return acc;
+                }, {}),
+                timestamp: Date.now()
+            }));
+        } catch (e) {
+            console.error('Error saving pending operations:', e);
+        }
+    }
+
+    loadPendingOperations() {
+        try {
+            const saved = localStorage.getItem('pendingOperations');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (Date.now() - data.timestamp < 86400000) { // 24 hours
+                    this.writeQueue = data.queue || [];
+                    console.log(`📦 Loaded ${this.writeQueue.length} pending operations from storage`);
+                } else {
+                    localStorage.removeItem('pendingOperations');
+                }
+            }
+        } catch (e) {
+            console.error('Error loading pending operations:', e);
+        }
+    }
+
+    // ============ NOTIFICATIONS ============
 
     showBinUpdateNotification(newBinId) {
         const notification = document.createElement('div');
@@ -564,571 +1027,6 @@ class ApiService {
         }, 15000);
     }
 
-    // Queue offline operations
-    queueOperation(binName, data) {
-        this.requestQueue.push({
-            binName,
-            data: JSON.parse(JSON.stringify(data)),
-            timestamp: Date.now()
-        });
-        
-        if (!this.isProcessingQueue) {
-            this.processQueue();
-        }
-    }
-
-    // Process queued operations
-    async processQueue() {
-        if (this.requestQueue.length === 0) {
-            this.isProcessingQueue = false;
-            return;
-        }
-        
-        this.isProcessingQueue = true;
-        
-        while (this.requestQueue.length > 0) {
-            const operation = this.requestQueue.shift();
-            
-            try {
-                const fullData = await this.getFullData();
-                fullData[operation.binName] = operation.data;
-                
-                const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
-                    method: 'PUT',
-                    includeMeta: false,
-                    body: JSON.stringify(fullData)
-                });
-                
-                if (updateResponse.ok) {
-                    console.log(`✅ Synced ${operation.binName} from queue`);
-                    this.lastFetchTime[operation.binName] = Date.now();
-                } else {
-                    this.requestQueue.unshift(operation);
-                    break;
-                }
-            } catch (error) {
-                console.error('Queue processing error:', error);
-                this.requestQueue.unshift(operation);
-                break;
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        
-        this.isProcessingQueue = false;
-        
-        if (this.requestQueue.length > 0) {
-            setTimeout(() => this.processQueue(), 30000);
-        }
-    }
-
-    // Save rate limit info
-    saveRateLimitInfo() {
-        try {
-            localStorage.setItem('rateLimitInfo', JSON.stringify({
-                remaining: this.rateLimitRemaining,
-                reset: this.rateLimitReset
-            }));
-        } catch (e) {
-            console.error('Error saving rate limit info:', e);
-        }
-    }
-
-    // Get full data
-    async getFullData() {
-        try {
-            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch: ${response.status}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching full data:', error);
-            return {
-                allusers: [],
-                allproducts: [],
-                allpayments: []
-            };
-        }
-    }
-
-    // User methods
-    async getAllUsers(forceRefresh = false) {
-        return await this.getBin(CONFIG.BINS.ALLUSERS, forceRefresh);
-    }
-
-    async getUserByUserId(userId) {
-        const users = await this.getAllUsers();
-        return users.find(u => u.userId === userId);
-    }
-
-    async getUserByEmail(email) {
-        const users = await this.getAllUsers();
-        return users.find(u => u.email === email);
-    }
-
-    async createUser(userData) {
-        const users = await this.getAllUsers(true);
-        
-        const existingUser = users.find(u => u.email === userData.email || u.userId === userData.userId);
-        if (existingUser) {
-            throw new Error('User already exists');
-        }
-        
-        users.push(userData);
-        await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-        return userData;
-    }
-
-    async updateUser(userId, updatedData) {
-        const users = await this.getAllUsers(true);
-        const index = users.findIndex(u => u.userId === userId);
-        if (index !== -1) {
-            users[index] = { ...users[index], ...updatedData };
-            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-            return users[index];
-        }
-        throw new Error('User not found');
-    }
-
-    async deleteUser(userId) {
-        const users = await this.getAllUsers(true);
-        const filtered = users.filter(u => u.userId !== userId);
-        await this.updateBin(CONFIG.BINS.ALLUSERS, filtered);
-    }
-
-    // Product methods
-    async getAllProducts(forceRefresh = false) {
-        return await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
-    }
-
-    async getActiveProducts() {
-        const products = await this.getAllProducts();
-        const now = new Date();
-        
-        return products.filter(p => {
-            if (p.activityStatus !== 'Active') return false;
-            
-            if (p.endDate) {
-                const endDate = new Date(p.endDate);
-                if (endDate < now) {
-                    this.deactivateExpiredProduct(p.sku);
-                    return false;
-                }
-            }
-            return true;
-        });
-    }
-
-    async getProductsBySeller(userId) {
-        const products = await this.getAllProducts();
-        return products.filter(p => p.sellerId === userId);
-    }
-
-    async getProductsByCategory(category) {
-        try {
-            const products = await this.getAllProducts();
-            const now = new Date();
-            
-            const filtered = products.filter(p => {
-                if (p.category !== category) return false;
-                if (p.activityStatus !== 'Active') return false;
-                if (p.endDate) {
-                    const endDate = new Date(p.endDate);
-                    if (endDate < now) return false;
-                }
-                return true;
-            });
-            
-            console.log(`getProductsByCategory(${category}): found ${filtered.length} products`);
-            return filtered;
-            
-        } catch (error) {
-            console.error('Error in getProductsByCategory:', error);
-            return [];
-        }
-    }
-
-    async getProductBySku(sku) {
-        const products = await this.getAllProducts();
-        return products.find(p => p.sku === sku);
-    }
-
-/*
-    async createProduct(productData) {
-        const products = await this.getAllProducts(true);
-        
-        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        const now = new Date();
-        let endDate = new Date();
-        
-        if (productData.paymentStatus === 'free') {
-            endDate.setDate(endDate.getDate() + 14);
-        } else {
-            endDate = null;
-        }
-        
-        const testPayload = {
-            sku: sku,
-            name: productData.name,
-            description: productData.description,
-            price: parseFloat(productData.price),
-            category: productData.category,
-            images: productData.images || [],
-            sellerId: productData.sellerId,
-            sellerName: productData.sellerName || '',
-            sellerContact: productData.sellerContact || '',
-            activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
-            paymentStatus: productData.paymentStatus || 'free',
-            paymentType: productData.paymentType || null,
-            dateAdvertised: now.toISOString(),
-            endDate: endDate ? endDate.toISOString() : null,
-            chats: [],
-            unreadChatCount: 0,
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-            viewCount: 0
-        };
-        
-        const payloadSize = JSON.stringify(testPayload).length;
-        const payloadSizeMB = payloadSize / (1024 * 1024);
-        
-        console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
-        
-        if (payloadSizeMB > 9) {
-            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
-        }
-        
-        const newProduct = testPayload;
-        products.push(newProduct);
-        
-        // Update both product and user count in a coordinated way
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-        
-        const users = await this.getAllUsers(true);
-        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-        if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-        }
-        
-        console.log('✅ Product created:', newProduct);
-        return newProduct;
-    }
-    */
-// In api.js - Update createProduct method to include state
-
-async createProduct(productData) {
-    const products = await this.getAllProducts(true);
-    
-    const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-    const now = new Date();
-    let endDate = new Date();
-    
-    if (productData.paymentStatus === 'free') {
-        endDate.setDate(endDate.getDate() + 14);
-    } else {
-        endDate = null;
-    }
-    
-    // Updated testPayload to include state (with backward compatibility)
-    const testPayload = {
-        sku: sku,
-        name: productData.name,
-        description: productData.description,
-        price: parseFloat(productData.price),
-        category: productData.category,
-        state: productData.state || 'Not specified', // NEW: Nigerian state field with default
-        images: productData.images || [],
-        sellerId: productData.sellerId,
-        sellerName: productData.sellerName || '',
-        sellerContact: productData.sellerContact || '',
-        activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
-        paymentStatus: productData.paymentStatus || 'free',
-        paymentType: productData.paymentType || null,
-        dateAdvertised: now.toISOString(),
-        endDate: endDate ? endDate.toISOString() : null,
-        chats: [],
-        unreadChatCount: 0,
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
-        viewCount: 0
-    };
-    
-    const payloadSize = JSON.stringify(testPayload).length;
-    const payloadSizeMB = payloadSize / (1024 * 1024);
-    
-    console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
-    
-    if (payloadSizeMB > 9) {
-        throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
-    }
-    
-    const newProduct = testPayload;
-    products.push(newProduct);
-    
-    await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-    
-    const users = await this.getAllUsers(true);
-    const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-    if (userIndex !== -1) {
-        users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-        await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-    }
-    
-    console.log('✅ Product created:', newProduct);
-    return newProduct;
-}
-
-// Update validateData to be backward compatible
-validateData(binName, data) {
-    if (binName === 'allusers') {
-        return data.every(user => 
-            user.userId && 
-            user.email && 
-            typeof user.userGroup === 'number'
-        );
-    }
-    
-    if (binName === 'allproducts') {
-        return data.every(product => 
-            product.sku && 
-            product.name && 
-            product.price &&
-            Array.isArray(product.images)
-            // State is optional for backward compatibility
-        );
-    }
-    
-    return true;
-}    
-
-    async updateProduct(sku, updatedData) {
-        const products = await this.getAllProducts(true);
-        const index = products.findIndex(p => p.sku === sku);
-        
-        if (index !== -1) {
-            products[index] = {
-                ...products[index],
-                ...updatedData,
-                updatedAt: new Date().toISOString()
-            };
-            
-            await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-            return products[index];
-        }
-        throw new Error('Product not found');
-    }
-
-    async deleteProduct(sku) {
-        const products = await this.getAllProducts(true);
-        const filtered = products.filter(p => p.sku !== sku);
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, filtered);
-    }
-
-    async deactivateExpiredProduct(sku) {
-        const products = await this.getAllProducts(true);
-        const product = products.find(p => p.sku === sku);
-        
-        if (product && product.activityStatus === 'Active') {
-            product.activityStatus = 'Inactive';
-            await this.updateProduct(sku, { activityStatus: 'Inactive' });
-        }
-    }
-
-    // Chat methods
-    async addChatMessage(sku, message, senderId, senderName) {
-        const products = await this.getAllProducts(true);
-        const product = products.find(p => p.sku === sku);
-        
-        if (product) {
-            if (!product.chats) product.chats = [];
-            
-            const chatMessage = {
-                id: 'chat-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-                sender: senderId,
-                senderName: senderName,
-                message: message,
-                timestamp: new Date().toISOString(),
-                read: false
-            };
-            
-            product.chats.push(chatMessage);
-            
-            if (senderId !== product.sellerId) {
-                product.unreadChatCount = (product.unreadChatCount || 0) + 1;
-            }
-            
-            await this.updateProduct(sku, { 
-                chats: product.chats,
-                unreadChatCount: product.unreadChatCount 
-            });
-            
-            return chatMessage;
-        }
-        throw new Error('Product not found');
-    }
-
-    async markChatAsRead(sku, userId) {
-        const products = await this.getAllProducts(true);
-        const product = products.find(p => p.sku === sku);
-        
-        if (product && product.chats) {
-            product.chats.forEach(chat => {
-                if (chat.sender !== userId) {
-                    chat.read = true;
-                }
-            });
-            
-            if (userId === product.sellerId) {
-                product.unreadChatCount = 0;
-            }
-            
-            await this.updateProduct(sku, { 
-                chats: product.chats,
-                unreadChatCount: product.unreadChatCount 
-            });
-        }
-    }
-
-    // Payment methods
-    async getAllPayments(forceRefresh = false) {
-        return await this.getBin(CONFIG.BINS.ALLPAYMENTS, forceRefresh);
-    }
-
-    async createPayment(paymentData) {
-        const payments = await this.getAllPayments(true);
-        payments.push({
-            productSKU: paymentData.productSKU,
-            userID: paymentData.userID,
-            payAmount: paymentData.payAmount,
-            paymentDate: new Date().toISOString(),
-            reference: paymentData.reference
-        });
-        await this.updateBin(CONFIG.BINS.ALLPAYMENTS, payments);
-        return paymentData;
-    }
-
-    // Initialize admin user
-    async initializeAdmin() {
-        try {
-            const users = await this.getAllUsers(true);
-            const adminExists = users.find(u => u.userId === 'admin01');
-            
-            if (!adminExists) {
-                const adminUser = {
-                    userId: 'admin01',
-                    password: '12345@',
-                    email: 'admin@giteksol.com',
-                    firstName: 'Admin',
-                    lastName: 'User',
-                    telephone: '09038197586',
-                    userGroup: 0,
-                    dateOfRegistration: new Date().toISOString(),
-                    userActivityStatus: 1,
-                    numberOfAdverts: 0,
-                    dailyPayValue: 300,
-                    weeklyPayValue: 1000,
-                    monthlyPayValue: 2800
-                };
-                
-                users.push(adminUser);
-                await this.updateBin(CONFIG.BINS.ALLUSERS, users);
-                console.log('✅ Admin user created');
-            }
-        } catch (error) {
-            console.error('Error initializing admin:', error);
-        }
-    }
-
-    // Pending operations management
-    savePendingOperations() {
-        try {
-            localStorage.setItem('pendingOperations', JSON.stringify({
-                queue: this.requestQueue,
-                timestamp: Date.now()
-            }));
-        } catch (e) {
-            console.error('Error saving pending operations:', e);
-        }
-    }
-
-    loadPendingOperations() {
-        try {
-            const saved = localStorage.getItem('pendingOperations');
-            if (saved) {
-                const data = JSON.parse(saved);
-                if (Date.now() - data.timestamp < 86400000) {
-                    this.requestQueue = data.queue || [];
-                    console.log(`📦 Loaded ${this.requestQueue.length} pending operations from storage`);
-                } else {
-                    localStorage.removeItem('pendingOperations');
-                }
-            }
-        } catch (e) {
-            console.error('Error loading pending operations:', e);
-        }
-    }
-
-    // Enhanced queue operation
-    queueOperation(binName, data, metadata = {}) {
-        const operation = {
-            id: 'op-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-            binName,
-            data: JSON.parse(JSON.stringify(data)),
-            timestamp: Date.now(),
-            attempts: 0,
-            maxAttempts: 5,
-            metadata: {
-                ...metadata,
-                userMessage: metadata.userMessage || 'Your changes will be saved automatically when connection is restored.'
-            }
-        };
-        
-        this.requestQueue.push(operation);
-        this.savePendingOperations();
-        this.showPendingOperationNotification(operation);
-        
-        if (!this.isProcessingQueue) {
-            this.processQueue();
-        }
-        
-        return operation.id;
-    }
-
-    showPendingOperationNotification(operation) {
-        const notification = document.createElement('div');
-        notification.id = `pending-${operation.id}`;
-        notification.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: #ff9800;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-            max-width: 350px;
-        `;
-        notification.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-clock" style="font-size: 1.2rem;"></i>
-                <div>
-                    <strong>Pending Save</strong>
-                    <p style="margin: 5px 0 0; font-size: 0.85rem;">${operation.metadata.userMessage}</p>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            const notif = document.getElementById(`pending-${operation.id}`);
-            if (notif) notif.remove();
-        }, 5000);
-    }
-
     showQueueSuccessNotification(operation) {
         const notification = document.createElement('div');
         notification.style.cssText = `
@@ -1146,7 +1044,7 @@ validateData(binName, data) {
         notification.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-check-circle" style="font-size: 1.2rem;"></i>
-                <span>${operation.metadata.userMessage || 'Changes saved successfully!'}</span>
+                <span>${operation.metadata?.userMessage || 'Changes saved successfully!'}</span>
             </div>
         `;
         document.body.appendChild(notification);
@@ -1180,17 +1078,42 @@ validateData(binName, data) {
         setTimeout(() => notification.remove(), 5000);
     }
 
-    checkAndClearPendingForBin(binName) {
-        const pendingForBin = this.requestQueue.filter(op => op.binName === binName);
-        
-        if (pendingForBin.length > 0) {
-            console.log(`🧹 Clearing ${pendingForBin.length} pending operations for ${binName}`);
-            this.requestQueue = this.requestQueue.filter(op => op.binName !== binName);
-            this.savePendingOperations();
+    // ============ RATE LIMIT ============
+
+    saveRateLimitInfo() {
+        try {
+            localStorage.setItem('rateLimitInfo', JSON.stringify({
+                remaining: this.rateLimitRemaining,
+                reset: this.rateLimitReset
+            }));
+        } catch (e) {
+            console.error('Error saving rate limit info:', e);
         }
     }
 
-    // Load from localStorage
+    // ============ HEALTH CHECK ============
+
+    async performHealthCheck() {
+        try {
+            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`, {
+                includeMeta: true
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Health check passed', {
+                    version: data.metadata.version,
+                    userCount: data.record.allusers?.length || 0,
+                    productCount: data.record.allproducts?.length || 0
+                });
+            }
+        } catch (error) {
+            console.error('❌ Health check failed:', error);
+        }
+    }
+
+    // ============ LOCAL STORAGE BACKUP ============
+
     loadFromLocalStorage() {
         try {
             const users = localStorage.getItem('backup_allusers');
