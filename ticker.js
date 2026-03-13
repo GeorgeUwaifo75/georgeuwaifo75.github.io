@@ -69,6 +69,26 @@ class MarketTicker {
             this.renderFallbackData();
         }
     }
+
+ // In your ticker.js
+async fetchAnalyticsStats() {
+  try {
+    const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG', {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    const data = await response.json();
+    
+    return {
+      visitorsToday: data.users, // Adjust based on actual response structure
+      visitorsMonth: data.sessions
+    };
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return this.getFallbackStats();
+  }
+} 
     
     async fetchCurrencyRates() {
         try {
