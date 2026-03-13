@@ -546,6 +546,7 @@ class ApiService {
 
     // ============ DATA VALIDATION ============
 
+  /*
     validateData(binName, data) {
         if (!Array.isArray(data)) {
             console.error(`❌ Data for ${binName} is not an array`);
@@ -578,6 +579,52 @@ class ApiService {
         
         return true;
     }
+    */
+    
+    // In api.js - Update validateData to be more flexible
+        validateData(binName, data) {
+            if (!Array.isArray(data)) {
+                console.error(`❌ Data for ${binName} is not an array`);
+                return false;
+            }
+            
+            if (binName === 'allusers') {
+                // More flexible validation - only check for essential fields
+                return data.every(user => 
+                    user && 
+                    user.userId && 
+                    user.email
+                    // password can be optional for existing users
+                    // userGroup can be optional for backward compatibility
+                );
+            }
+            
+            if (binName === 'allproducts') {
+                // Much more flexible validation for products
+                return data.every(product => {
+                    // Only check for the absolute essentials
+                    const hasRequired = product && 
+                        product.sku && 
+                        product.name;
+                    
+                    // Log any issues for debugging
+                    if (!hasRequired) {
+                        console.warn('Product missing required fields:', product);
+                    }
+                    
+                    return hasRequired;
+                });
+            }
+            
+            if (binName === 'allpayments') {
+                return data.every(payment => 
+                    payment && 
+                    (payment.productSKU || payment.reference)
+                );
+            }
+            
+            return true;
+        }
 
     // ============ HIGH-INTEGRITY USER METHODS ============
 
@@ -665,10 +712,34 @@ class ApiService {
     }
 
     // ============ PRODUCT METHODS ============
-
+/*
     async getAllProducts(forceRefresh = false) {
         return await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
     }
+    */
+    
+    // In api.js - Verify getAllProducts
+async getAllProducts(forceRefresh = false) {
+    const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
+    
+    // Ensure each product has at least the minimum structure
+    if (Array.isArray(products)) {
+        return products.map(p => ({
+            sku: p.sku || '',
+            name: p.name || '',
+            description: p.description || '',
+            price: p.price || 0,
+            category: p.category || '',
+            images: Array.isArray(p.images) ? p.images : [],
+            sellerId: p.sellerId || '',
+            activityStatus: p.activityStatus || 'Inactive',
+            paymentStatus: p.paymentStatus || 'free',
+            ...p // Keep all other fields
+        }));
+    }
+    
+    return [];
+}
 
     async getProductsBySeller(userId) {
         const products = await this.getAllProducts();
@@ -1044,13 +1115,16 @@ class ApiService {
         notification.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-check-circle" style="font-size: 1.2rem;"></i>
-                <span>${operation.metadata?.userMessage || 'Changes saved successfully!'}</span>
+                <span>${operation.metadata?.userMessage|| 'Loaded successfully!'}</span>
+              
             </div>
         `;
         document.body.appendChild(notification);
         setTimeout(() => notification.remove(), 4000);
     }
 
+   //     <span>${operation.metadata?.userMessage || 'Changes saved successfully!'}</span>
+          
     showQueueFailedNotification(operation) {
         const notification = document.createElement('div');
         notification.style.cssText = `
