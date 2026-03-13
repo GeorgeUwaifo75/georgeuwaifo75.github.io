@@ -1885,3 +1885,57 @@ footer {
 .header-container:hover::before {
     animation-duration: 5s;
 }
+
+/* Image upload styles */
+#imagePreview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 120px;
+}
+
+#imagePreview div {
+    position: relative;
+    transition: transform 0.2s;
+}
+
+#imagePreview div:hover {
+    transform: scale(1.05);
+}
+
+#imagePreview div:hover button {
+    opacity: 1;
+}
+
+#imagePreview button {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+#imagePreview button:hover {
+    background: var(--primary-red) !important;
+    transform: scale(1.1);
+}
+
+#imagePreview .add-more-btn {
+    border: 2px dashed #999;
+    transition: all 0.3s;
+}
+
+#imagePreview .add-more-btn:hover {
+    border-color: var(--primary-purple);
+    color: var(--primary-purple);
+    background: #f0f0f0;
+}
+
+/* Submit button disabled state */
+#submitProductBtn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#submitProductBtn:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
