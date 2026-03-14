@@ -1019,15 +1019,15 @@ function initializeCategories() {
     // Sample category images
     const categoryImages = {
          'Businesses and Outlets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446471486.jpg',
-        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
+        'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485205068.jpg',
         'Professional services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773447341073.jpg',
         'Household and Fashion': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446780522.jpg',
         'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
-        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
+        'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773484532217.jpg',
         'Automobiles and Machines': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
-        'Food and Well-being': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20services.png',
-        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/furniture%20business.png',
-        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/props%20and%20real%20estate.png'  
+        'Food and Well-being': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485323022.jpg',
+        'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485448937.jpg',
+        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485513353.jpg' 
     };
 
     CATEGORIES.forEach(category => {
