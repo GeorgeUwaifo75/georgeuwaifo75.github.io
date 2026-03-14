@@ -1022,9 +1022,9 @@ function initializeCategories() {
         'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485205068.jpg',
         'Professional services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773447341073.jpg',
         'Household and Fashion': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446780522.jpg',
-        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
+        'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773487107406.jpg',
         'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773484532217.jpg',
-        'Automobiles and Machines': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
+        'Automobiles and Machines': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773487597654.jpg',
         'Food and Well-being': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485323022.jpg',
         'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485448937.jpg',
         'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485513353.jpg' 
