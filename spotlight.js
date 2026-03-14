@@ -1,4 +1,4 @@
-// spotlight.js - Spotlight Products Rotator
+// spotlight.js - Spotlight Products Rotator (Responsive)
 
 class SpotlightProducts {
     constructor() {
@@ -8,10 +8,29 @@ class SpotlightProducts {
         this.countdownInterval = 1000; // 1 second countdown
         this.remainingSeconds = 60;
         this.currentProducts = [];
-        this.categories = []; // Track categories used
-        this.maxProducts = 5;
+        this.categories = [];
+        
+        // Set max products based on screen size
+        this.updateMaxProducts();
+        
+        // Listen for window resize to update max products
+        window.addEventListener('resize', () => {
+            this.updateMaxProducts();
+            if (this.currentProducts.length > 0) {
+                this.renderSpotlight(); // Re-render with new max
+            }
+        });
         
         this.init();
+    }
+    
+    updateMaxProducts() {
+        // Determine max products based on screen width
+        if (window.innerWidth <= 768) {
+            this.maxProducts = 4; // Mobile: 4 products
+        } else {
+            this.maxProducts = 5; // Desktop/Tablet: 5 products
+        }
     }
     
     async init() {
@@ -49,6 +68,9 @@ class SpotlightProducts {
     
     async loadSpotlightProducts() {
         try {
+            // Update max products in case screen was resized
+            this.updateMaxProducts();
+            
             // Get all active products
             const allProducts = await api.getAllProducts();
             const activeProducts = allProducts.filter(p => 
@@ -81,7 +103,7 @@ class SpotlightProducts {
             const selectedProducts = [];
             const usedCategories = new Set();
             
-            // Priority 1: Randomly select from recent paid adverts (up to 5)
+            // Priority 1: Randomly select from recent paid adverts
             if (recentPaid.length > 0) {
                 const shuffledPaid = this.shuffleArray([...recentPaid]);
                 
@@ -111,7 +133,7 @@ class SpotlightProducts {
                 }
             }
             
-            // If we still have less than 5 products, hide the section
+            // If we still have less than max products, hide the section
             if (selectedProducts.length < this.maxProducts) {
                 this.hideSpotlight();
                 return;
@@ -133,7 +155,10 @@ class SpotlightProducts {
         
         this.container.innerHTML = '';
         
-        this.currentProducts.forEach(product => {
+        // Show only up to maxProducts
+        const productsToShow = this.currentProducts.slice(0, this.maxProducts);
+        
+        productsToShow.forEach(product => {
             const card = this.createSpotlightCard(product);
             this.container.appendChild(card);
         });
@@ -148,7 +173,7 @@ class SpotlightProducts {
             : 'https://via.placeholder.com/200x140?text=No+Image';
         
         const isPaid = product.paymentStatus === 'paid';
-        const badgeText = isPaid ? '🔥 PAID AD' : '✨ FREE';
+        const badgeText = isPaid ? '🔥 AD' : '✨';
         const badgeClass = isPaid ? 'paid' : 'free';
         
         // Format price
@@ -172,7 +197,6 @@ class SpotlightProducts {
         `;
         
         card.addEventListener('click', () => {
-            // Navigate to product detail
             if (typeof loadProductDetail === 'function') {
                 loadProductDetail(product.sku);
             }
@@ -198,7 +222,7 @@ class SpotlightProducts {
     
     showSpotlight() {
         const section = document.getElementById('spotlightSection');
-        if (section && window.innerWidth >= 769) {
+        if (section) {
             section.style.display = 'block';
         }
     }
