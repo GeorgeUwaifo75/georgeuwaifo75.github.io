@@ -62,24 +62,32 @@ class MarketTicker {
             
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
-            this.renderTicker({ ...marketData, stats });
+           //New 
+            const stats2 = await this.fetchAnalyticsStats();
+            this.renderTicker({ ...marketData, stats, stats2 });
+           
+            //this.renderTicker({ ...marketData, stats });
             
         } catch (error) {
             console.error('Error fetching market data:', error);
             this.renderFallbackData();
         }
     }
+    
+    
+   // In your ticker.js
 
- // In your ticker.js
+/*
 async fetchAnalyticsStats() {
   try {
     const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG', {
+      
       headers: {
         'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
       }
     });
     const data = await response.json();
-    
+    console.error('The data analytics:', data);
     return {
       visitorsToday: data.users, // Adjust based on actual response structure
       visitorsMonth: data.sessions
@@ -89,6 +97,78 @@ async fetchAnalyticsStats() {
     return this.getFallbackStats();
   }
 } 
+*/
+
+async fetchAnalyticsStats() {
+  try {
+    // Replace 123456789 with your actual numeric Property ID
+    const propertyId = '527751931'; // e.g., '123456789'
+    
+    // Today's visitors
+    const todayResponse = await fetch(`https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today`, {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    // Monthly visitors (last 30 days)
+    const monthResponse = await fetch(`https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=30daysAgo`, {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    let todayUsers = 0;
+    let monthUsers = 0;
+    
+    if (todayResponse.ok) {
+      const todayData = await todayResponse.json();
+      todayUsers = todayData.activeUsers || 0;
+      console.log('Today\'s visitors:', todayUsers);
+    } else {
+      console.error('Today API error:', await todayResponse.text());
+    }
+    
+    if (monthResponse.ok) {
+      const monthData = await monthResponse.json();
+      monthUsers = monthData.activeUsers || 0;
+      console.log('Monthly visitors:', monthUsers);
+    }
+    
+    return {
+      visitorsToday: todayUsers,
+      visitorsMonth: monthUsers
+    };
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return {
+      visitorsToday: Math.floor(Math.random() * 150) + 50,
+      visitorsMonth: Math.floor(Math.random() * 4500) + 1500
+    };
+  }
+}
+
+
+
+// Separate method for monthly data
+async fetchMonthlyVisitors() {
+  try {
+    const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?daterange=30daysAgo', {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    if (!response.ok) return 0;
+    
+    const data = await response.json();
+    return data.activeUsers || 0;
+  } catch (error) {
+    return 0;
+  }
+}
+    
+    
     
     async fetchCurrencyRates() {
         try {
@@ -153,6 +233,8 @@ async fetchAnalyticsStats() {
                 recentProducts: recentProducts,
                 visitorsToday: visitorsToday,
                 visitorsMonth: visitorsMonth
+                
+                
             };
         } catch (error) {
             console.error('Error fetching platform stats:', error);
