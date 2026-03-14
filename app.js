@@ -1018,10 +1018,10 @@ function initializeCategories() {
     
     // Sample category images
     const categoryImages = {
-          'Businesses and Outlets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/supermarket.png',
+         'Businesses and Outlets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446471486.jpg',
         'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/computer%20electronics.png',
-        'Professional services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/A%20computer%20services.png',
-        'Household and Fashion': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/household%20products.png',
+        'Professional services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773447341073.jpg',
+        'Household and Fashion': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446780522.jpg',
         'Wholesale food commodities': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/food%20commodities.png',
         'Printing and Publishing': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/printing%20and%20publishing.png',
         'Automobiles and Machines': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/automobiles.png',
