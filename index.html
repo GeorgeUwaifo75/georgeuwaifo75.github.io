@@ -106,6 +106,18 @@
         <span id="rateLimitMessage">Rate limit approaching. Please wait a moment before adding more products.</span>
         </div>
       
+      <!-- Spotlight Products Section (visible only on larger devices) -->
+          <section id="spotlightSection" class="section spotlight-section">
+              <div class="spotlight-header">
+                  <h2><i class="fas fa-star"></i> Spotlight Products</h2>
+                  <div class="spotlight-timer">
+                      <i class="fas fa-sync-alt"></i> <span id="spotlightTimer">60</span>s
+                  </div>
+              </div>
+              <div class="spotlight-grid" id="spotlightGrid">
+                  <div class="spotlight-loading">Loading featured products...</div>
+              </div>
+          </section>
       
       
         <section id="categoriesSection" class="section active">
@@ -181,7 +193,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     
     <script src="firebase.js"></script>
-   
+    <script src="spotlight.js"></script>
     <script src="ticker.js"></script>
     <script src="api.js"></script>
     <script src="auth.js"></script>
