@@ -2553,3 +2553,27 @@ footer {
 .spotlight-category {
     opacity: 0.8;
 }
+
+/* Original desktop category size: 0.7rem */
+/* 30% reduction = 0.7rem * 0.7 = 0.49rem */
+
+/* Mobile Landscape (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+    .spotlight-category {
+        font-size: 0.49rem; /* Exactly 30% smaller than desktop */
+    }
+}
+
+/* Mobile Portrait (up to 480px) */
+@media (max-width: 480px) {
+    .spotlight-category {
+        font-size: 0.49rem; /* Consistent 30% reduction */
+    }
+}
+
+/* Very Small Devices (up to 320px) */
+@media (max-width: 320px) {
+    .spotlight-category {
+        font-size: 0.42rem; /* Slightly smaller for very small screens */
+    }
+}
