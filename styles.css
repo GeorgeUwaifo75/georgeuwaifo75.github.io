@@ -2127,10 +2127,10 @@ footer {
     background: rgba(74, 222, 128, 0.15);
 }
 
-/* Spotlight Products Section - Now responsive for all devices */
+/* Spotlight Products Section - Enhanced Title Visibility */
 .spotlight-section {
     margin-bottom: 2rem;
-    display: block; /* Always visible, but responsive grid */
+    display: block;
 }
 
 .spotlight-header {
@@ -2183,7 +2183,7 @@ footer {
     display: grid;
     gap: 1rem;
     padding: 0.5rem;
-    grid-template-columns: repeat(5, 1fr); /* Default for desktop */
+    grid-template-columns: repeat(5, 1fr);
 }
 
 /* Spotlight Card Styles */
@@ -2245,14 +2245,28 @@ footer {
     padding: 0.8rem;
 }
 
+/* ENHANCED TITLE STYLES - Better Mobile Visibility */
 .spotlight-name {
     font-size: 0.9rem;
     font-weight: 600;
     margin-bottom: 0.25rem;
     color: var(--dark-gray);
-    white-space: nowrap;
+    
+    /* Improved text display */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.3;
+    min-height: 2.4em; /* Ensures consistent height for 2 lines */
+    
+    /* Better contrast for readability */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    
+    /* Smooth font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .spotlight-price {
@@ -2260,14 +2274,18 @@ footer {
     font-weight: 700;
     color: var(--primary-purple);
     margin-bottom: 0.25rem;
+    letter-spacing: 0.3px;
 }
 
 .spotlight-category {
     font-size: 0.7rem;
-    color: #888;
+    color: #666;
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
 .spotlight-category i {
@@ -2340,23 +2358,28 @@ footer {
         padding: 0.5rem;
     }
     
+    /* ENHANCED MOBILE TITLE STYLES */
     .spotlight-name {
-        font-size: 0.75rem;
-        white-space: normal;
-        display: -webkit-box;
+        font-size: 0.8rem;
+        font-weight: 600;
         -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        height: 2.2em;
+        line-height: 1.2;
+        min-height: 2em;
+        color: #222; /* Darker color for better contrast */
+        text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+        margin-bottom: 0.2rem;
     }
     
     .spotlight-price {
-        font-size: 0.8rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--primary-purple);
         margin-bottom: 0.1rem;
     }
     
     .spotlight-category {
-        font-size: 0.6rem;
+        font-size: 0.65rem;
+        color: #555;
     }
     
     .spotlight-badge {
@@ -2400,28 +2423,40 @@ footer {
         padding: 0.3rem;
     }
     
+    /* ENHANCED MOBILE PORTRAIT TITLE STYLES */
     .spotlight-name {
-        font-size: 0.65rem;
-        white-space: normal;
-        display: -webkit-box;
+        font-size: 0.7rem;
+        font-weight: 600;
         -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        height: 2.2em;
-        margin-bottom: 0.1rem;
+        line-height: 1.2;
+        min-height: 1.7em;
+        color: #222;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+        margin-bottom: 0.15rem;
+        
+        /* Better text contrast */
+        background: linear-gradient(135deg, #333, #222);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: #222;
+        background-clip: text;
     }
     
     .spotlight-price {
-        font-size: 0.7rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--primary-purple);
         margin-bottom: 0.1rem;
+        letter-spacing: 0.2px;
     }
     
     .spotlight-category {
-        font-size: 0.55rem;
+        font-size: 0.6rem;
+        color: #555;
+        font-weight: 500;
     }
     
     .spotlight-category i {
-        font-size: 0.5rem;
+        font-size: 0.55rem;
     }
     
     .spotlight-badge {
@@ -2429,6 +2464,7 @@ footer {
         padding: 0.1rem 0.25rem;
         top: 3px;
         right: 3px;
+        font-weight: 600;
     }
     
     .spotlight-badge i {
@@ -2463,16 +2499,57 @@ footer {
         height: 60px;
     }
     
+    /* EXTRA SMALL TITLE STYLES */
     .spotlight-name {
-        font-size: 0.6rem;
+        font-size: 0.65rem;
         -webkit-line-clamp: 2;
+        line-height: 1.1;
+        min-height: 1.5em;
+        font-weight: 600;
     }
     
     .spotlight-price {
-        font-size: 0.65rem;
+        font-size: 0.7rem;
     }
     
     .spotlight-category {
-        font-size: 0.5rem;
+        font-size: 0.55rem;
     }
+}
+
+/* Add a subtle hover effect for better touch feedback on mobile */
+@media (hover: none) and (pointer: coarse) {
+    .spotlight-card:active {
+        transform: scale(0.98);
+        background: linear-gradient(135deg, #f0f0f0, #e8e8e8);
+        transition: transform 0.1s ease;
+    }
+    
+    .spotlight-name {
+        color: #111; /* Even darker on touch devices */
+    }
+}
+
+/* Ensure text remains readable on high-resolution displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .spotlight-name {
+        font-weight: 500; /* Slightly lighter weight for retina displays */
+        -webkit-font-smoothing: antialiased;
+    }
+}
+
+/* Optional: Add a background highlight for better contrast */
+.spotlight-name {
+    position: relative;
+    z-index: 1;
+}
+
+/* For devices with light backgrounds, ensure text pops */
+.spotlight-card {
+    background: white;
+}
+
+/* Ensure category text doesn't compete with title */
+.spotlight-category {
+    opacity: 0.8;
 }
