@@ -1499,6 +1499,33 @@ function showAuthForm(type) {
                 
                 const user = await auth.login(userId, password);
                 updateUIForUser(user);
+
+                // 👇 IMPORTANT: Force dashboard to show immediately after login 👇
+                    setTimeout(() => {
+                        // Hide all sections first
+                        document.querySelectorAll('.section').forEach(section => {
+                            section.classList.remove('active');
+                        });
+                        
+                        if (user.userGroup === 0) {
+                            // Admin user
+                            console.log('Showing admin dashboard');
+                            const adminSection = document.getElementById('adminDashboardSection');
+                            if (adminSection) {
+                                adminSection.classList.add('active');
+                                loadAdminDashboard(); // Load admin data
+                            }
+                        } else {
+                            // Merchant user
+                            console.log('Showing user dashboard');
+                            const userSection = document.getElementById('userDashboardSection');
+                            if (userSection) {
+                                userSection.classList.add('active');
+                                loadUserDashboard(); // Load user data
+                            }
+                        }
+                    }, 100);
+        
                 showSection('categoriesSection');
             } catch (error) {
                 alert(error.message);
