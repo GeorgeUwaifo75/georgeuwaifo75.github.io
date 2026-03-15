@@ -2554,26 +2554,189 @@ footer {
     opacity: 0.8;
 }
 
-/* Original desktop category size: 0.7rem */
-/* 30% reduction = 0.7rem * 0.7 = 0.49rem */
-
 /* Mobile Landscape (481px - 768px) */
 @media (min-width: 481px) and (max-width: 768px) {
+    .spotlight-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .spotlight-card {
+        border-radius: 8px;
+    }
+    
+    .spotlight-image {
+        height: 80px;
+    }
+    
+    .spotlight-info {
+        padding: 0.5rem;
+    }
+    
+    .spotlight-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        -webkit-line-clamp: 2;
+        line-height: 1.2;
+        min-height: 2em;
+        color: #222;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+        margin-bottom: 0.2rem;
+    }
+    
+    .spotlight-price {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--primary-purple);
+        margin-bottom: 0.1rem;
+    }
+    
+    /* Category label reduced by 30% on mobile */
     .spotlight-category {
-        font-size: 0.49rem; /* Exactly 30% smaller than desktop */
+        font-size: 0.45rem; /* Reduced from 0.65rem by ~30% */
+        color: #555;
+        letter-spacing: 0.2px;
+    }
+    
+    .spotlight-category i {
+        font-size: 0.4rem;
+    }
+    
+    .spotlight-badge {
+        font-size: 0.6rem;
+        padding: 0.15rem 0.3rem;
+        top: 4px;
+        right: 4px;
+    }
+    
+    .spotlight-badge i {
+        font-size: 0.5rem;
+    }
+    
+    .spotlight-header h2 {
+        font-size: 1.2rem;
+    }
+    
+    .spotlight-timer {
+        padding: 0.3rem 0.8rem;
+        font-size: 0.8rem;
     }
 }
 
 /* Mobile Portrait (up to 480px) */
 @media (max-width: 480px) {
+    .spotlight-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.3rem;
+        padding: 0.3rem;
+    }
+    
+    .spotlight-card {
+        border-radius: 6px;
+    }
+    
+    .spotlight-image {
+        height: 70px;
+    }
+    
+    .spotlight-info {
+        padding: 0.3rem;
+    }
+    
+    .spotlight-name {
+        font-size: 0.7rem;
+        font-weight: 600;
+        -webkit-line-clamp: 2;
+        line-height: 1.2;
+        min-height: 1.7em;
+        color: #222;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+        margin-bottom: 0.15rem;
+        background: linear-gradient(135deg, #333, #222);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: #222;
+        background-clip: text;
+    }
+    
+    .spotlight-price {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--primary-purple);
+        margin-bottom: 0.1rem;
+        letter-spacing: 0.2px;
+    }
+    
+    /* Category label reduced by 30% on mobile portrait */
     .spotlight-category {
-        font-size: 0.49rem; /* Consistent 30% reduction */
+        font-size: 0.42rem; /* Reduced from 0.6rem by 30% */
+        color: #555;
+        font-weight: 500;
+        letter-spacing: 0.15px;
+    }
+    
+    .spotlight-category i {
+        font-size: 0.38rem;
+    }
+    
+    .spotlight-badge {
+        font-size: 0.55rem;
+        padding: 0.1rem 0.25rem;
+        top: 3px;
+        right: 3px;
+        font-weight: 600;
+    }
+    
+    .spotlight-badge i {
+        font-size: 0.45rem;
+    }
+    
+    .spotlight-header {
+        padding: 0 0.3rem;
+    }
+    
+    .spotlight-header h2 {
+        font-size: 1rem;
+    }
+    
+    .spotlight-header h2 i {
+        font-size: 0.9rem;
+    }
+    
+    .spotlight-timer {
+        padding: 0.2rem 0.6rem;
+        font-size: 0.7rem;
+    }
+    
+    .spotlight-timer i {
+        font-size: 0.6rem;
     }
 }
 
 /* Very Small Devices (up to 320px) */
 @media (max-width: 320px) {
+    .spotlight-image {
+        height: 60px;
+    }
+    
+    .spotlight-name {
+        font-size: 0.65rem;
+        -webkit-line-clamp: 2;
+        line-height: 1.1;
+        min-height: 1.5em;
+        font-weight: 600;
+    }
+    
+    .spotlight-price {
+        font-size: 0.7rem;
+    }
+    
+    /* Category label for very small devices */
     .spotlight-category {
-        font-size: 0.42rem; /* Slightly smaller for very small screens */
+        font-size: 0.38rem; /* Extra small for very small screens */
+        letter-spacing: 0.1px;
+    }
+    
+    .spotlight-category i {
+        font-size: 0.35rem;
     }
 }
