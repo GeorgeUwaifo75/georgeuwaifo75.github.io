@@ -1786,6 +1786,40 @@ async function loadUserDashboard() {
     }
 }
 
+// Function to attach dashboard menu listeners for regular users
+function attachDashboardMenuListeners() {
+    console.log('Attaching dashboard menu listeners...');
+    
+    const menuItems = document.querySelectorAll('.dashboard-menu li');
+    
+    menuItems.forEach(item => {
+        // Remove existing listeners to prevent duplicates
+        const newItem = item.cloneNode(true);
+        item.parentNode.replaceChild(newItem, item);
+    });
+    
+    // Re-attach fresh listeners
+    document.querySelectorAll('.dashboard-menu li').forEach(item => {
+        item.addEventListener('click', (e) => {
+            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+            item.classList.add('active');
+            
+            const view = item.dataset.view;
+            console.log('Dashboard menu clicked:', view);
+            
+            if (view === 'add-product') {
+                showAddProductForm();
+            } else if (view === 'products') {
+                loadUserDashboard();
+            } else if (view === 'payments') {
+                loadUserPayments();
+            } else if (view === 'profile') {
+                showUserProfile();
+            }
+        });
+    });
+}
+
 function renderUserProductsTable(products) {
     const container = document.getElementById('userProductsTable');
     if (!container) return;
