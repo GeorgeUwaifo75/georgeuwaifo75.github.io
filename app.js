@@ -1151,30 +1151,7 @@ async function updateCategoryCounts() {
     });
 }
 
-/*
-function createProductCard(product) {
-    const card = document.createElement('div');
-    card.className = 'product-card';
-    
-    const mainImage = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/250x200?text=No+Image';
-    
-    card.innerHTML = `
-        <div class="product-images">
-            <img src="${mainImage}" alt="${product.name}" class="product-main-image">
-            <span class="image-count">${product.images ? product.images.length : 0} photos</span>
-            ${product.chats && product.chats.length > 0 ? 
-                `<span class="chat-notification">${product.chats.filter(c => !c.read).length}</span>` : ''}
-        </div>
-        <div class="product-info">
-            <div class="product-name">${product.name}</div>
-            <div class="product-price">₦${product.price}</div>
-            <div class="product-seller">Seller: ${product.sellerId}</div>
-        </div>
-    `;
-    
-    card.addEventListener('click', () => loadProductDetail(product.sku));
-    return card;
-}*/
+
 // Updated createProduct function with Firebase Storage and state - FIXED VERSION
 async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
@@ -2320,7 +2297,7 @@ async function processPaidProduct(productDataStr) {
 
 
 // Updated createProduct function with Firebase Storage and state
-async function createProduct(paymentStatus, productData = null, paymentType = null) {
+/*async function createProduct(paymentStatus, productData = null, paymentType = null) {
     try {
         let imageFiles = [];
         let name, category, description, price, state;
@@ -2420,7 +2397,7 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
         showNotification('❌ Failed to create product: ' + error.message, 'error');
         throw error;
     }
-}
+}*/
 
 
 function showPaymentOptions() {
