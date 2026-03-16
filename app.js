@@ -1151,6 +1151,7 @@ async function updateCategoryCounts() {
     });
 }
 
+/*
 function createProductCard(product) {
     const card = document.createElement('div');
     card.className = 'product-card';
@@ -1173,6 +1174,139 @@ function createProductCard(product) {
     
     card.addEventListener('click', () => loadProductDetail(product.sku));
     return card;
+}*/
+// Updated createProduct function with Firebase Storage and state - FIXED VERSION
+async function createProduct(paymentStatus, productData = null, paymentType = null) {
+    try {
+        let imageFiles = [];
+        let name, category, description, price, state;
+        
+        if (productData) {
+            name = productData.name;
+            category = productData.category;
+            state = productData.state;
+            description = productData.description;
+            price = productData.price;
+            imageFiles = productData.images || [];
+        } else {
+            imageFiles = await collectImages();
+            if (!imageFiles || imageFiles.length < 4) {
+                alert('Please upload at least 4 images');
+                return null;
+            }
+            
+            name = document.getElementById('productName').value;
+            category = document.getElementById('productCategory').value;
+            state = document.getElementById('productState').value;
+            description = document.getElementById('productDescription').value;
+            price = document.getElementById('productPrice').value;
+        }
+        
+        // Validate inputs including state
+        if (!name || !category || !state || !description || !price) {
+            throw new Error('Missing required fields');
+        }
+        
+        // Show loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading-spinner';
+        loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); z-index: 10000;';
+        loadingDiv.innerHTML = 'Creating product...';
+        document.body.appendChild(loadingDiv);
+        
+        // Generate SKU first (needed for Firebase path)
+        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        
+        // Upload images to Firebase
+        loadingDiv.innerHTML = `Uploading ${imageFiles.length} images to Firebase...`;
+        let imageUrls = [];
+        
+        try {
+            imageUrls = await firebaseService.uploadMultipleImages(imageFiles, sku);
+            console.log('✅ Images uploaded to Firebase:', imageUrls);
+        } catch (uploadError) {
+            loadingDiv.remove();
+            throw new Error('Failed to upload images: ' + uploadError.message);
+        }
+        
+        // Calculate end date based on payment status and type
+        const now = new Date();
+        let endDate = null;
+        let activityStatus = 'Inactive';
+        
+        if (paymentStatus === 'free') {
+            // Free adverts: active for 14 days
+            endDate = new Date();
+            endDate.setDate(endDate.getDate() + 14);
+            activityStatus = 'Active';
+        } else if (paymentStatus === 'paid') {
+            // Paid adverts: calculate based on payment type
+            endDate = new Date();
+            switch(paymentType) {
+                case 'daily':
+                    endDate.setDate(endDate.getDate() + 1);
+                    activityStatus = 'Active';
+                    break;
+                case 'weekly':
+                    endDate.setDate(endDate.getDate() + 7);
+                    activityStatus = 'Active';
+                    break;
+                case 'monthly':
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    activityStatus = 'Active';
+                    break;
+                default:
+                    // If payment type is missing, keep inactive
+                    endDate = null;
+                    activityStatus = 'Inactive';
+            }
+        }
+        
+        // Prepare complete product data with all fields
+        const completeProductData = {
+            name: name,
+            description: description,
+            price: parseFloat(price),
+            category: category,
+            state: state,
+            images: imageUrls,
+            sellerId: auth.currentUser.userId,
+            sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
+            sellerContact: auth.currentUser.telephone,
+            paymentStatus: paymentStatus,
+            paymentType: paymentType,
+            activityStatus: activityStatus,
+            endDate: endDate ? endDate.toISOString() : null,
+            dateAdvertised: now.toISOString(),
+            chats: [],
+            unreadChatCount: 0,
+            viewCount: 0
+        };
+        
+        // Calculate payload size
+        const finalSizeKB = JSON.stringify(completeProductData).length / 1024;
+        console.log(`📦 Final payload: ${finalSizeKB.toFixed(2)}KB`);
+        
+        // Create product in JSONBin.io
+        loadingDiv.innerHTML = 'Saving product data...';
+        const product = await api.createProduct(completeProductData);
+        
+        loadingDiv.remove();
+        
+        console.log('✅ Product created successfully:', product);
+        showNotification('✅ Product created successfully!', 'success');
+        
+        return product;
+        
+    } catch (error) {
+        console.error('❌ Error creating product:', error);
+        
+        const loadingDiv = document.querySelector('.loading-spinner');
+        if (loadingDiv) loadingDiv.remove();
+        
+        showNotification('❌ Failed to create product: ' + error.message, 'error');
+        throw error;
+    }
 }
 
 
