@@ -258,7 +258,7 @@ function displaySearchResults(results, searchTerm) {
     // Show the products section
     showSection('productsSection');
 }
-
+/*New add*/
 // Function to create product card for category display
 function createProductCard(product) {
     const card = document.createElement('div');
