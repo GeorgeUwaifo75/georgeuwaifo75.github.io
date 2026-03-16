@@ -2764,68 +2764,256 @@ async function loadAdminDashboard() {
             </div>
             
             <h3>User Management</h3>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>User ID</th>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Telephone</th>
-                            <th>Group</th>
-                            <th>Status</th>
-                            <th>Adverts</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${users.map(user => `
-                            <tr>
-                                <td>${user.userId}</td>
-                                <td>${user.firstName} ${user.lastName}</td>
-                                <td>${user.email}</td>
-                                <td>${user.telephone}</td>
-                                <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
-                                <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
-                                <td>${user.numberOfAdverts || 0}</td>
-                                <td>
-                                    <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
-                                    <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
-                                        ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
-                                    </button>
-                                    ${user.userId !== 'admin01' ? 
-                                        `<button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>` : ''}
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+            
+            <!-- Search and Per Page Controls -->
+            <div class="pagination-search">
+                <input type="text" id="userSearch" placeholder="Search users by ID, name, or email...">
+                <button onclick="filterUsers()" class="btn-small">Search</button>
+                <button onclick="clearUserSearch()" class="btn-small">Clear</button>
             </div>
+            
+            <div class="records-per-page">
+                <label>Show:</label>
+                <select id="usersPerPage" onchange="changeUsersPerPage(this.value)">
+                    <option value="10">10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+            
+            <!-- Users Table Container (will be populated by pagination) -->
+            <div id="usersTable" class="table-container"></div>
         `;
         
+        // Initialize pagination for users table
+        const userPagination = new Pagination('usersTable', 10);
+        userPagination.onPageChange = (pageData) => {
+            renderUsersTable(pageData);
+        };
+        userPagination.setData(users);
+        
+        // Store in global instances
+        window.paginationInstances = window.paginationInstances || {};
+        window.paginationInstances['usersTable'] = userPagination;
+        
         // Add event listeners for admin dashboard menu
-        document.querySelectorAll('.dashboard-menu li').forEach(item => {
-            item.addEventListener('click', (e) => {
-                document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
-                item.classList.add('active');
-                
-                const view = item.dataset.view;
-                if (view === 'users') {
-                    loadAdminDashboard();
-                } else if (view === 'all-products') {
-                    loadAllProductsAdmin();
-                } else if (view === 'payments-report') {
-                    loadPaymentsReport();
-                } else if (view === 'settings') {
-                    loadAdminSettings();
-                }
-            });
-        });
+        attachAdminMenuListeners();
         
     } catch (error) {
         console.error('Error loading admin dashboard:', error);
         adminContent.innerHTML = '<p class="error-message">Error loading dashboard. Please try again.</p>';
     }
+}
+
+// Function to render the users table
+function renderUsersTable(users) {
+    const container = document.getElementById('usersTable');
+    if (!container) return;
+    
+    if (users.length === 0) {
+        container.innerHTML = '<p class="text-center">No users found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Telephone</th>
+                    <th>Group</th>
+                    <th>Status</th>
+                    <th>Adverts</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(user => `
+                    <tr>
+                        <td>${user.userId}</td>
+                        <td>${user.firstName || ''} ${user.lastName || ''}</td>
+                        <td>${user.email || ''}</td>
+                        <td>${user.telephone || ''}</td>
+                        <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
+                        <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
+                        <td>${user.numberOfAdverts || 0}</td>
+                        <td>
+                            <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
+                            <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
+                                ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
+                            </button>
+                            ${user.userId !== 'admin01' ? 
+                                `<button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+// Filter functions for users
+function filterUsers() {
+    const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
+    const pagination = window.paginationInstances?.['usersTable'];
+    
+    if (pagination) {
+        pagination.filter(user => {
+            return (user.userId && user.userId.toLowerCase().includes(searchTerm)) ||
+                   (user.firstName && user.firstName.toLowerCase().includes(searchTerm)) ||
+                   (user.lastName && user.lastName.toLowerCase().includes(searchTerm)) ||
+                   (user.email && user.email.toLowerCase().includes(searchTerm));
+        });
+    }
+}
+
+function clearUserSearch() {
+    document.getElementById('userSearch').value = '';
+    filterUsers();
+}
+
+function changeUsersPerPage(value) {
+    const perPage = parseInt(value);
+    const pagination = window.paginationInstances?.['usersTable'];
+    
+    if (pagination) {
+        pagination.itemsPerPage = perPage;
+        pagination.render();
+    }
+}
+
+// Function to attach admin menu listeners
+function attachAdminMenuListeners() {
+    document.querySelectorAll('.dashboard-menu li').forEach(item => {
+        // Remove existing listeners to prevent duplicates
+        item.replaceWith(item.cloneNode(true));
+    });
+    
+    document.querySelectorAll('.dashboard-menu li').forEach(item => {
+        item.addEventListener('click', (e) => {
+            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+            item.classList.add('active');
+            
+            const view = item.dataset.view;
+            if (view === 'users') {
+                loadAdminDashboard();
+            } else if (view === 'all-products') {
+                loadAllProductsAdmin();
+            } else if (view === 'payments-report') {
+                loadPaymentsReport();
+            } else if (view === 'settings') {
+                loadAdminSettings();
+            }
+        });
+    });
+}
+
+// Function to render the users table
+function renderUsersTable(users) {
+    const container = document.getElementById('usersTable');
+    if (!container) return;
+    
+    if (users.length === 0) {
+        container.innerHTML = '<p class="text-center">No users found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Telephone</th>
+                    <th>Group</th>
+                    <th>Status</th>
+                    <th>Adverts</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(user => `
+                    <tr>
+                        <td>${user.userId}</td>
+                        <td>${user.firstName || ''} ${user.lastName || ''}</td>
+                        <td>${user.email || ''}</td>
+                        <td>${user.telephone || ''}</td>
+                        <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
+                        <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
+                        <td>${user.numberOfAdverts || 0}</td>
+                        <td>
+                            <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
+                            <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
+                                ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
+                            </button>
+                            ${user.userId !== 'admin01' ? 
+                                `<button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+// Filter functions for users
+function filterUsers() {
+    const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
+    const pagination = window.paginationInstances?.['usersTable'];
+    
+    if (pagination) {
+        pagination.filter(user => {
+            return (user.userId && user.userId.toLowerCase().includes(searchTerm)) ||
+                   (user.firstName && user.firstName.toLowerCase().includes(searchTerm)) ||
+                   (user.lastName && user.lastName.toLowerCase().includes(searchTerm)) ||
+                   (user.email && user.email.toLowerCase().includes(searchTerm));
+        });
+    }
+}
+
+function clearUserSearch() {
+    document.getElementById('userSearch').value = '';
+    filterUsers();
+}
+
+function changeUsersPerPage(value) {
+    const perPage = parseInt(value);
+    const pagination = window.paginationInstances?.['usersTable'];
+    
+    if (pagination) {
+        pagination.itemsPerPage = perPage;
+        pagination.render();
+    }
+}
+
+// Function to attach admin menu listeners
+function attachAdminMenuListeners() {
+    document.querySelectorAll('.dashboard-menu li').forEach(item => {
+        // Remove existing listeners to prevent duplicates
+        item.replaceWith(item.cloneNode(true));
+    });
+    
+    document.querySelectorAll('.dashboard-menu li').forEach(item => {
+        item.addEventListener('click', (e) => {
+            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+            item.classList.add('active');
+            
+            const view = item.dataset.view;
+            if (view === 'users') {
+                loadAdminDashboard();
+            } else if (view === 'all-products') {
+                loadAllProductsAdmin();
+            } else if (view === 'payments-report') {
+                loadPaymentsReport();
+            } else if (view === 'settings') {
+                loadAdminSettings();
+            }
+        });
+    });
 }
 
 
@@ -3331,3 +3519,8 @@ window.changeAdminProductsPerPage = changeAdminProductsPerPage;
 window.filterPayments = filterPayments;
 window.clearPaymentSearch = clearPaymentSearch;
 window.changePaymentsPerPage = changePaymentsPerPage;
+// Make admin pagination functions globally available
+window.filterUsers = filterUsers;
+window.clearUserSearch = clearUserSearch;
+window.changeUsersPerPage = changeUsersPerPage;
+window.attachAdminMenuListeners = attachAdminMenuListeners;
