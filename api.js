@@ -546,40 +546,6 @@ class ApiService {
 
     // ============ DATA VALIDATION ============
 
-  /*
-    validateData(binName, data) {
-        if (!Array.isArray(data)) {
-            console.error(`❌ Data for ${binName} is not an array`);
-            return false;
-        }
-        
-        if (binName === 'allusers') {
-            return data.every(user => 
-                user && 
-                user.userId && 
-                typeof user.userId === 'string' &&
-                user.email && 
-                typeof user.email === 'string' &&
-                typeof user.userGroup === 'number'
-            );
-        }
-        
-        if (binName === 'allproducts') {
-            return data.every(product => 
-                product && 
-                product.sku && 
-                typeof product.sku === 'string' &&
-                product.name && 
-                typeof product.name === 'string' &&
-                product.price && 
-                typeof product.price === 'number' &&
-                Array.isArray(product.images)
-            );
-        }
-        
-        return true;
-    }
-    */
     
     // In api.js - Update validateData to be more flexible
         validateData(binName, data) {
@@ -771,6 +737,7 @@ async getAllProducts(forceRefresh = false) {
         return products.find(p => p.sku === sku);
     }
 
+/*
     async createProduct(productData) {
         const products = await this.getAllProducts(true);
         
@@ -833,6 +800,63 @@ async getAllProducts(forceRefresh = false) {
         console.log('✅ Product created:', newProduct);
         return newProduct;
     }
+    */
+   // In api.js - Update createProduct method
+async createProduct(productData) {
+    const products = await this.getAllProducts(true);
+    
+    const sku = productData.sku || ('SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase());
+    const now = new Date();
+    
+    const newProduct = {
+        sku: sku,
+        name: productData.name,
+        description: productData.description,
+        price: parseFloat(productData.price),
+        category: productData.category,
+        state: productData.state || 'Not specified',
+        images: productData.images || [],
+        sellerId: productData.sellerId,
+        sellerName: productData.sellerName || '',
+        sellerContact: productData.sellerContact || '',
+        activityStatus: productData.activityStatus || 'Inactive',
+        paymentStatus: productData.paymentStatus || 'free',
+        paymentType: productData.paymentType || null,
+        dateAdvertised: productData.dateAdvertised || now.toISOString(),
+        endDate: productData.endDate || null,
+        chats: productData.chats || [],
+        unreadChatCount: productData.unreadChatCount || 0,
+        createdAt: productData.createdAt || now.toISOString(),
+        updatedAt: now.toISOString(),
+        viewCount: productData.viewCount || 0
+    };
+    
+    const payloadSize = JSON.stringify(newProduct).length;
+    const payloadSizeMB = payloadSize / (1024 * 1024);
+    
+    console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
+    
+    if (payloadSizeMB > 9) {
+        throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
+    }
+    
+    products.push(newProduct);
+    
+    await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+    
+    // Update user's advert count only for free products or after payment
+    if (productData.paymentStatus !== 'pending') {
+        const users = await this.getAllUsers(true);
+        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
+        if (userIndex !== -1) {
+            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
+            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+        }
+    }
+    
+    console.log('✅ Product created:', newProduct);
+    return newProduct;
+} 
 
     async updateProduct(sku, updatedData) {
         const products = await this.getAllProducts(true);
