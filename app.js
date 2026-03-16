@@ -259,6 +259,37 @@ function displaySearchResults(results, searchTerm) {
     showSection('productsSection');
 }
 
+// Function to create product card for category display
+function createProductCard(product) {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    
+    const mainImage = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/250x200?text=No+Image';
+    
+    // Format price
+    const price = typeof product.price === 'number' 
+        ? product.price.toLocaleString() 
+        : parseFloat(product.price).toLocaleString();
+    
+    card.innerHTML = `
+        <div class="product-images">
+            <img src="${mainImage}" alt="${product.name}" class="product-main-image" loading="lazy">
+            <span class="image-count">${product.images ? product.images.length : 0} photos</span>
+            ${product.paymentStatus === 'free' ? '<span class="free-badge">FREE</span>' : ''}
+            ${product.paymentStatus === 'paid' ? '<span class="paid-badge">PAID</span>' : ''}
+        </div>
+        <div class="product-info">
+            <div class="product-name">${product.name}</div>
+            <div class="product-price">₦${price}</div>
+            <div class="product-location"><i class="fas fa-map-marker-alt"></i> ${product.state || 'Nigeria'}</div>
+            <div class="product-seller">Seller: ${product.sellerName || product.sellerId}</div>
+        </div>
+    `;
+    
+    card.addEventListener('click', () => loadProductDetail(product.sku));
+    return card;
+}
+
 // Create search result card with highlighting
 function createSearchResultCard(product, searchTerm) {
     const card = document.createElement('div');
