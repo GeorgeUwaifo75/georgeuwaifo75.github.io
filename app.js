@@ -144,15 +144,6 @@ function initializeSearch() {
           }
       }, 500));
     
-    /*
-    // Search on Enter key
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            performSearch();
-        }
-    });
-    */
     
     // Real-time search with debounce (optional)
     let debounceTimeout;
@@ -431,7 +422,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Add this missing function if not present
 function loadUserPayments() {
     console.log('Loading user payments...');
     const dashboardContent = document.getElementById('dashboardContent');
@@ -441,36 +431,85 @@ function loadUserPayments() {
         return;
     }
     
+    dashboardContent.innerHTML = `
+        <h3>My Payment History</h3>
+        
+        <div class="pagination-search">
+            <input type="text" id="userPaymentSearch" placeholder="Search by product SKU or reference...">
+            <button onclick="filterUserPayments()">Search</button>
+        </div>
+        
+        <div class="records-per-page">
+            <label>Show:</label>
+            <select id="userPaymentsPerPage" onchange="changeUserPaymentsPerPage()">
+                <option value="10">10 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+        </div>
+        
+        <div id="userPaymentsTable" class="table-container"></div>
+    `;
+    
     paymentService.getUserPaymentHistory(auth.currentUser.userId).then(payments => {
-        dashboardContent.innerHTML = `
-            <h3>My Payment History</h3>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Product SKU</th>
-                            <th>Amount</th>
-                            <th>Payment Date</th>
-                            <th>Reference</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${payments.length > 0 ? payments.map(payment => `
-                            <tr>
-                                <td>${payment.productSKU}</td>
-                                <td>₦${payment.payAmount}</td>
-                                <td>${new Date(payment.paymentDate).toLocaleString()}</td>
-                                <td>${payment.reference || 'N/A'}</td>
-                            </tr>
-                        `).join('') : '<tr><td colspan="4" class="text-center">No payments found</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
-        `;
+        window.userPaymentsPagination = new Pagination('userPaymentsTable', 10);
+        window.userPaymentsPagination.onPageChange = (pageData) => {
+            renderUserPaymentsTable(pageData);
+        };
+        window.userPaymentsPagination.setData(payments);
     }).catch(error => {
         console.error('Error loading payments:', error);
         dashboardContent.innerHTML = '<p>Error loading payment history</p>';
     });
+}
+
+function renderUserPaymentsTable(payments) {
+    const container = document.getElementById('userPaymentsTable');
+    if (!container) return;
+    
+    if (payments.length === 0) {
+        container.innerHTML = '<p class="text-center">No payments found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Product SKU</th>
+                    <th>Amount</th>
+                    <th>Payment Date</th>
+                    <th>Reference</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${payments.map(payment => `
+                    <tr>
+                        <td>${payment.productSKU}</td>
+                        <td>₦${payment.payAmount}</td>
+                        <td>${new Date(payment.paymentDate).toLocaleString()}</td>
+                        <td>${payment.reference || 'N/A'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function filterUserPayments() {
+    const searchTerm = document.getElementById('userPaymentSearch')?.value.toLowerCase() || '';
+    
+    window.userPaymentsPagination.filter(payment => {
+        return (payment.productSKU && payment.productSKU.toLowerCase().includes(searchTerm)) ||
+               (payment.reference && payment.reference.toLowerCase().includes(searchTerm));
+    });
+}
+
+function changeUserPaymentsPerPage() {
+    const perPage = parseInt(document.getElementById('userPaymentsPerPage').value);
+    window.userPaymentsPagination.itemsPerPage = perPage;
+    window.userPaymentsPagination.render();
 }
 
 // Add this missing function
@@ -1018,7 +1057,7 @@ function initializeCategories() {
     
     // Sample category images
     const categoryImages = {
-         'Businesses and Outlets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446471486.jpg',
+        'Businesses and Outlets': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446471486.jpg',
         'Computing and Electronics': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485205068.jpg',
         'Professional services': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773447341073.jpg',
         'Household and Fashion': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773446780522.jpg',
@@ -1027,7 +1066,7 @@ function initializeCategories() {
         'Automobiles and Machines': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773487597654.jpg',
         'Food and Well-being': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485323022.jpg',
         'Furniture and others': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485448937.jpg',
-        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485513353.jpg' 
+        'Rentals and Properties': 'https://uploads.onecompiler.io/42trk4zn7/44f6rhm72/grok_image_1773485513353.jpg'  
     };
 
     CATEGORIES.forEach(category => {
@@ -1499,33 +1538,35 @@ function showAuthForm(type) {
                 
                 const user = await auth.login(userId, password);
                 updateUIForUser(user);
-
+                
                 // 👇 IMPORTANT: Force dashboard to show immediately after login 👇
-                    setTimeout(() => {
-                        // Hide all sections first
-                        document.querySelectorAll('.section').forEach(section => {
-                            section.classList.remove('active');
-                        });
-                        
-                        if (user.userGroup === 0) {
-                            // Admin user
-                            console.log('Showing admin dashboard');
-                            const adminSection = document.getElementById('adminDashboardSection');
-                            if (adminSection) {
-                                adminSection.classList.add('active');
-                                loadAdminDashboard(); // Load admin data
-                            }
-                        } else {
-                            // Merchant user
-                            console.log('Showing user dashboard');
-                            const userSection = document.getElementById('userDashboardSection');
-                            if (userSection) {
-                                userSection.classList.add('active');
-                                loadUserDashboard(); // Load user data
-                            }
-                        }
-                    }, 100);
-        
+                  setTimeout(() => {
+                      // Hide all sections first
+                      document.querySelectorAll('.section').forEach(section => {
+                          section.classList.remove('active');
+                      });
+                      
+                      if (user.userGroup === 0) {
+                          // Admin user
+                          console.log('Showing admin dashboard');
+                          const adminSection = document.getElementById('adminDashboardSection');
+                          if (adminSection) {
+                              adminSection.classList.add('active');
+                              loadAdminDashboard(); // Load admin data
+                          }
+                      } else {
+                          // Merchant user
+                          console.log('Showing user dashboard');
+                          const userSection = document.getElementById('userDashboardSection');
+                          if (userSection) {
+                              userSection.classList.add('active');
+                              loadUserDashboard(); // Load user data
+                          }
+                      }
+                  }, 100);
+                  
+                
+                
                 showSection('categoriesSection');
             } catch (error) {
                 alert(error.message);
@@ -1593,40 +1634,168 @@ function showAuthForm(type) {
 
 
 function updateUIForUser(user) {
-    document.getElementById('userInfo').style.display = 'flex';
-    document.getElementById('displayName').textContent = user.firstName;
-    document.getElementById('signinLink').style.display = 'none';
-    document.getElementById('signupLink').style.display = 'none';
+    console.log('🔄 Updating UI for user:', user.userId, 'Type:', user.userGroup === 0 ? 'Admin' : 'Merchant');
+    
+    // Update user info display
+    const userInfo = document.getElementById('userInfo');
+    const displayName = document.getElementById('displayName');
+    const signinLink = document.getElementById('signinLink');
+    const signupLink = document.getElementById('signupLink');
+    const newAdLink = document.getElementById('newAdLink');
+    
+    if (userInfo) userInfo.style.display = 'flex';
+    if (displayName) displayName.textContent = user.firstName;
+    if (signinLink) signinLink.style.display = 'none';
+    if (signupLink) signupLink.style.display = 'none';
     
     // Show/hide New Ad menu based on user type
-    const newAdLink = document.getElementById('newAdLink');
     if (newAdLink) {
-        // Show New Ad for merchants (group 1), hide for admins (group 0)
-        if (user.userGroup === 1) {
-            newAdLink.style.display = 'inline-flex'; // Use inline-flex for proper alignment
-        } else {
-            newAdLink.style.display = 'none';
-        }
+        newAdLink.style.display = user.userGroup === 1 ? 'inline-flex' : 'none';
     }
     
-    // Show appropriate dashboard based on user type
+    // Hide both dashboards first
+    const adminDashboard = document.getElementById('adminDashboardSection');
+    const userDashboard = document.getElementById('userDashboardSection');
+    const categoriesSection = document.getElementById('categoriesSection');
+    
+    if (adminDashboard) adminDashboard.classList.remove('active');
+    if (userDashboard) userDashboard.classList.remove('active');
+    if (categoriesSection) categoriesSection.classList.remove('active');
+    
+    // Show appropriate dashboard based on user group
     if (user.userGroup === 0) {
-        loadAdminDashboard();
-        showSection('adminDashboardSection');
+        // ADMIN USER
+        console.log('👑 Admin user detected - loading admin dashboard');
+        
+        // Show admin dashboard
+        if (adminDashboard) {
+            adminDashboard.classList.add('active');
+            
+            // Load admin dashboard data
+            loadAdminDashboard().then(() => {
+                console.log('✅ Admin dashboard loaded successfully');
+                
+                // Highlight the users tab by default
+                const usersTab = document.querySelector('.dashboard-menu li[data-view="users"]');
+                if (usersTab) {
+                    document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+                    usersTab.classList.add('active');
+                }
+            }).catch(error => {
+                console.error('❌ Error loading admin dashboard:', error);
+                adminDashboard.innerHTML = '<p class="error-message">Error loading dashboard. Please refresh.</p>';
+            });
+        }
+        
     } else {
-        loadUserDashboard();
-        showSection('userDashboardSection');
+        // MERCHANT USER
+        console.log('🛒 Merchant user detected - loading user dashboard');
+        
+        // Show user dashboard
+        if (userDashboard) {
+            userDashboard.classList.add('active');
+            
+            // Load user dashboard data
+            loadUserDashboard().then(() => {
+                console.log('✅ User dashboard loaded successfully');
+                
+                // Highlight the products tab by default
+                const productsTab = document.querySelector('.dashboard-menu li[data-view="products"]');
+                if (productsTab) {
+                    document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+                    productsTab.classList.add('active');
+                }
+            }).catch(error => {
+                console.error('❌ Error loading user dashboard:', error);
+                userDashboard.innerHTML = '<p class="error-message">Error loading dashboard. Please refresh.</p>';
+            });
+        }
     }
 }
 
+
+
+
+// In loadUserDashboard function
 async function loadUserDashboard() {
-    const dashboardContent = document.getElementById('dashboardContent');
-    const products = await api.getProductsBySeller(auth.currentUser.userId);
+    console.log('Loading user dashboard for:', auth.currentUser.userId);
     
- // In loadUserDashboard function, simplify the product display
-dashboardContent.innerHTML = `
-    <h3>My Products</h3>
-    <div class="table-container">
+    const dashboardContent = document.getElementById('dashboardContent');
+    if (!dashboardContent) return;
+    
+    dashboardContent.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
+    
+    try {
+        const products = await api.getProductsBySeller(auth.currentUser.userId);
+        
+        // Calculate stats
+        const activeProducts = products.filter(p => p.activityStatus === 'Active').length;
+        const paidProducts = products.filter(p => p.paymentStatus === 'paid').length;
+        
+        dashboardContent.innerHTML = `
+            <div class="user-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--primary-purple), #4158D0); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Total Products</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${products.length}</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Active</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${activeProducts}</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #FF9800, #F57C00); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Paid Ads</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${paidProducts}</p>
+                </div>
+            </div>
+            
+            <div class="pagination-search">
+                <input type="text" id="productSearch" placeholder="Search products by name or SKU...">
+                <button onclick="filterUserProducts()">Search</button>
+                <button onclick="clearUserProductSearch()" class="btn-small">Clear</button>
+            </div>
+            
+            <div class="records-per-page">
+                <label>Show:</label>
+                <select id="userProductsPerPage" onchange="changeUserProductsPerPage(this.value)">
+                    <option value="10">10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+            
+            <h3>My Products</h3>
+            <div id="userProductsTable" class="table-container"></div>
+        `;
+        
+        // Initialize pagination for user products and store in global instances
+        const pagination = new Pagination('userProductsTable', 10);
+        pagination.onPageChange = (pageData) => {
+            renderUserProductsTable(pageData);
+        };
+        pagination.setData(products);
+        
+        // Store in global instances object
+        window.paginationInstances['userProductsTable'] = pagination;
+        
+        attachDashboardMenuListeners();
+        
+    } catch (error) {
+        console.error('Error loading user dashboard:', error);
+        dashboardContent.innerHTML = '<p class="error-message">Error loading dashboard. Please try again.</p>';
+    }
+}
+
+function renderUserProductsTable(products) {
+    const container = document.getElementById('userProductsTable');
+    if (!container) return;
+    
+    if (products.length === 0) {
+        container.innerHTML = '<p class="text-center">No products found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
         <table>
             <thead>
                 <tr>
@@ -1649,40 +1818,42 @@ dashboardContent.innerHTML = `
                         <td>
                             <button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
                             <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
-                            ${product.paymentStatus !== 'paid' && auth.currentUser.numberOfAdverts >= 2 ? 
+                            ${product.paymentStatus !== 'paid' && auth.currentUser?.numberOfAdverts >= 2 ? 
                                 `<button onclick="payForAdvert('${product.sku}')" class="btn-small" style="background: green;">Pay</button>` : ''}
                         </td>
                     </tr>
                 `).join('')}
             </tbody>
         </table>
-    </div>
-`;
-    // Add event listeners for dashboard menu
-    document.querySelectorAll('.dashboard-menu li').forEach(item => {
-        item.addEventListener('click', (e) => {
-            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
-            item.classList.add('active');
-            
-            const view = item.dataset.view;
-            if (view === 'add-product') {
-                showAddProductForm();
-            } else if (view === 'products') {
-                loadUserDashboard();
-            } else if (view === 'payments') {
-                loadUserPayments();
-            } else if (view === 'profile') {
-                showUserProfile();
-            }
-        });
-    });
-    
-    
-    
-    // After loading products, check for incomplete ones
-   // await checkIncompleteProducts();
+    `;
 }
 
+function filterUserProducts() {
+    const searchTerm = document.getElementById('productSearch')?.value.toLowerCase() || '';
+    const pagination = window.paginationInstances['userProductsTable'];
+    
+    if (pagination) {
+        pagination.filter(product => {
+            return product.name.toLowerCase().includes(searchTerm) ||
+                   product.sku.toLowerCase().includes(searchTerm);
+        });
+    }
+}
+
+function clearUserProductSearch() {
+    document.getElementById('productSearch').value = '';
+    filterUserProducts();
+}
+
+function changeUserProductsPerPage(value) {
+    const perPage = parseInt(value);
+    const pagination = window.paginationInstances['userProductsTable'];
+    
+    if (pagination) {
+        pagination.itemsPerPage = perPage;
+        pagination.render();
+    }
+}
 
 
 // Updated collectImages function - returns the global uploaded files
@@ -2548,126 +2719,240 @@ function resetUploadedImages() {
 
 
 async function loadAdminDashboard() {
+    console.log('Loading admin dashboard...');
+    
     const adminContent = document.getElementById('adminContent');
-    const users = await api.getAllUsers();
-    const products = await api.getAllProducts();
-    const payments = await api.getAllPayments();
+    if (!adminContent) return;
     
-    adminContent.innerHTML = `
-        <h3>User Management</h3>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>User ID</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Telephone</th>
-                        <th>Group</th>
-                        <th>Status</th>
-                        <th>Adverts</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${users.map(user => `
-                        <tr>
-                            <td>${user.userId}</td>
-                            <td>${user.firstName} ${user.lastName}</td>
-                            <td>${user.email}</td>
-                            <td>${user.telephone}</td>
-                            <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
-                            <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
-                            <td>${user.numberOfAdverts || 0}</td>
-                            <td>
-                                <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
-                                <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
-                                    ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
-                                </button>
-                                <button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
+    // Show loading state
+    adminContent.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
     
-    // Add event listeners for admin dashboard menu
-    document.querySelectorAll('.dashboard-menu li').forEach(item => {
-        item.addEventListener('click', (e) => {
-            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
-            item.classList.add('active');
+    try {
+        const [users, products, payments] = await Promise.all([
+            api.getAllUsers(),
+            api.getAllProducts(),
+            api.getAllPayments()
+        ]);
+        
+        console.log(`Admin data loaded: ${users.length} users, ${products.length} products, ${payments.length} payments`);
+        
+        // Calculate stats
+        const activeUsers = users.filter(u => u.userActivityStatus === 1).length;
+        const activeProducts = products.filter(p => p.activityStatus === 'Active').length;
+        const totalRevenue = payments.reduce((sum, p) => sum + (p.payAmount || 0), 0);
+        
+        adminContent.innerHTML = `
+            <div class="admin-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--primary-purple), #4158D0); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Total Users</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${users.length}</p>
+                    <small>${activeUsers} active</small>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--primary-red), #FF6B6B); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Total Products</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${products.length}</p>
+                    <small>${activeProducts} active</small>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Total Payments</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">${payments.length}</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #FF9800, #F57C00); color: white; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <h4>Revenue</h4>
+                    <p style="font-size: 1.8rem; font-weight: bold;">₦${totalRevenue.toLocaleString()}</p>
+                </div>
+            </div>
             
-            const view = item.dataset.view;
-            if (view === 'users') {
-                loadAdminDashboard();
-            } else if (view === 'all-products') {
-                loadAllProductsAdmin();
-            } else if (view === 'payments-report') {
-                loadPaymentsReport();
-            } else if (view === 'settings') {
-                loadAdminSettings();
-            }
+            <h3>User Management</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Telephone</th>
+                            <th>Group</th>
+                            <th>Status</th>
+                            <th>Adverts</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map(user => `
+                            <tr>
+                                <td>${user.userId}</td>
+                                <td>${user.firstName} ${user.lastName}</td>
+                                <td>${user.email}</td>
+                                <td>${user.telephone}</td>
+                                <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
+                                <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
+                                <td>${user.numberOfAdverts || 0}</td>
+                                <td>
+                                    <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
+                                    <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
+                                        ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                    ${user.userId !== 'admin01' ? 
+                                        `<button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>` : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        // Add event listeners for admin dashboard menu
+        document.querySelectorAll('.dashboard-menu li').forEach(item => {
+            item.addEventListener('click', (e) => {
+                document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
+                item.classList.add('active');
+                
+                const view = item.dataset.view;
+                if (view === 'users') {
+                    loadAdminDashboard();
+                } else if (view === 'all-products') {
+                    loadAllProductsAdmin();
+                } else if (view === 'payments-report') {
+                    loadPaymentsReport();
+                } else if (view === 'settings') {
+                    loadAdminSettings();
+                }
+            });
         });
-    });
+        
+    } catch (error) {
+        console.error('Error loading admin dashboard:', error);
+        adminContent.innerHTML = '<p class="error-message">Error loading dashboard. Please try again.</p>';
+    }
 }
+
 
 async function loadAllProductsAdmin() {
     const adminContent = document.getElementById('adminContent');
-    const products = await api.getAllProducts();
+    if (!adminContent) return;
     
     adminContent.innerHTML = `
         <h3>All Products</h3>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Image</th>
-                        <th>SKU</th>
-                        <th>Name</th>
-                        <th>Seller</th>
-                        <th>Price</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>Payment</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${products.map(product => `
-                        <tr>
-                            <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
-                            <td>${product.sku}</td>
-                            <td>${product.name}</td>
-                            <td>${product.sellerId}</td>
-                            <td>₦${product.price}</td>
-                            <td>${product.category}</td>
-                            <td>${product.activityStatus}</td>
-                            <td>${product.paymentStatus}</td>
-                            <td>
-                                <button onclick="adminToggleProductStatus('${product.sku}')" class="btn-small" style="background: ${product.activityStatus === 'Active' ? 'orange' : 'green'}">
-                                    ${product.activityStatus === 'Active' ? 'Deactivate' : 'Activate'}
-                                </button>
-                                <button onclick="adminDeleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        
+        <div class="pagination-search">
+            <input type="text" id="adminProductSearch" placeholder="Search products by name, SKU, or seller...">
+            <button onclick="filterAdminProducts()">Search</button>
+            <button onclick="clearAdminProductSearch()" class="btn-small">Clear</button>
         </div>
+        
+        <div class="records-per-page">
+            <label>Show:</label>
+            <select id="adminProductsPerPage" onchange="changeAdminProductsPerPage(this.value)">
+                <option value="10">10 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+        </div>
+        
+        <div id="adminProductsTable" class="table-container"></div>
     `;
+    
+    const products = await api.getAllProducts();
+    
+    const pagination = new Pagination('adminProductsTable', 10);
+    pagination.onPageChange = (pageData) => {
+        renderAdminProductsTable(pageData);
+    };
+    pagination.setData(products);
+    
+    window.paginationInstances['adminProductsTable'] = pagination;
+}
+
+function renderAdminProductsTable(products) {
+    const container = document.getElementById('adminProductsTable');
+    if (!container) return;
+    
+    if (products.length === 0) {
+        container.innerHTML = '<p class="text-center">No products found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Seller</th>
+                    <th>Price</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${products.map(product => `
+                    <tr>
+                        <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
+                        <td>${product.sku}</td>
+                        <td>${product.name}</td>
+                        <td>${product.sellerId}</td>
+                        <td>₦${product.price}</td>
+                        <td>${product.category}</td>
+                        <td>${product.activityStatus}</td>
+                        <td>${product.paymentStatus}</td>
+                        <td>
+                            <button onclick="adminToggleProductStatus('${product.sku}')" class="btn-small" style="background: ${product.activityStatus === 'Active' ? 'orange' : 'green'}">
+                                ${product.activityStatus === 'Active' ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button onclick="adminDeleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function filterAdminProducts() {
+    const searchTerm = document.getElementById('adminProductSearch')?.value.toLowerCase() || '';
+    const pagination = window.paginationInstances['adminProductsTable'];
+    
+    if (pagination) {
+        pagination.filter(product => {
+            return product.name.toLowerCase().includes(searchTerm) ||
+                   product.sku.toLowerCase().includes(searchTerm) ||
+                   product.sellerId.toLowerCase().includes(searchTerm);
+        });
+    }
+}
+
+function clearAdminProductSearch() {
+    document.getElementById('adminProductSearch').value = '';
+    filterAdminProducts();
+}
+
+function changeAdminProductsPerPage(value) {
+    const perPage = parseInt(value);
+    const pagination = window.paginationInstances['adminProductsTable'];
+    
+    if (pagination) {
+        pagination.itemsPerPage = perPage;
+        pagination.render();
+    }
 }
 
 async function loadPaymentsReport() {
     const adminContent = document.getElementById('adminContent');
+    if (!adminContent) return;
+    
     const payments = await api.getAllPayments();
     
-    // Calculate totals
-    const totalAmount = payments.reduce((sum, p) => sum + p.payAmount, 0);
+    const totalAmount = payments.reduce((sum, p) => sum + (p.payAmount || 0), 0);
     
     adminContent.innerHTML = `
         <h3>Payments Report</h3>
+        
         <div class="summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
             <div class="card" style="background: var(--light-gray); padding: 1rem; border-radius: 8px;">
                 <h4>Total Payments</h4>
@@ -2679,35 +2964,99 @@ async function loadPaymentsReport() {
             </div>
         </div>
         
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Product SKU</th>
-                        <th>User ID</th>
-                        <th>Amount</th>
-                        <th>Payment Date</th>
-                        <th>Reference</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${payments.map(payment => `
-                        <tr>
-                            <td>${payment.productSKU}</td>
-                            <td>${payment.userID}</td>
-                            <td>₦${payment.payAmount}</td>
-                            <td>${new Date(payment.paymentDate).toLocaleString()}</td>
-                            <td>${payment.reference || 'N/A'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        <div class="pagination-search">
+            <input type="text" id="paymentSearch" placeholder="Search by product SKU or user ID...">
+            <button onclick="filterPayments()">Search</button>
+            <button onclick="clearPaymentSearch()" class="btn-small">Clear</button>
         </div>
+        
+        <div class="records-per-page">
+            <label>Show:</label>
+            <select id="paymentsPerPage" onchange="changePaymentsPerPage(this.value)">
+                <option value="10">10 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+        </div>
+        
+        <div id="paymentsTable" class="table-container"></div>
         
         <button onclick="exportPaymentsReport()" class="btn" style="margin-top: 1rem;">
             <i class="fas fa-download"></i> Export Report
         </button>
     `;
+    
+    const pagination = new Pagination('paymentsTable', 10);
+    pagination.onPageChange = (pageData) => {
+        renderPaymentsTable(pageData);
+    };
+    pagination.setData(payments);
+    
+    window.paginationInstances['paymentsTable'] = pagination;
+}
+
+function renderPaymentsTable(payments) {
+    const container = document.getElementById('paymentsTable');
+    if (!container) return;
+    
+    if (payments.length === 0) {
+        container.innerHTML = '<p class="text-center">No payments found</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Product SKU</th>
+                    <th>User ID</th>
+                    <th>Amount</th>
+                    <th>Payment Date</th>
+                    <th>Reference</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${payments.map(payment => `
+                    <tr>
+                        <td>${payment.productSKU}</td>
+                        <td>${payment.userID}</td>
+                        <td>₦${payment.payAmount}</td>
+                        <td>${new Date(payment.paymentDate).toLocaleString()}</td>
+                        <td>${payment.reference || 'N/A'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function filterPayments() {
+    const searchTerm = document.getElementById('paymentSearch')?.value.toLowerCase() || '';
+    const pagination = window.paginationInstances['paymentsTable'];
+    
+    if (pagination) {
+        pagination.filter(payment => {
+            return (payment.productSKU && payment.productSKU.toLowerCase().includes(searchTerm)) ||
+                   (payment.userID && payment.userID.toLowerCase().includes(searchTerm)) ||
+                   (payment.reference && payment.reference.toLowerCase().includes(searchTerm));
+        });
+    }
+}
+
+function clearPaymentSearch() {
+    document.getElementById('paymentSearch').value = '';
+    filterPayments();
+}
+
+function changePaymentsPerPage(value) {
+    const perPage = parseInt(value);
+    const pagination = window.paginationInstances['paymentsTable'];
+    
+    if (pagination) {
+        pagination.itemsPerPage = perPage;
+        pagination.render();
+    }
 }
 
 function exportPaymentsReport() {
@@ -2964,13 +3313,21 @@ window.closePaymentModal = closePaymentModal;
 
 window.performSearch = performSearch;
 window.clearSearch = clearSearch;
-
-// Make closeMobileMenu globally available
 window.closeMobileMenu = closeMobileMenu;
 
 window.goToHome = goToHome;
 window.createNewAd = createNewAd;
 
-// Make image upload functions globally available
 window.removeImage = removeImage;
 window.resetUploadedImages = resetUploadedImages;
+
+// Make pagination functions globally available
+window.filterUserProducts = filterUserProducts;
+window.clearUserProductSearch = clearUserProductSearch;
+window.changeUserProductsPerPage = changeUserProductsPerPage;
+window.filterAdminProducts = filterAdminProducts;
+window.clearAdminProductSearch = clearAdminProductSearch;
+window.changeAdminProductsPerPage = changeAdminProductsPerPage;
+window.filterPayments = filterPayments;
+window.clearPaymentSearch = clearPaymentSearch;
+window.changePaymentsPerPage = changePaymentsPerPage;
