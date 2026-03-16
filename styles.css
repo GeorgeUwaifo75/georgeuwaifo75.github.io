@@ -3134,8 +3134,11 @@ footer {
 
 /* Dashboard Content Area */
 .dashboard-content {
+    padding: 1.5rem 1.2rem 1.2rem 1.2rem; /* Increased top padding from 1.2rem to 1.5rem */
+    margin-top: 0.5rem; /* Added margin to push content down */
+   
     background: white;
-    padding: 2rem;
+    /*padding: 2rem;*/
     border-radius: 16px 0 0 16px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.02);
     overflow-y: auto;
@@ -3163,6 +3166,7 @@ footer {
 /* Stats Cards Grid - Brighter Colors */
 .user-stats,
 .admin-stats {
+    margin-top: 1rem; /* Added top margin to push cards down */
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1.2rem;
