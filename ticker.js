@@ -99,7 +99,7 @@ async fetchAnalyticsStats() {
 } 
 */
 
-/*async fetchAnalyticsStats() {
+async fetchAnalyticsStats() {
   try {
     // Replace 123456789 with your actual numeric Property ID
     const propertyId = '527751931'; // e.g., '123456789'
@@ -147,36 +147,8 @@ async fetchAnalyticsStats() {
     };
   }
 }
-*/
 
-async  fetchAnalyticsStats() {
-  const propertyId = '527751931';
-  const endpoint = 'https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG';
-  
-  try {
-    const response = await fetch(
-      `${endpoint}?propertyId=${propertyId}&metrics=users&startDate=2026-03-16`,
-      {
-        headers: {
-          'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('Analytics data:', data);
-    return data;
-  } catch (error) {
-    console.error('Error fetching analytics:', error);
-    return null;
-  }
-}
 
-   
 
 
 // Separate method for monthly data
