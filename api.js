@@ -737,71 +737,7 @@ async getAllProducts(forceRefresh = false) {
         return products.find(p => p.sku === sku);
     }
 
-/*
-    async createProduct(productData) {
-        const products = await this.getAllProducts(true);
-        
-        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        const now = new Date();
-        let endDate = new Date();
-        
-        if (productData.paymentStatus === 'free') {
-            endDate.setDate(endDate.getDate() + 14);
-        } else {
-            endDate = null;
-        }
-        
-        const newProduct = {
-            sku: sku,
-            name: productData.name,
-            description: productData.description,
-            price: parseFloat(productData.price),
-            category: productData.category,
-            state: productData.state || 'Not specified',
-            images: productData.images || [],
-            sellerId: productData.sellerId,
-            sellerName: productData.sellerName || '',
-            sellerContact: productData.sellerContact || '',
-            activityStatus: productData.paymentStatus === 'free' ? 'Active' : 'Inactive',
-            paymentStatus: productData.paymentStatus || 'free',
-            paymentType: productData.paymentType || null,
-            dateAdvertised: now.toISOString(),
-            endDate: endDate ? endDate.toISOString() : null,
-            chats: [],
-            unreadChatCount: 0,
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-            viewCount: 0
-        };
-        
-        // Check payload size
-        const payloadSizeMB = JSON.stringify(newProduct).length / (1024 * 1024);
-        if (payloadSizeMB > 9) {
-            throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB)`);
-        }
-        
-        products.push(newProduct);
-        
-        // Update products bin
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products, {
-            userMessage: 'Creating new product...'
-        });
-        
-        // Update user's advert count
-        const users = await this.getAllUsers(true);
-        const userIndex = users.findIndex(u => u.userId === productData.sellerId);
-        if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await this.updateBin(CONFIG.BINS.ALLUSERS, users, {
-                userMessage: 'Updating advert count...'
-            });
-        }
-        
-        console.log('✅ Product created:', newProduct);
-        return newProduct;
-    }
-    */
-   // In api.js - Update createProduct method
+// In api.js - Update createProduct method
 async createProduct(productData) {
     const products = await this.getAllProducts(true);
     
