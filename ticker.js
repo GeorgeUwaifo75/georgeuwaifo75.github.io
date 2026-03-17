@@ -151,8 +151,9 @@ async fetchMonthlyVisitors() {
 async  fetchCurrencyFreaks() {
     const API_KEY = '37c639eaaa8b485fa72716ccaeab3ba8';
     // Free tier limits base currency to USD
-    const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${API_KEY}&base=USD";
-    
+   // const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${API_KEY}&base=USD";
+     const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&base=USD";
+   
     //https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&symbols=NGN,CYN,GBP,EUR,USD
     
     try {
