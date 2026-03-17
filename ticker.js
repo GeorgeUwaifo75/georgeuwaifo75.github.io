@@ -64,6 +64,9 @@ class MarketTicker {
             
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
+            
+           // const stats = await this.fetchAnalyticsData2();
+            
             this.renderTicker({ ...marketData, stats });
             
         } catch (error) {
@@ -73,7 +76,7 @@ class MarketTicker {
     }
     
     
-    
+  
     
 
 async fetchAnalyticsStats() {
@@ -82,14 +85,14 @@ async fetchAnalyticsStats() {
     const propertyId = '527751931'; // e.g., '123456789'
     
     // Today's visitors
-    const todayResponse = await fetch(`https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today`, {
+    const todayResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today', {
       headers: {
         'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
       }
     });
     
     // Monthly visitors (last 30 days)
-    const monthResponse = await fetch(`https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=30daysAgo`, {
+    const monthResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=30daysAgo', {
       headers: {
         'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
       }
@@ -152,8 +155,8 @@ async  fetchCurrencyFreaks() {
     const API_KEY = '37c639eaaa8b485fa72716ccaeab3ba8';
     // Free tier limits base currency to USD
    // const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${API_KEY}&base=USD";
-     const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&base=USD";
-   
+    const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&base=USD";
+    
     //https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&symbols=NGN,CYN,GBP,EUR,USD
     
     try {
@@ -281,7 +284,7 @@ async  fetchCurrencyFreaks() {
         track.className = 'ticker-track';
         
         // Add currency items
-       // track.appendChild(this.createCurrencyItems(data.currencies));
+        track.appendChild(this.createCurrencyItems(data.currencies));
         
         // Add platform stats
         if (data.stats) {
