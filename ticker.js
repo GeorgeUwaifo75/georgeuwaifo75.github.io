@@ -314,7 +314,8 @@ async  fetchCurrencyFreaks() {
         const fragment = document.createDocumentFragment();
         
         const items = [
-            { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.USDNGN.toFixed(2) },
+           // { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.USDNGN.toFixed(2) },
+            { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.GBPNGN.toFixed(2) },
             { icon: 'fa-pound-sign', label: 'GBP/NGN', value: rates.GBPNGN.toFixed(2) },
             { icon: 'fa-euro-sign', label: 'EUR/NGN', value: rates.EURNGN.toFixed(2) },
             { icon: 'fa-yen-sign', label: 'JPY/NGN', value: rates.JPYNGN.toFixed(2) }
