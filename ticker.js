@@ -172,8 +172,9 @@ async  fetchCurrencyFreaks() {
                 GBPNGN: usdToGbp / usdToNgn,
                 EURNGN: usdToEur / usdToNgn,
                 JPYNGN: usdToJpy / usdToNgn,
-                CNYNGN: usdToCny / usdToNgn,
-                timestamp: data.date()
+                CNYNGN: usdToCny / usdToNgn
+                //,
+               // timestamp: data.date()
             };
             
             console.log('CurrencyFreaks Rates:', rates);
