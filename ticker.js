@@ -172,10 +172,16 @@ async  fetchCurrencyFreaks() {
             
             const rates = {
                 USDNGN: usdToNgn,
+                /*
                 GBPNGN: usdToGbp / usdToNgn,
                 EURNGN: usdToEur / usdToNgn,
                 JPYNGN: usdToJpy / usdToNgn,
-                CNYNGN: usdToCny / usdToNgn,
+                CNYNGN: usdToCny / usdToNgn,*/
+                
+                GBPNGN: usdToNgn/usdToGbp,
+                EURNGN: usdToNgn/usdToEur,
+                JPYNGN: usdToNgn/usdToJpy,
+                CNYNGN: usdToNgn/usdToCny,
                 
                 //Remove the date entry if it causes errors
                 timestamp: Date.now()
