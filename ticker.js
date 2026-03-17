@@ -50,7 +50,9 @@ class MarketTicker {
             }
             
             // Fetch currency rates
-            const currencyData = await this.fetchCurrencyRates();
+           // const currencyData = await this.fetchCurrencyRates();
+            const currencyData = await this.fetchCurrencyFreaks();
+            
             
             const marketData = {
                 currencies: currencyData,
@@ -63,7 +65,7 @@ class MarketTicker {
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
            //New 
-            const stats2 = await this.fetchAnalyticsStats();
+            const stats2 = await this.fetchCurrencyFreaks();
             this.renderTicker({ ...marketData, stats, stats2 });
            
             //this.renderTicker({ ...marketData, stats });
@@ -75,29 +77,8 @@ class MarketTicker {
     }
     
     
-   // In your ticker.js
-
-/*
-async fetchAnalyticsStats() {
-  try {
-    const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG', {
-      
-      headers: {
-        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
-      }
-    });
-    const data = await response.json();
-    console.error('The data analytics:', data);
-    return {
-      visitorsToday: data.users, // Adjust based on actual response structure
-      visitorsMonth: data.sessions
-    };
-  } catch (error) {
-    console.error('Error fetching analytics:', error);
-    return this.getFallbackStats();
-  }
-} 
-*/
+    
+    
 
 async fetchAnalyticsStats() {
   try {
@@ -150,7 +131,6 @@ async fetchAnalyticsStats() {
 
 
 
-
 // Separate method for monthly data
 async fetchMonthlyVisitors() {
   try {
@@ -169,6 +149,44 @@ async fetchMonthlyVisitors() {
   }
 }
     
+  
+  
+  // CurrencyFreaks API example
+async  fetchCurrencyFreaks() {
+    const API_KEY = '37c639eaaa8b485fa72716ccaeab3ba8';
+    // Free tier limits base currency to USD
+    const url = "https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${API_KEY}&base=USD";
+    
+    //https://api.currencyfreaks.com/v2.0/rates/latest?apikey=37c639eaaa8b485fa72716ccaeab3ba8&symbols=NGN,CYN,GBP,EUR,USD
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.rates) {
+            const usdToNgn = parseFloat(data.rates['NGN']);
+            const usdToGbp = parseFloat(data.rates['GBP']);
+            const usdToEur = parseFloat(data.rates['EUR']);
+            const usdToCny = parseFloat(data.rates['CNY']);
+            
+            const rates = {
+                USDNGN: usdToNgn,
+                GBPNGN: usdToGbp / usdToNgn,
+                EURNGN: usdToEur / usdToNgn,
+                CNYNGN: usdToCny / usdToNgn,
+                timestamp: data.date()
+            };
+            
+          
+            
+            console.log('CurrencyFreaks Rates:', rates);
+            return rates;
+        }
+    } catch (error) {
+        console.error('CurrencyFreaks error:', error);
+        return null;
+    }
+}
     
     
     async fetchCurrencyRates() {
