@@ -64,10 +64,6 @@ class MarketTicker {
             
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
-           //New 
-            //const stats2 = await this.fetchCurrencyFreaks();
-            //this.renderTicker({ ...marketData, stats, stats2 });
-           
             this.renderTicker({ ...marketData, stats });
             
         } catch (error) {
@@ -167,23 +163,17 @@ async  fetchCurrencyFreaks() {
             const usdToNgn = parseFloat(data.rates['NGN']);
             const usdToGbp = parseFloat(data.rates['GBP']);
             const usdToEur = parseFloat(data.rates['EUR']);
+            const usdToJpy = parseFloat(data.rates['JPY']);
             const usdToCny = parseFloat(data.rates['CNY']);
             
             const rates = {
                 USDNGN: usdToNgn,
                 GBPNGN: usdToGbp / usdToNgn,
                 EURNGN: usdToEur / usdToNgn,
+                JPYNGN: usdToJpy / usdToNgn,
                 CNYNGN: usdToCny / usdToNgn,
                 timestamp: data.date()
             };
-            /*
-                USDNGN: 1540.25,
-                GBPNGN: 1950.75,
-                EURNGN: 1680.50,
-                JPYNGN: 10.25,
-                // Add a small random variation to make it look live
-                timestamp: Date.now()
-                */
             
             console.log('CurrencyFreaks Rates:', rates);
             return rates;
@@ -314,8 +304,7 @@ async  fetchCurrencyFreaks() {
         const fragment = document.createDocumentFragment();
         
         const items = [
-           // { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.USDNGN.toFixed(2) },
-            { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.GBPNGN.toFixed(2) },
+            { icon: 'fa-dollar-sign', label: 'USD/NGN', value: rates.USDNGN.toFixed(2) },
             { icon: 'fa-pound-sign', label: 'GBP/NGN', value: rates.GBPNGN.toFixed(2) },
             { icon: 'fa-euro-sign', label: 'EUR/NGN', value: rates.EURNGN.toFixed(2) },
             { icon: 'fa-yen-sign', label: 'JPY/NGN', value: rates.JPYNGN.toFixed(2) }
