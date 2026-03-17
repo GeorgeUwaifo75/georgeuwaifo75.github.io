@@ -280,7 +280,7 @@ async  fetchCurrencyFreaks() {
         track.className = 'ticker-track';
         
         // Add currency items
-        track.appendChild(this.createCurrencyItems(data.currencies));
+       // track.appendChild(this.createCurrencyItems(data.currencies));
         
         // Add platform stats
         if (data.stats) {
