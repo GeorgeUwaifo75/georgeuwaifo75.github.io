@@ -65,10 +65,10 @@ class MarketTicker {
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
            //New 
-            const stats2 = await this.fetchCurrencyFreaks();
-            this.renderTicker({ ...marketData, stats, stats2 });
+            //const stats2 = await this.fetchCurrencyFreaks();
+            //this.renderTicker({ ...marketData, stats, stats2 });
            
-            //this.renderTicker({ ...marketData, stats });
+            this.renderTicker({ ...marketData, stats });
             
         } catch (error) {
             console.error('Error fetching market data:', error);
@@ -176,8 +176,14 @@ async  fetchCurrencyFreaks() {
                 CNYNGN: usdToCny / usdToNgn,
                 timestamp: data.date()
             };
-            
-          
+            /*
+                USDNGN: 1540.25,
+                GBPNGN: 1950.75,
+                EURNGN: 1680.50,
+                JPYNGN: 10.25,
+                // Add a small random variation to make it look live
+                timestamp: Date.now()
+                */
             
             console.log('CurrencyFreaks Rates:', rates);
             return rates;
