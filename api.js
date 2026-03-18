@@ -594,6 +594,26 @@ class ApiService {
 
     // ============ HIGH-INTEGRITY USER METHODS ============
 
+
+// Add to ApiService class in api.js
+async trackWhatsAppClick(sku) {
+    try {
+        const products = await this.getAllProducts(true);
+        const product = products.find(p => p.sku === sku);
+        
+        if (product) {
+            // Increment a whatsappClickCount field
+            product.whatsappClicks = (product.whatsappClicks || 0) + 1;
+            await this.updateProduct(sku, { whatsappClicks: product.whatsappClicks });
+            console.log(`✅ WhatsApp click tracked for product ${sku}`);
+        }
+    } catch (error) {
+        console.error('Error tracking WhatsApp click:', error);
+    }
+}
+
+
+
     async getAllUsers(forceRefresh = false) {
         return await this.getBin(CONFIG.BINS.ALLUSERS, forceRefresh);
     }
@@ -712,6 +732,7 @@ async getAllProducts(forceRefresh = false) {
         return products.filter(p => p.sellerId === userId);
     }
 
+    /*
     async getProductsByCategory(category) {
         try {
             const products = await this.getAllProducts();
@@ -730,7 +751,60 @@ async getAllProducts(forceRefresh = false) {
             console.error('Error in getProductsByCategory:', error);
             return [];
         }
+    } */
+    
+    // In api.js - Enhanced getProductsByCategory with better debugging
+async getProductsByCategory(category) {
+    try {
+        console.log(`🔍 Fetching products for category: "${category}"`);
+        
+        const products = await this.getAllProducts();
+        console.log(`📦 Total products fetched: ${products.length}`);
+        
+        const now = new Date();
+        
+        const filtered = products.filter(p => {
+            // Check if category matches
+            const categoryMatch = p.category === category;
+            
+            // Check if active
+            const isActive = p.activityStatus === 'Active';
+            
+            // Check if not expired
+            let notExpired = true;
+            if (p.endDate) {
+                const endDate = new Date(p.endDate);
+                notExpired = endDate > now;
+            }
+            
+            // Log filtering for debugging
+            if (categoryMatch) {
+                console.log(`📋 Product: ${p.name} | Category: ${p.category} | Active: ${isActive} | Not Expired: ${notExpired}`);
+            }
+            
+            return categoryMatch && isActive && notExpired;
+        });
+        
+        console.log(`✅ Found ${filtered.length} active products in category "${category}"`);
+        
+        // If no products found, try a case-insensitive match
+        if (filtered.length === 0) {
+            console.log('⚠️ No products found, trying case-insensitive match...');
+            const caseInsensitive = products.filter(p => 
+                p.category && p.category.toLowerCase() === category.toLowerCase() && 
+                p.activityStatus === 'Active'
+            );
+            console.log(`📊 Case-insensitive match found: ${caseInsensitive.length} products`);
+            return caseInsensitive;
+        }
+        
+        return filtered;
+        
+    } catch (error) {
+        console.error('❌ Error in getProductsByCategory:', error);
+        return [];
     }
+}
 
     async getProductBySku(sku) {
         const products = await this.getAllProducts();
@@ -1168,6 +1242,12 @@ async createProduct(productData) {
             console.error('Error loading from localStorage:', e);
         }
     }
+    
+    
+    
+    
+    
+    
 }
 
 const api = new ApiService();
