@@ -82,7 +82,7 @@ class MarketTicker {
 async fetchAnalyticsStats() {
   try {
     // Replace 123456789 with your actual numeric Property ID
-    const propertyId = '527751931'; // e.g., '123456789'
+    const propertyId = '529021838'; // e.g., '123456789'
     
     // Today's visitors
     const todayResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today', {
