@@ -3782,5 +3782,63 @@ tr:hover {
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
+/* WhatsApp Button Styles */
+.whatsapp-container {
+    grid-column: 1 / -1; /* Make it full width */
+    margin-top: 0.5rem;
+}
 
+.whatsapp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background: #25D366;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+}
 
+.whatsapp-btn i {
+    font-size: 1.3rem;
+}
+
+.whatsapp-btn:hover {
+    background: #20b859;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(37, 211, 102, 0.4);
+}
+
+.whatsapp-btn:active {
+    transform: translateY(0);
+}
+
+/* For dark mode compatibility */
+@media (prefers-color-scheme: dark) {
+    .whatsapp-btn {
+        box-shadow: 0 4px 10px rgba(37, 211, 102, 0.5);
+    }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .whatsapp-btn {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+    }
+    
+    .whatsapp-btn i {
+        font-size: 1.1rem;
+    }
+}
+
+/* Add Font Awesome for WhatsApp icon if not already present */
+/* Make sure you have the Font Awesome kit or CDN in your HTML */
