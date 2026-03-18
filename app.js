@@ -1403,6 +1403,11 @@ async function loadProductDetail(sku) {
             daysRemaining = remaining > 0 ? `${remaining} days` : 'Expired';
         }
         
+        // Format seller's phone for WhatsApp
+        const sellerPhone = seller?.telephone || product.sellerContact || '';
+        // Remove any non-digit characters and ensure it has country code
+        const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
+        
         // Create image grid HTML with 2x2 layout
         const imageGridHTML = product.images && product.images.length > 0 
             ? product.images.map((img, index) => `
@@ -1435,14 +1440,11 @@ async function loadProductDetail(sku) {
                     </div>
                 </div>
                 
-                
-
                 <div class="product-meta">
                     <div class="meta-item">
                         <div class="meta-label">Category</div>
                         <div class="meta-value">${product.category}</div>
                     </div>
-                    <!-- ADD THIS NEW META-ITEM FOR STATE -->
                     <div class="meta-item">
                         <div class="meta-label">Location</div>
                         <div class="meta-value">${product.state || 'Nigeria'}</div>
@@ -1482,6 +1484,18 @@ async function loadProductDetail(sku) {
                             <i class="fas fa-phone"></i>
                             <span>${seller ? seller.telephone : product.sellerContact || 'N/A'}</span>
                         </div>
+                        
+                        <!-- WhatsApp Button -->
+                        ${formattedPhone ? `
+                        <div class="seller-detail-item whatsapp-container">
+                            <a href="https://wa.me/${formattedPhone}?text=${encodeURIComponent(generateWhatsAppMessage(product, seller))}" 
+                               target="_blank" 
+                               class="whatsapp-btn">
+                                <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                            </a>
+                        </div>
+                        ` : ''}
+                        
                         <div class="seller-detail-item">
                             <i class="fas fa-calendar"></i>
                             <span>Member since: ${seller ? new Date(seller.dateOfRegistration).toLocaleDateString() : 'N/A'}</span>
@@ -1540,6 +1554,34 @@ async function loadProductDetail(sku) {
         console.error('Error loading product detail:', error);
         alert('Error loading product details. Please try again.');
     }
+}
+
+// Helper function to format phone number for WhatsApp
+function formatPhoneForWhatsApp(phone) {
+    if (!phone) return '';
+    
+    // Remove all non-digit characters
+    let cleaned = phone.replace(/\D/g, '');
+    
+    // Nigerian numbers: if it starts with 0, replace with 234
+    if (cleaned.startsWith('0')) {
+        cleaned = '234' + cleaned.substring(1);
+    }
+    // If it doesn't have country code, assume Nigeria and add 234
+    else if (!cleaned.startsWith('234') && !cleaned.startsWith('+')) {
+        cleaned = '234' + cleaned;
+    }
+    
+    return cleaned;
+}
+
+// Helper function to generate WhatsApp message
+function generateWhatsAppMessage(product, seller) {
+    const productName = product.name || 'this product';
+    const productPrice = product.price ? `₦${product.price.toLocaleString()}` : 'price not specified';
+    const sellerName = seller ? seller.firstName : 'the seller';
+    
+    return `Hello ${sellerName}, I'm interested in your product: ${productName} (${productPrice}). Is it still available?`;
 }
 
 // Enhanced expandImage function
