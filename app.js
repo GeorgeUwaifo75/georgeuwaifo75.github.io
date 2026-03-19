@@ -1363,13 +1363,22 @@ async function loadProductsByCategory(category) {
 }
 
 // Initialize image slider for mobile only - with bottom controls
+// Initialize image slider for mobile only - with bottom controls
 function initializeImageSlider(product) {
     // Only initialize on mobile
     if (window.innerWidth > 768) return;
     
+    console.log('Initializing mobile slider for product:', product.sku);
+    
     // Show mobile controls
     const controls = document.getElementById('sliderControls');
-    if (controls) controls.style.display = 'flex';
+    if (controls) {
+        controls.style.display = 'flex';
+        console.log('Slider controls displayed');
+    } else {
+        console.error('Slider controls element not found');
+        return;
+    }
     
     const slider = document.getElementById('productImageSlider');
     const prevBtn = document.getElementById('prevImage');
@@ -1377,12 +1386,27 @@ function initializeImageSlider(product) {
     const dots = document.querySelectorAll('.slider-dot');
     const positionSpan = document.getElementById('imagePosition');
     
-    if (!slider || !prevBtn || !nextBtn || !dots.length) return;
+    if (!slider) {
+        console.error('Slider element not found');
+        return;
+    }
+    
+    if (!prevBtn || !nextBtn) {
+        console.error('Navigation buttons not found');
+        return;
+    }
+    
+    if (!dots.length) {
+        console.error('Slider dots not found');
+        return;
+    }
     
     let currentIndex = 0;
     const totalImages = product.images.length;
     let isScrolling = false;
     let scrollTimeout;
+    
+    console.log(`Slider initialized with ${totalImages} images`);
     
     // Update all indicators
     function updateIndicators(index) {
@@ -1407,10 +1431,14 @@ function initializeImageSlider(product) {
     
     // Scroll to specific image
     function scrollToIndex(index, smooth = true) {
-        if (index < 0 || index >= totalImages) return;
+        if (index < 0 || index >= totalImages) {
+            console.log(`Invalid index: ${index}`);
+            return;
+        }
         
         const imageItems = slider.querySelectorAll('.product-image-item');
         if (imageItems.length > index) {
+            console.log(`Scrolling to image ${index + 1}`);
             imageItems[index].scrollIntoView({
                 behavior: smooth ? 'smooth' : 'auto',
                 block: 'nearest',
@@ -1418,11 +1446,14 @@ function initializeImageSlider(product) {
             });
             currentIndex = index;
             updateIndicators(index);
+        } else {
+            console.error(`Image item at index ${index} not found`);
         }
     }
     
     // Previous image
     prevBtn.addEventListener('click', () => {
+        console.log('Previous button clicked');
         if (currentIndex > 0) {
             scrollToIndex(currentIndex - 1);
         }
@@ -1430,6 +1461,7 @@ function initializeImageSlider(product) {
     
     // Next image
     nextBtn.addEventListener('click', () => {
+        console.log('Next button clicked');
         if (currentIndex < totalImages - 1) {
             scrollToIndex(currentIndex + 1);
         }
@@ -1438,6 +1470,7 @@ function initializeImageSlider(product) {
     // Click on dots to navigate
     dots.forEach((dot, index) => {
         dot.addEventListener('click', () => {
+            console.log(`Dot ${index + 1} clicked`);
             scrollToIndex(index);
         });
     });
@@ -1470,6 +1503,7 @@ function initializeImageSlider(product) {
             });
             
             if (closestIndex !== currentIndex) {
+                console.log(`Scroll detected, changing from ${currentIndex + 1} to ${closestIndex + 1}`);
                 currentIndex = closestIndex;
                 updateIndicators(currentIndex);
             }
@@ -1480,36 +1514,80 @@ function initializeImageSlider(product) {
     
     // Handle touch events for swipe
     let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
     
     slider.addEventListener('touchstart', (e) => {
         touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+        touchStartTime = Date.now();
     }, { passive: true });
     
     slider.addEventListener('touchend', (e) => {
         const touchEndX = e.changedTouches[0].screenX;
-        const swipeThreshold = 40;
-        const diff = touchStartX - touchEndX;
+        const touchEndY = e.changedTouches[0].screenY;
+        const touchEndTime = Date.now();
         
-        if (Math.abs(diff) > swipeThreshold) {
-            if (diff > 0 && currentIndex < totalImages - 1) {
-                // Swipe left - go to next
-                scrollToIndex(currentIndex + 1);
-            } else if (diff < 0 && currentIndex > 0) {
-                // Swipe right - go to previous
-                scrollToIndex(currentIndex - 1);
+        // Calculate swipe metrics
+        const diffX = touchStartX - touchEndX;
+        const diffY = Math.abs(touchStartY - touchEndY);
+        const timeDiff = touchEndTime - touchStartTime;
+        
+        // Only trigger if horizontal swipe (not vertical scroll) and within time threshold
+        if (diffY < 50 && timeDiff < 300) {
+            const swipeThreshold = 40;
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                if (diffX > 0 && currentIndex < totalImages - 1) {
+                    // Swipe left - go to next
+                    console.log('Swipe left detected');
+                    scrollToIndex(currentIndex + 1);
+                } else if (diffX < 0 && currentIndex > 0) {
+                    // Swipe right - go to previous
+                    console.log('Swipe right detected');
+                    scrollToIndex(currentIndex - 1);
+                }
             }
         }
     }, { passive: true });
     
+    // Handle image load to ensure proper sizing
+    const images = slider.querySelectorAll('.product-image-item img');
+    images.forEach(img => {
+        if (img.complete) {
+            // Image already loaded
+            console.log('Image already loaded:', img.src);
+        } else {
+            img.addEventListener('load', () => {
+                console.log('Image loaded:', img.src);
+            });
+            img.addEventListener('error', () => {
+                console.error('Image failed to load:', img.src);
+                // Fallback for broken images
+                img.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+            });
+        }
+    });
+    
     // Initialize first position
     updateIndicators(0);
     
-    // Ensure first image is properly aligned
+    // Ensure first image is properly aligned after a short delay
     setTimeout(() => {
         scrollToIndex(0, false);
-    }, 100);
+        console.log('Initial scroll to first image');
+    }, 200);
+    
+    // Handle resize events
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 768) {
+            // Recalculate positions on resize
+            setTimeout(() => {
+                scrollToIndex(currentIndex, false);
+            }, 100);
+        }
+    });
 }
-
 
 
 
