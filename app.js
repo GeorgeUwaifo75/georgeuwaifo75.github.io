@@ -1839,9 +1839,10 @@ const imageGridHTML = product.images && product.images.length > 0
         showSection('productDetailSection');
         // Only initialize slider on mobile
           if (window.innerWidth <= 768) {
-              initializeImageSlider(product);
               //New addition 
              setTimeout(handleImageLoading, 100);
+              initializeImageSlider(product);
+              
           }
         
         
