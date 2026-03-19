@@ -1505,7 +1505,10 @@ async function loadProductDetail(sku) {
                             <span>${product.paymentStatus === 'free' ? 'Free Advert' : 'Paid Advert'}</span>
                         </div>
                     </div>
-                </div>
+                 </div>
+                
+                <!-- Social Share Section -->
+                ${socialShare.createShareButtons(product)}
                 
                 <div class="chat-section">
                     <div class="chat-header">
