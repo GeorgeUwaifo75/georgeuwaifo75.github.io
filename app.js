@@ -1557,6 +1557,7 @@ async function loadProductDetail(sku) {
         const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
         
        // Create enhanced image display with desktop grid and mobile slider// Create enhanced image display with desktop grid and mobile slider with bottom controls
+// Create enhanced image display with desktop grid and mobile slider with bottom controls
 const imageGridHTML = product.images && product.images.length > 0 
     ? `
         <!-- Image Container - Holds both grid/slider and controls -->
@@ -1600,7 +1601,7 @@ const imageGridHTML = product.images && product.images.length > 0
         </div>
     `
     : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
-    
+        
         detailContainer.innerHTML = `
             <div class="product-detail-container">
                 <div class="product-header">
@@ -1608,9 +1609,8 @@ const imageGridHTML = product.images && product.images.length > 0
                     <p class="product-sku">SKU: ${product.sku}</p>
                 </div>
                 
-                <div class="product-images-grid">
-                    ${imageGridHTML}
-                </div>
+                <!-- Product Images - This is the key fix -->
+                ${imageGridHTML}
                 
                 <div class="product-info-grid">
                     <div class="product-description">
