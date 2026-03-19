@@ -1364,29 +1364,6 @@ async function loadProductsByCategory(category) {
     }
 }
 
-// Function to handle image loading states
-function handleImageLoading() {
-    const images = document.querySelectorAll('.product-image-item img');
-    images.forEach(img => {
-        if (img.complete) {
-            img.classList.add('loaded');
-        } else {
-            img.addEventListener('load', function() {
-                this.classList.add('loaded');
-            });
-            img.addEventListener('error', function() {
-                this.classList.add('error');
-                console.error('Image failed to load:', this.src);
-            });
-        }
-    });
-}
-
-// Call this after setting the product detail HTML
-// In loadProductDetail function, after setting innerHTML, add:
-// setTimeout(handleImageLoading, 100);
-
-
 
 // Initialize image slider for mobile only - with bottom controls
 // Initialize image slider for mobile only - with bottom controls
@@ -1844,22 +1821,43 @@ const imageGridHTML = product.images && product.images.length > 0
           if (window.innerWidth <= 768) {
               //New addition 
              initializeImageSlider(product);
-             setTimeout(handleImageLoading, 100);
               
           }
         
-        
-        // Initialize mobile slider if on mobile
-        /*  if (window.innerWidth <= 768 && product.images && product.images.length > 0) {
-              initializeImageSlider(product);
-          }*/
-          
         
     } catch (error) {
         console.error('Error loading product detail:', error);
         alert('Error loading product details. Please try again.');
     }
 }
+
+
+// Handle image loading states
+function handleImageLoading() {
+    const images = document.querySelectorAll('.product-image-item img');
+    images.forEach(img => {
+        // Force a small delay to ensure styles are applied
+        setTimeout(() => {
+            if (img.complete) {
+                img.classList.add('loaded');
+            } else {
+                img.addEventListener('load', function() {
+                    this.classList.add('loaded');
+                });
+                img.addEventListener('error', function() {
+                    this.classList.add('error');
+                    console.error('Image failed to load:', this.src);
+                    // Fallback for broken images
+                    this.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                });
+            }
+        }, 10);
+    });
+}
+
+// Call the function
+setTimeout(handleImageLoading, 200);
+
 
 // Helper function to format phone number for WhatsApp
 function formatPhoneForWhatsApp(phone) {
