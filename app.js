@@ -1362,7 +1362,138 @@ async function loadProductsByCategory(category) {
     }
 }
 
+// Initialize image slider for mobile
+function initializeImageSlider(product) {
+    // Show mobile-only elements
+    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'flex');
+    
+    const slider = document.getElementById('productImageSlider');
+    const prevBtn = document.getElementById('prevImage');
+    const nextBtn = document.getElementById('nextImage');
+    const counterDots = document.querySelectorAll('.image-counter-dot');
+    const positionSpan = document.querySelector('.image-position');
+    
+    if (!slider || !prevBtn || !nextBtn) return;
+    
+    let currentIndex = 0;
+    const totalImages = product.images.length;
+    
+    // Update position indicator
+    function updateIndicators(index) {
+        // Update dots
+        counterDots.forEach((dot, i) => {
+            if (i === index) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        });
+        
+        // Update text position
+        if (positionSpan) {
+            positionSpan.textContent = `${index + 1}/${totalImages}`;
+        }
+        
+        // Update button states
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === totalImages - 1;
+    }
+    
+    // Scroll to specific image
+    function scrollToIndex(index) {
+        const imageItems = slider.querySelectorAll('.product-image-item');
+        if (imageItems.length > index) {
+            imageItems[index].scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'center'
+            });
+            currentIndex = index;
+            updateIndicators(index);
+        }
+    }
+    
+    // Previous image
+    prevBtn.addEventListener('click', () => {
+        if (currentIndex > 0) {
+            scrollToIndex(currentIndex - 1);
+        }
+    });
+    
+    // Next image
+    nextBtn.addEventListener('click', () => {
+        if (currentIndex < totalImages - 1) {
+            scrollToIndex(currentIndex + 1);
+        }
+    });
+    
+    // Update active dot on scroll
+    slider.addEventListener('scroll', () => {
+        const imageItems = slider.querySelectorAll('.product-image-item');
+        const sliderRect = slider.getBoundingClientRect();
+        const centerPoint = sliderRect.left + sliderRect.width / 2;
+        
+        let closestIndex = 0;
+        let closestDistance = Infinity;
+        
+        imageItems.forEach((item, index) => {
+            const itemRect = item.getBoundingClientRect();
+            const itemCenter = itemRect.left + itemRect.width / 2;
+            const distance = Math.abs(itemCenter - centerPoint);
+            
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = index;
+            }
+        });
+        
+        if (closestIndex !== currentIndex) {
+            currentIndex = closestIndex;
+            updateIndicators(currentIndex);
+        }
+    });
+    
+    // Handle touch events for better UX
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    slider.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+    
+    slider.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+    
+    function handleSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0 && currentIndex < totalImages - 1) {
+                // Swipe left - go to next
+                scrollToIndex(currentIndex + 1);
+            } else if (diff < 0 && currentIndex > 0) {
+                // Swipe right - go to previous
+                scrollToIndex(currentIndex - 1);
+            }
+        }
+    }
+    
+    // Click on dots to navigate
+    counterDots.forEach((dot, index) => {
+        dot.addEventListener('click', () => {
+            scrollToIndex(index);
+        });
+    });
+    
+    // Initialize first position
+    updateIndicators(0);
+}
 
+// Make function globally available
+window.initializeImageSlider = initializeImageSlider;
 
 
 async function loadProductDetail(sku) {
@@ -1408,14 +1539,36 @@ async function loadProductDetail(sku) {
         // Remove any non-digit characters and ensure it has country code
         const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
         
-        // Create image grid HTML with 2x2 layout
-        const imageGridHTML = product.images && product.images.length > 0 
-            ? product.images.map((img, index) => `
-                <div class="product-image-item" onclick="expandImage('${img}')">
+       // Create enhanced image display with desktop grid and mobile slider
+const imageGridHTML = product.images && product.images.length > 0 
+    ? `
+        <div class="product-images-grid" id="productImageSlider">
+            ${product.images.map((img, index) => `
+                <div class="product-image-item" data-index="${index}" onclick="expandImage('${img}', ${JSON.stringify(product.images).replace(/"/g, '&quot;')}, ${index})">
                     <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
                 </div>
-            `).join('')
-            : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
+            `).join('')}
+        </div>
+        
+        <!-- Mobile: Image counter and navigation -->
+        <div class="image-counter mobile-only" id="imageCounter" style="display: none;">
+            ${product.images.map((_, index) => `
+                <span class="image-counter-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></span>
+            `).join('')}
+        </div>
+        
+        <!-- Mobile: Navigation arrows -->
+        <div class="slider-nav mobile-only" id="sliderNav" style="display: none;">
+            <button class="slider-nav-btn" id="prevImage" disabled>
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <span class="image-position">1/${product.images.length}</span>
+            <button class="slider-nav-btn" id="nextImage">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    `
+    : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
         
         detailContainer.innerHTML = `
             <div class="product-detail-container">
@@ -1553,6 +1706,11 @@ async function loadProductDetail(sku) {
         
         showSection('productDetailSection');
         
+        // Initialize mobile slider if on mobile
+          if (window.innerWidth <= 768 && product.images && product.images.length > 0) {
+              initializeImageSlider(product);
+          }
+        
     } catch (error) {
         console.error('Error loading product detail:', error);
         alert('Error loading product details. Please try again.');
@@ -1587,25 +1745,89 @@ function generateWhatsAppMessage(product, seller) {
     return `Hello ${sellerName}, I'm interested in your product: ${productName} (${productPrice}). Is it still available?`;
 }
 
-// Enhanced expandImage function
-function expandImage(src) {
+// Enhanced expandImage function with gallery navigation
+function expandImage(src, allImages = null, currentIndex = 0) {
     const modal = document.createElement('div');
     modal.className = 'image-expand-modal';
+    
+    let images = allImages || [src];
+    let currentImageIndex = currentIndex;
+    
+    function updateModalImage(index) {
+        const img = modal.querySelector('img');
+        img.src = images[index];
+        img.alt = `Image ${index + 1} of ${images.length}`;
+        
+        // Update counter if exists
+        const counter = modal.querySelector('.image-counter');
+        if (counter) {
+            counter.textContent = `${index + 1} / ${images.length}`;
+        }
+        
+        // Update navigation buttons
+        const prevBtn = modal.querySelector('.prev-btn');
+        const nextBtn = modal.querySelector('.next-btn');
+        if (prevBtn) prevBtn.style.display = index === 0 ? 'none' : 'flex';
+        if (nextBtn) nextBtn.style.display = index === images.length - 1 ? 'none' : 'flex';
+    }
+    
     modal.innerHTML = `
         <span class="close" onclick="this.parentElement.remove()">&times;</span>
+        ${images.length > 1 ? `
+            <button class="nav-btn prev-btn" onclick="event.stopPropagation(); expandImageNavigate(-1)" ${currentIndex === 0 ? 'style="display:none;"' : ''}>
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="nav-btn next-btn" onclick="event.stopPropagation(); expandImageNavigate(1)" ${currentIndex === images.length - 1 ? 'style="display:none;"' : ''}>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            <div class="image-counter">${currentIndex + 1} / ${images.length}</div>
+        ` : ''}
         <img src="${src}" alt="Expanded view" onclick="this.style.transform = this.style.transform === 'scale(1.5)' ? 'scale(1)' : 'scale(1.5)'; this.style.transition = 'transform 0.3s ease';">
     `;
+    
     document.body.appendChild(modal);
+    
+    // Store gallery data for navigation
+    window.currentGallery = {
+        images: images,
+        currentIndex: currentIndex,
+        modal: modal
+    };
     
     // Close on click outside image
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
             modal.remove();
+            delete window.currentGallery;
         }
     });
 }
 
+// Navigation function for expanded gallery
+function expandImageNavigate(direction) {
+    if (!window.currentGallery) return;
+    
+    const gallery = window.currentGallery;
+    const newIndex = gallery.currentIndex + direction;
+    
+    if (newIndex >= 0 && newIndex < gallery.images.length) {
+        gallery.currentIndex = newIndex;
+        const img = gallery.modal.querySelector('img');
+        img.src = gallery.images[newIndex];
+        
+        // Update navigation buttons
+        const prevBtn = gallery.modal.querySelector('.prev-btn');
+        const nextBtn = gallery.modal.querySelector('.next-btn');
+        const counter = gallery.modal.querySelector('.image-counter');
+        
+        if (prevBtn) prevBtn.style.display = newIndex === 0 ? 'none' : 'flex';
+        if (nextBtn) nextBtn.style.display = newIndex === gallery.images.length - 1 ? 'none' : 'flex';
+        if (counter) counter.textContent = `${newIndex + 1} / ${gallery.images.length}`;
+    }
+}
 
+// Make navigation function globally available
+window.expandImageNavigate = expandImageNavigate;
 
 
 
