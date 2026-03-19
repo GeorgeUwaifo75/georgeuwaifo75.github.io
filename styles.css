@@ -2661,6 +2661,7 @@ footer {
 .product-image-item {
     position: relative;
     overflow: hidden;
+    background: #f5f5f5; /* Light gray background while loading */
 }
 
 .product-image-item::before {
@@ -2674,38 +2675,40 @@ footer {
     background-size: 200% 100%;
     animation: shine 1.5s linear infinite;
     z-index: 1;
-    opacity: 1;
-    transition: opacity 0.3s ease;
+    pointer-events: none;
 }
 
+/* Images - ensure they're visible */
 .product-image-item img {
     position: relative;
     z-index: 2;
-    opacity: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    opacity: 1 !important; /* Force opacity to 1 */
     transition: opacity 0.3s ease;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
 
+
+/* Remove the loading animation once image is loaded */
 .product-image-item img.loaded {
-    opacity: 1;
+    opacity: 1 !important;
 }
+
 
 .product-image-item img.loaded + ::before,
 .product-image-item img.loaded::before {
     opacity: 0;
     animation: none;
+    visibility: hidden;
 }
 
+/* Error state */
 .product-image-item img.error {
-    opacity: 1;
+    opacity: 1 !important;
     object-fit: contain;
     background: #f0f0f0;
-}
-
-.product-image-item img.error + ::before {
-    display: none;
 }
 
 @keyframes shine {
@@ -2714,23 +2717,38 @@ footer {
     }
 }
 
-/* Ensure desktop styles are preserved */
+/* Ensure desktop grid images are visible */
 @media (min-width: 769px) {
     .product-image-item {
         aspect-ratio: 1 / 1;
     }
+    
+    .product-image-item img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
 }
 
+/* Ensure mobile slider images are visible */
 @media (max-width: 768px) {
     .product-image-item {
         aspect-ratio: 4 / 3;
         min-height: 200px;
+        flex: 0 0 85% !important;
+    }
+    
+    .product-image-item img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
     }
 }
 
 @media (max-width: 480px) {
     .product-image-item {
         min-height: 180px;
+        flex: 0 0 90% !important;
     }
 }
 
