@@ -1841,8 +1841,7 @@ const imageGridHTML = product.images && product.images.length > 0
           if (window.innerWidth <= 768) {
               //New addition 
              initializeImageSlider(product);
-             //  setTimeout(handleImageLoading, 100);
-               handleImageLoading();
+               setTimeout(handleImageLoading, 100);
              
               
           }
