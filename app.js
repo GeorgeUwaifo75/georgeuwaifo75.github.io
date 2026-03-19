@@ -1073,6 +1073,29 @@ function goToHome() {
 }
 
 
+
+// Function to handle image loading states
+function handleImageLoading() {
+    const images = document.querySelectorAll('.product-image-item img');
+    images.forEach(img => {
+        if (img.complete) {
+            img.classList.add('loaded');
+        } else {
+            img.addEventListener('load', function() {
+                this.classList.add('loaded');
+            });
+            img.addEventListener('error', function() {
+                this.classList.add('error');
+                console.error('Image failed to load:', this.src);
+            });
+        }
+    });
+}
+
+// Call this after setting the product detail HTML
+// In loadProductDetail function, after setting innerHTML, add:
+// setTimeout(handleImageLoading, 100);
+
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
     const dropdown = document.getElementById('categoriesDropdown');
@@ -1818,7 +1841,9 @@ const imageGridHTML = product.images && product.images.length > 0
           if (window.innerWidth <= 768) {
               initializeImageSlider(product);
           }
-       
+        //New addition 
+        setTimeout(handleImageLoading, 100);
+        
         // Initialize mobile slider if on mobile
         /*  if (window.innerWidth <= 768 && product.images && product.images.length > 0) {
               initializeImageSlider(product);
