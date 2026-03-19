@@ -1366,12 +1366,19 @@ async function loadProductsByCategory(category) {
 
 
 // Initialize image slider for mobile only - with bottom controls
-// Initialize image slider for mobile only - with bottom controls
 function initializeImageSlider(product) {
     // Only initialize on mobile
     if (window.innerWidth > 768) return;
     
     console.log('Initializing mobile slider for product:', product.sku);
+    
+    // FORCE ALL IMAGES TO BE VISIBLE
+    const allImages = document.querySelectorAll('.product-image-item img');
+    allImages.forEach(img => {
+        img.style.opacity = '1';
+        img.style.display = 'block';
+        img.style.visibility = 'visible';
+    });
     
     // Show mobile controls
     const controls = document.getElementById('sliderControls');
@@ -1832,29 +1839,33 @@ const imageGridHTML = product.images && product.images.length > 0
 }
 
 
-// Handle image loading states
+// Function to handle image loading states
 function handleImageLoading() {
     const images = document.querySelectorAll('.product-image-item img');
+    
     images.forEach(img => {
-        // Force a small delay to ensure styles are applied
-        setTimeout(() => {
-            if (img.complete) {
-                img.classList.add('loaded');
-            } else {
-                img.addEventListener('load', function() {
-                    this.classList.add('loaded');
-                });
-                img.addEventListener('error', function() {
-                    this.classList.add('error');
-                    console.error('Image failed to load:', this.src);
-                    // Fallback for broken images
-                    this.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
-                });
-            }
-        }, 10);
+        // Force remove any opacity styles
+        img.style.opacity = '1';
+        
+        if (img.complete) {
+            img.classList.add('loaded');
+            console.log('Image already loaded:', img.src.substring(0, 50) + '...');
+        } else {
+            img.addEventListener('load', function() {
+                this.classList.add('loaded');
+                this.style.opacity = '1';
+                console.log('Image loaded:', this.src.substring(0, 50) + '...');
+            });
+            
+            img.addEventListener('error', function() {
+                this.classList.add('error');
+                console.error('Image failed to load:', this.src);
+                // Fallback for broken images
+                this.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+            });
+        }
     });
 }
-
 // Call the function
 setTimeout(handleImageLoading, 200);
 
