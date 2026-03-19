@@ -1074,27 +1074,6 @@ function goToHome() {
 
 
 
-// Function to handle image loading states
-function handleImageLoading() {
-    const images = document.querySelectorAll('.product-image-item img');
-    images.forEach(img => {
-        if (img.complete) {
-            img.classList.add('loaded');
-        } else {
-            img.addEventListener('load', function() {
-                this.classList.add('loaded');
-            });
-            img.addEventListener('error', function() {
-                this.classList.add('error');
-                console.error('Image failed to load:', this.src);
-            });
-        }
-    });
-}
-
-// Call this after setting the product detail HTML
-// In loadProductDetail function, after setting innerHTML, add:
-// setTimeout(handleImageLoading, 100);
 
 function initializeCategories() {
     const categoriesGrid = document.getElementById('categoriesGrid');
@@ -1384,6 +1363,30 @@ async function loadProductsByCategory(category) {
         productsGrid.innerHTML = '<p class="text-center">Error loading products. Please try again.</p>';
     }
 }
+
+// Function to handle image loading states
+function handleImageLoading() {
+    const images = document.querySelectorAll('.product-image-item img');
+    images.forEach(img => {
+        if (img.complete) {
+            img.classList.add('loaded');
+        } else {
+            img.addEventListener('load', function() {
+                this.classList.add('loaded');
+            });
+            img.addEventListener('error', function() {
+                this.classList.add('error');
+                console.error('Image failed to load:', this.src);
+            });
+        }
+    });
+}
+
+// Call this after setting the product detail HTML
+// In loadProductDetail function, after setting innerHTML, add:
+// setTimeout(handleImageLoading, 100);
+
+
 
 // Initialize image slider for mobile only - with bottom controls
 // Initialize image slider for mobile only - with bottom controls
