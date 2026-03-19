@@ -1825,11 +1825,16 @@ const imageGridHTML = product.images && product.images.length > 0
         
         showSection('productDetailSection');
         // Only initialize slider on mobile
-          if (window.innerWidth <= 768) {
-              //New addition 
-             initializeImageSlider(product);
-              
-          }
+            if (window.innerWidth <= 768) {
+                initializeImageSlider(product);
+                // Call image loading handler immediately
+                setTimeout(handleImageLoading, 50);
+                // And again after a short delay to catch any late-loading images
+                setTimeout(handleImageLoading, 500);
+            } else {
+                // On desktop, just handle image loading
+                setTimeout(handleImageLoading, 50);
+            }
         
         
     } catch (error) {
