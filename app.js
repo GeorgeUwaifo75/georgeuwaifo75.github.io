@@ -1362,26 +1362,32 @@ async function loadProductsByCategory(category) {
     }
 }
 
-// Initialize image slider for mobile
+// Initialize image slider for mobile only - with bottom controls
 function initializeImageSlider(product) {
-    // Show mobile-only elements
-    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'flex');
+    // Only initialize on mobile
+    if (window.innerWidth > 768) return;
+    
+    // Show mobile controls
+    const controls = document.getElementById('sliderControls');
+    if (controls) controls.style.display = 'flex';
     
     const slider = document.getElementById('productImageSlider');
     const prevBtn = document.getElementById('prevImage');
     const nextBtn = document.getElementById('nextImage');
-    const counterDots = document.querySelectorAll('.image-counter-dot');
-    const positionSpan = document.querySelector('.image-position');
+    const dots = document.querySelectorAll('.slider-dot');
+    const positionSpan = document.getElementById('imagePosition');
     
-    if (!slider || !prevBtn || !nextBtn) return;
+    if (!slider || !prevBtn || !nextBtn || !dots.length) return;
     
     let currentIndex = 0;
     const totalImages = product.images.length;
+    let isScrolling = false;
+    let scrollTimeout;
     
-    // Update position indicator
+    // Update all indicators
     function updateIndicators(index) {
         // Update dots
-        counterDots.forEach((dot, i) => {
+        dots.forEach((dot, i) => {
             if (i === index) {
                 dot.classList.add('active');
             } else {
@@ -1389,7 +1395,7 @@ function initializeImageSlider(product) {
             }
         });
         
-        // Update text position
+        // Update position text
         if (positionSpan) {
             positionSpan.textContent = `${index + 1}/${totalImages}`;
         }
@@ -1400,11 +1406,13 @@ function initializeImageSlider(product) {
     }
     
     // Scroll to specific image
-    function scrollToIndex(index) {
+    function scrollToIndex(index, smooth = true) {
+        if (index < 0 || index >= totalImages) return;
+        
         const imageItems = slider.querySelectorAll('.product-image-item');
         if (imageItems.length > index) {
             imageItems[index].scrollIntoView({
-                behavior: 'smooth',
+                behavior: smooth ? 'smooth' : 'auto',
                 block: 'nearest',
                 inline: 'center'
             });
@@ -1427,47 +1435,59 @@ function initializeImageSlider(product) {
         }
     });
     
-    // Update active dot on scroll
-    slider.addEventListener('scroll', () => {
-        const imageItems = slider.querySelectorAll('.product-image-item');
-        const sliderRect = slider.getBoundingClientRect();
-        const centerPoint = sliderRect.left + sliderRect.width / 2;
-        
-        let closestIndex = 0;
-        let closestDistance = Infinity;
-        
-        imageItems.forEach((item, index) => {
-            const itemRect = item.getBoundingClientRect();
-            const itemCenter = itemRect.left + itemRect.width / 2;
-            const distance = Math.abs(itemCenter - centerPoint);
-            
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestIndex = index;
-            }
+    // Click on dots to navigate
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', () => {
+            scrollToIndex(index);
         });
-        
-        if (closestIndex !== currentIndex) {
-            currentIndex = closestIndex;
-            updateIndicators(currentIndex);
-        }
     });
     
-    // Handle touch events for better UX
+    // Update active dot on scroll with debounce
+    slider.addEventListener('scroll', () => {
+        if (isScrolling) {
+            clearTimeout(scrollTimeout);
+        }
+        
+        isScrolling = true;
+        
+        scrollTimeout = setTimeout(() => {
+            const imageItems = slider.querySelectorAll('.product-image-item');
+            const sliderRect = slider.getBoundingClientRect();
+            const centerPoint = sliderRect.left + sliderRect.width / 2;
+            
+            let closestIndex = 0;
+            let closestDistance = Infinity;
+            
+            imageItems.forEach((item, index) => {
+                const itemRect = item.getBoundingClientRect();
+                const itemCenter = itemRect.left + itemRect.width / 2;
+                const distance = Math.abs(itemCenter - centerPoint);
+                
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = index;
+                }
+            });
+            
+            if (closestIndex !== currentIndex) {
+                currentIndex = closestIndex;
+                updateIndicators(currentIndex);
+            }
+            
+            isScrolling = false;
+        }, 50);
+    });
+    
+    // Handle touch events for swipe
     let touchStartX = 0;
-    let touchEndX = 0;
     
     slider.addEventListener('touchstart', (e) => {
         touchStartX = e.changedTouches[0].screenX;
     }, { passive: true });
     
     slider.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-    }, { passive: true });
-    
-    function handleSwipe() {
-        const swipeThreshold = 50;
+        const touchEndX = e.changedTouches[0].screenX;
+        const swipeThreshold = 40;
         const diff = touchStartX - touchEndX;
         
         if (Math.abs(diff) > swipeThreshold) {
@@ -1479,21 +1499,18 @@ function initializeImageSlider(product) {
                 scrollToIndex(currentIndex - 1);
             }
         }
-    }
-    
-    // Click on dots to navigate
-    counterDots.forEach((dot, index) => {
-        dot.addEventListener('click', () => {
-            scrollToIndex(index);
-        });
-    });
+    }, { passive: true });
     
     // Initialize first position
     updateIndicators(0);
+    
+    // Ensure first image is properly aligned
+    setTimeout(() => {
+        scrollToIndex(0, false);
+    }, 100);
 }
 
-// Make function globally available
-window.initializeImageSlider = initializeImageSlider;
+
 
 
 async function loadProductDetail(sku) {
@@ -1539,37 +1556,51 @@ async function loadProductDetail(sku) {
         // Remove any non-digit characters and ensure it has country code
         const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
         
-       // Create enhanced image display with desktop grid and mobile slider
+       // Create enhanced image display with desktop grid and mobile slider// Create enhanced image display with desktop grid and mobile slider with bottom controls
 const imageGridHTML = product.images && product.images.length > 0 
     ? `
-        <div class="product-images-grid" id="productImageSlider">
-            ${product.images.map((img, index) => `
-                <div class="product-image-item" data-index="${index}" onclick="expandImage('${img}', ${JSON.stringify(product.images).replace(/"/g, '&quot;')}, ${index})">
-                    <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
+        <!-- Image Container - Holds both grid/slider and controls -->
+        <div class="product-image-container">
+            
+            <!-- Image Grid/Slider - Desktop shows 2x2, Mobile shows slider -->
+            <div class="product-images-grid" id="productImageSlider">
+                ${product.images.map((img, index) => `
+                    <div class="product-image-item" data-index="${index}" onclick="expandImage('${img}', ${JSON.stringify(product.images).replace(/"/g, '&quot;')}, ${index})">
+                        <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
+                    </div>
+                `).join('')}
+            </div>
+            
+            <!-- Mobile Only: Slider Controls at BOTTOM -->
+            <div class="mobile-slider-controls mobile-only" id="sliderControls" style="display: none;">
+                
+                <!-- Dot indicators -->
+                <div class="slider-dots" id="sliderDots">
+                    ${product.images.map((_, index) => `
+                        <button class="slider-dot ${index === 0 ? 'active' : ''}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
+                    `).join('')}
                 </div>
-            `).join('')}
-        </div>
-        
-        <!-- Mobile: Image counter and navigation -->
-        <div class="image-counter mobile-only" id="imageCounter" style="display: none;">
-            ${product.images.map((_, index) => `
-                <span class="image-counter-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></span>
-            `).join('')}
-        </div>
-        
-        <!-- Mobile: Navigation arrows -->
-        <div class="slider-nav mobile-only" id="sliderNav" style="display: none;">
-            <button class="slider-nav-btn" id="prevImage" disabled>
-                <i class="fas fa-chevron-left"></i>
-            </button>
-            <span class="image-position">1/${product.images.length}</span>
-            <button class="slider-nav-btn" id="nextImage">
-                <i class="fas fa-chevron-right"></i>
-            </button>
+                
+                <!-- Navigation buttons and counter -->
+                <div class="slider-nav-row">
+                    <button class="slider-nav-btn" id="prevImage" disabled aria-label="Previous image">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    
+                    <span class="image-counter-pill">
+                        <i class="fas fa-images"></i>
+                        <span id="imagePosition">1/${product.images.length}</span>
+                    </span>
+                    
+                    <button class="slider-nav-btn" id="nextImage" aria-label="Next image">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     `
     : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
-        
+    
         detailContainer.innerHTML = `
             <div class="product-detail-container">
                 <div class="product-header">
@@ -1705,11 +1736,16 @@ const imageGridHTML = product.images && product.images.length > 0
         await api.updateProduct(sku, { viewCount: (product.viewCount || 0) + 1 });
         
         showSection('productDetailSection');
-        
-        // Initialize mobile slider if on mobile
-          if (window.innerWidth <= 768 && product.images && product.images.length > 0) {
+        // Only initialize slider on mobile
+          if (window.innerWidth <= 768) {
               initializeImageSlider(product);
           }
+       
+        // Initialize mobile slider if on mobile
+        /*  if (window.innerWidth <= 768 && product.images && product.images.length > 0) {
+              initializeImageSlider(product);
+          }*/
+          
         
     } catch (error) {
         console.error('Error loading product detail:', error);
@@ -3967,3 +4003,6 @@ window.filterUsers = filterUsers;
 window.clearUserSearch = clearUserSearch;
 window.changeUsersPerPage = changeUsersPerPage;
 window.attachAdminMenuListeners = attachAdminMenuListeners;
+
+// Make function globally available
+window.initializeImageSlider = initializeImageSlider;
