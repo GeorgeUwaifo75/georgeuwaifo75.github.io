@@ -2794,9 +2794,6 @@ footer {
     }
 
     
-    
-    /* ============ ADMIN TABLES - MOBILE OPTIMIZATION ============ */
-
 /* ============ ADMIN TABLES - MOBILE OPTIMIZATION ============ */
 
 /* Base table container styles */
@@ -2812,46 +2809,46 @@ footer {
 
 /* Make tables responsive on mobile */
 @media (max-width: 768px) {
-    /* Table container adjustments */
+    /* Table container adjustments - full horizontal scroll */
     .table-container {
         margin: 1rem 0;
         border-radius: var(--border-radius-md);
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
         position: relative;
     }
     
-    /* Table specific styles for better readability */
+    /* Table specific styles - allow full horizontal scroll */
     .table-container table {
-        min-width: 550px;
-        width: 100%;
+        width: max-content;
+        min-width: 100%;
         border-collapse: collapse;
         font-size: 0.8rem;
+    }
+    
+    /* Ensure all columns are visible by scrolling */
+    .table-container thead,
+    .table-container tbody,
+    .table-container tr {
+        width: 100%;
     }
     
     /* Adjust cell padding for mobile */
     .table-container th,
     .table-container td {
-        padding: 0.7rem 0.6rem;
+        padding: 0.7rem 0.8rem;
         white-space: nowrap;
+        text-align: left;
     }
     
-    /* Make first column sticky for better context */
+    /* Remove sticky columns - let whole table scroll */
     .table-container td:first-child,
-    .table-container th:first-child {
-        position: sticky;
-        left: 0;
-        background: white;
-        z-index: 2;
-        box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1);
-    }
-    
-    /* Make action column sticky on the right if needed */
+    .table-container th:first-child,
     .table-container td:last-child,
     .table-container th:last-child {
-        position: sticky;
-        right: 0;
-        background: white;
-        z-index: 2;
-        box-shadow: -2px 0 5px -2px rgba(0,0,0,0.1);
+        position: static;
+        box-shadow: none;
     }
     
     /* Action buttons styling */
@@ -2862,6 +2859,9 @@ footer {
         min-height: 32px;
         min-width: 40px;
         white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
     
     /* Thumbnail images */
@@ -2873,19 +2873,74 @@ footer {
     
     /* Scroll indicator */
     .table-container::after {
-        content: '← Scroll horizontally →';
+        content: '← Scroll horizontally to see more →';
         display: block;
         text-align: center;
         font-size: 0.65rem;
-        color: #999;
-        padding: 0.4rem;
+        color: #666;
+        padding: 0.5rem;
         background: #f8f9fa;
         border-top: 1px solid #e2e8f0;
+        position: sticky;
+        left: 0;
     }
     
     /* Hide scroll indicator after user scrolls */
     .table-container.scrolled::after {
         display: none;
+    }
+    
+    /* Show scrollbar for better UX */
+    .table-container::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .table-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .table-container::-webkit-scrollbar-thumb {
+        background: var(--primary-purple);
+        border-radius: 10px;
+    }
+    
+    /* Add shadow indicator for scrollable content */
+    .table-container {
+        position: relative;
+    }
+    
+    .table-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 30px;
+        background: linear-gradient(90deg, rgba(0,0,0,0.05), transparent);
+        pointer-events: none;
+        z-index: 1;
+        display: none;
+    }
+    
+    .table-container::after {
+        content: '→';
+        position: absolute;
+        top: 50%;
+        right: 5px;
+        transform: translateY(-50%);
+        background: rgba(106,76,156,0.8);
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        pointer-events: none;
+        opacity: 0.7;
+        animation: pulse 1.5s infinite;
     }
 }
 
@@ -2896,41 +2951,56 @@ footer {
     }
     
     .table-container table {
-        min-width: 500px;
         font-size: 0.75rem;
     }
     
     .table-container th,
     .table-container td {
-        padding: 0.5rem 0.5rem;
+        padding: 0.5rem 0.6rem;
     }
     
     .btn-small {
         padding: 0.3rem 0.5rem;
         font-size: 0.65rem;
         min-height: 28px;
-        min-width: 36px;
+        min-width: 34px;
     }
     
     .thumbnail {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
     }
 }
 
-/* Remove duplicate table styles - ensure clean rendering */
+/* Remove duplicate table styles */
 @media (max-width: 768px) {
-    /* Reset any conflicting styles */
+    /* Ensure clean rendering */
     .dashboard-content .table-container {
         overflow-x: auto !important;
         max-width: 100%;
+        display: block;
     }
     
-    /* Ensure table doesn't overflow container */
     .dashboard-content {
         overflow-x: hidden;
     }
 }
+
+/* Optional: Add a nice scroll hint animation */
+@keyframes scrollHint {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(5px);
+    }
+}
+
+.table-container.scrollable::after {
+    animation: scrollHint 1s ease-in-out infinite;
+}
+
+
 
 /* Optional: Add a subtle indicator that table is scrollable */
 @media (max-width: 768px) {
