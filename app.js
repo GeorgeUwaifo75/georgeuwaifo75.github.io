@@ -1499,8 +1499,23 @@ function initializeImageSlider(product) {
         });
     });
     
-    // Update active dot on scroll with debounce
+    // FIX: Only track scroll when user is actually scrolling the slider
+    // Use requestAnimationFrame for smoother performance
+    let isUserScrollingSlider = false;
+    let scrollEndTimer;
+    
     slider.addEventListener('scroll', () => {
+        // Mark that user is scrolling the slider
+        isUserScrollingSlider = true;
+        
+        // Clear previous timer
+        clearTimeout(scrollEndTimer);
+        
+        // Set timer to reset flag after scrolling stops
+        scrollEndTimer = setTimeout(() => {
+            isUserScrollingSlider = false;
+        }, 150);
+        
         if (isScrolling) {
             clearTimeout(scrollTimeout);
         }
@@ -1508,35 +1523,38 @@ function initializeImageSlider(product) {
         isScrolling = true;
         
         scrollTimeout = setTimeout(() => {
-            const imageItems = slider.querySelectorAll('.product-image-item');
-            const sliderRect = slider.getBoundingClientRect();
-            const centerPoint = sliderRect.left + sliderRect.width / 2;
-            
-            let closestIndex = 0;
-            let closestDistance = Infinity;
-            
-            imageItems.forEach((item, index) => {
-                const itemRect = item.getBoundingClientRect();
-                const itemCenter = itemRect.left + itemRect.width / 2;
-                const distance = Math.abs(itemCenter - centerPoint);
+            // Only update if user is still scrolling the slider
+            if (isUserScrollingSlider) {
+                const imageItems = slider.querySelectorAll('.product-image-item');
+                const sliderRect = slider.getBoundingClientRect();
+                const centerPoint = sliderRect.left + sliderRect.width / 2;
                 
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestIndex = index;
+                let closestIndex = 0;
+                let closestDistance = Infinity;
+                
+                imageItems.forEach((item, index) => {
+                    const itemRect = item.getBoundingClientRect();
+                    const itemCenter = itemRect.left + itemRect.width / 2;
+                    const distance = Math.abs(itemCenter - centerPoint);
+                    
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestIndex = index;
+                    }
+                });
+                
+                if (closestIndex !== currentIndex) {
+                    console.log(`Scroll detected, changing from ${currentIndex + 1} to ${closestIndex + 1}`);
+                    currentIndex = closestIndex;
+                    updateIndicators(currentIndex);
                 }
-            });
-            
-            if (closestIndex !== currentIndex) {
-                console.log(`Scroll detected, changing from ${currentIndex + 1} to ${closestIndex + 1}`);
-                currentIndex = closestIndex;
-                updateIndicators(currentIndex);
             }
             
             isScrolling = false;
         }, 50);
     });
     
-    // Handle touch events for swipe
+    // Handle touch events for swipe - ensure we don't interfere with page scroll
     let touchStartX = 0;
     let touchStartY = 0;
     let touchStartTime = 0;
@@ -1545,7 +1563,9 @@ function initializeImageSlider(product) {
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;
         touchStartTime = Date.now();
-    }, { passive: true });
+        // Prevent page scroll when touching the slider
+        e.stopPropagation();
+    }, { passive: false });
     
     slider.addEventListener('touchend', (e) => {
         const touchEndX = e.changedTouches[0].screenX;
@@ -1566,14 +1586,16 @@ function initializeImageSlider(product) {
                     // Swipe left - go to next
                     console.log('Swipe left detected');
                     scrollToIndex(currentIndex + 1);
+                    e.preventDefault();
                 } else if (diffX < 0 && currentIndex > 0) {
                     // Swipe right - go to previous
                     console.log('Swipe right detected');
                     scrollToIndex(currentIndex - 1);
+                    e.preventDefault();
                 }
             }
         }
-    }, { passive: true });
+    }, { passive: false });
     
     // Handle image load to ensure proper sizing
     const images = slider.querySelectorAll('.product-image-item img');
@@ -1602,14 +1624,16 @@ function initializeImageSlider(product) {
         console.log('Initial scroll to first image');
     }, 200);
     
-    // Handle resize events
+    // Handle resize events - only if needed
+    let resizeTimer;
     window.addEventListener('resize', () => {
-        if (window.innerWidth <= 768) {
-            // Recalculate positions on resize
-            setTimeout(() => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (window.innerWidth <= 768) {
+                // Recalculate positions on resize
                 scrollToIndex(currentIndex, false);
-            }, 100);
-        }
+            }
+        }, 100);
     });
 }
 
@@ -3401,6 +3425,7 @@ async function loadAdminDashboard() {
             <div id="usersTable" class="table-container"></div>
         `;
         
+         initTableScrollIndicators();
         // Initialize pagination for users table
         const userPagination = new Pagination('usersTable', 10);
         userPagination.onPageChange = (pageData) => {
@@ -3415,7 +3440,7 @@ async function loadAdminDashboard() {
         // Add event listeners for admin dashboard menu
         attachAdminMenuListeners();
         
-      setTimeout(initTableScrollIndicators, 100); 
+      //setTimeout(initTableScrollIndicators, 100); 
         
         
     } catch (error) {
@@ -3583,11 +3608,16 @@ function renderUsersTable(users) {
 function initTableScrollIndicators() {
     const tables = document.querySelectorAll('.table-container');
     tables.forEach(container => {
-        container.addEventListener('scroll', function() {
-            this.classList.add('scrolled');
-        });
+        // Remove existing scroll event listeners to prevent duplicates
+        container.removeEventListener('scroll', handleTableScroll);
+        container.addEventListener('scroll', handleTableScroll);
     });
 }
+
+function handleTableScroll() {
+    this.classList.add('scrolled');
+}
+
 
 // Call this after tables are loaded
 // Add this to your loadAdminDashboard, loadAllProductsAdmin, loadPaymentsReport functions
@@ -3677,7 +3707,8 @@ async function loadAllProductsAdmin() {
         <div id="adminProductsTable" class="table-container"></div>
     `;
     
-    setTimeout(initTableScrollIndicators, 100);
+    //setTimeout(initTableScrollIndicators, 100);
+    initTableScrollIndicators();
     
     const products = await api.getAllProducts();
     
@@ -3811,7 +3842,8 @@ async function loadPaymentsReport() {
         </button>
     `;
     
-    setTimeout(initTableScrollIndicators, 100);
+    //setTimeout(initTableScrollIndicators, 100);
+     initTableScrollIndicators();
     
     const pagination = new Pagination('paymentsTable', 10);
     pagination.onPageChange = (pageData) => {
