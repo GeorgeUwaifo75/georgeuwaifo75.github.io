@@ -2793,18 +2793,13 @@ footer {
         font-size: 0.8rem;
     }
 
-    /* Table adjustments for mobile */
-    /*
-    .table-container {
-        margin: 1rem 0;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    */
+    
     
     /* ============ ADMIN TABLES - MOBILE OPTIMIZATION ============ */
 
-/* Base table container styles - ensure horizontal scroll on mobile */
+/* ============ ADMIN TABLES - MOBILE OPTIMIZATION ============ */
+
+/* Base table container styles */
 .table-container {
     overflow-x: auto;
     border-radius: var(--border-radius-md);
@@ -2812,91 +2807,128 @@ footer {
     background: white;
     margin: 1.5rem 0;
     width: 100%;
+    -webkit-overflow-scrolling: touch;
 }
-
 
 /* Make tables responsive on mobile */
 @media (max-width: 768px) {
-    /* Ensure table container scrolls horizontally */
+    /* Table container adjustments */
     .table-container {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        position: relative;
         margin: 1rem 0;
+        border-radius: var(--border-radius-md);
+        position: relative;
     }
     
     /* Table specific styles for better readability */
-    table {
-        min-width: 600px; /* Ensure minimum width for scroll */
+    .table-container table {
+        min-width: 550px;
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
     
     /* Adjust cell padding for mobile */
-    th, td {
-        padding: 0.75rem 0.8rem;
-        white-space: nowrap; /* Prevent text wrapping to maintain readability */
+    .table-container th,
+    .table-container td {
+        padding: 0.7rem 0.6rem;
+        white-space: nowrap;
     }
     
-    /* First column can have slightly more space for product names */
-    td:first-child,
-    th:first-child {
+    /* Make first column sticky for better context */
+    .table-container td:first-child,
+    .table-container th:first-child {
         position: sticky;
         left: 0;
         background: white;
-        z-index: 1;
+        z-index: 2;
         box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1);
     }
     
-    /* Make action buttons more compact but touch-friendly */
+    /* Make action column sticky on the right if needed */
+    .table-container td:last-child,
+    .table-container th:last-child {
+        position: sticky;
+        right: 0;
+        background: white;
+        z-index: 2;
+        box-shadow: -2px 0 5px -2px rgba(0,0,0,0.1);
+    }
+    
+    /* Action buttons styling */
     .btn-small {
         padding: 0.4rem 0.6rem;
         font-size: 0.7rem;
-        margin: 0.15rem;
-        min-height: 32px; /* Touch-friendly minimum size */
-        min-width: 48px; /* Touch-friendly minimum width */
+        margin: 0.1rem;
+        min-height: 32px;
+        min-width: 40px;
+        white-space: nowrap;
     }
     
-    /* Thumbnail images - smaller on mobile */
+    /* Thumbnail images */
     .thumbnail {
         width: 35px;
         height: 35px;
+        object-fit: cover;
     }
     
-    /* Status badges - adjust for mobile */
-    .status-badge {
-        padding: 0.2rem 0.4rem;
-        font-size: 0.7rem;
-        white-space: nowrap;
+    /* Scroll indicator */
+    .table-container::after {
+        content: '← Scroll horizontally →';
+        display: block;
+        text-align: center;
+        font-size: 0.65rem;
+        color: #999;
+        padding: 0.4rem;
+        background: #f8f9fa;
+        border-top: 1px solid #e2e8f0;
+    }
+    
+    /* Hide scroll indicator after user scrolls */
+    .table-container.scrolled::after {
+        display: none;
     }
 }
 
-/* For very small screens - make buttons stack if needed */
+/* For very small screens */
 @media (max-width: 480px) {
     .table-container {
         margin: 0.8rem 0;
     }
     
-    table {
-        min-width: 550px;
-        font-size: 0.8rem;
+    .table-container table {
+        min-width: 500px;
+        font-size: 0.75rem;
     }
     
-    th, td {
-        padding: 0.6rem 0.6rem;
+    .table-container th,
+    .table-container td {
+        padding: 0.5rem 0.5rem;
     }
     
     .btn-small {
-        padding: 0.35rem 0.5rem;
+        padding: 0.3rem 0.5rem;
         font-size: 0.65rem;
-        min-height: 30px;
-        min-width: 44px;
+        min-height: 28px;
+        min-width: 36px;
     }
     
     .thumbnail {
         width: 30px;
         height: 30px;
+    }
+}
+
+/* Remove duplicate table styles - ensure clean rendering */
+@media (max-width: 768px) {
+    /* Reset any conflicting styles */
+    .dashboard-content .table-container {
+        overflow-x: auto !important;
+        max-width: 100%;
+    }
+    
+    /* Ensure table doesn't overflow container */
+    .dashboard-content {
+        overflow-x: hidden;
     }
 }
 
