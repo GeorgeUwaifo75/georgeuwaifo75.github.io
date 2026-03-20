@@ -776,28 +776,42 @@ if (hamburger && navMenu) {
     });
     
     // Handle dropdown toggles on mobile
-    const dropdowns = document.querySelectorAll('.dropdown');
-    dropdowns.forEach(dropdown => {
-        const dropdownLink = dropdown.querySelector('.nav-link');
-        if (dropdownLink) {
-            dropdownLink.addEventListener('click', (e) => {
-                if (window.innerWidth <= 768) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    // Close other dropdowns
-                    dropdowns.forEach(d => {
-                        if (d !== dropdown) {
-                            d.classList.remove('active');
-                        }
-                    });
-                    
-                    // Toggle current dropdown
-                    dropdown.classList.toggle('active');
+const dropdowns = document.querySelectorAll('.dropdown');
+dropdowns.forEach(dropdown => {
+    const dropdownLink = dropdown.querySelector('.dropdown-toggle');
+    if (dropdownLink) {
+        // Remove any existing listeners to prevent duplicates
+        const newDropdownLink = dropdownLink.cloneNode(true);
+        dropdownLink.parentNode.replaceChild(newDropdownLink, dropdownLink);
+        
+        newDropdownLink.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Close other dropdowns
+                dropdowns.forEach(d => {
+                    if (d !== dropdown) {
+                        d.classList.remove('active');
+                    }
+                });
+                
+                // Toggle current dropdown
+                dropdown.classList.toggle('active');
+                
+                // Optional: Smooth scroll to keep menu in view
+                const menu = document.getElementById('navMenu');
+                if (menu && menu.classList.contains('active')) {
+                    const dropdownRect = dropdown.getBoundingClientRect();
+                    const menuRect = menu.getBoundingClientRect();
+                    if (dropdownRect.bottom > menuRect.bottom) {
+                        dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
                 }
-            });
-        }
-    });
+            }
+        });
+    }
+});
     
     // Close menu when clicking outside (on the main content)
     document.addEventListener('click', (e) => {
