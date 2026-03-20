@@ -3401,6 +3401,9 @@ async function loadAdminDashboard() {
         // Add event listeners for admin dashboard menu
         attachAdminMenuListeners();
         
+      setTimeout(initTableScrollIndicators, 100); 
+        
+        
     } catch (error) {
         console.error('Error loading admin dashboard:', error);
         adminContent.innerHTML = '<p class="error-message">Error loading dashboard. Please try again.</p>';
@@ -3561,6 +3564,22 @@ function renderUsersTable(users) {
     `;
 }
 
+
+// Add this to your app.js - handles table scroll indicator
+function initTableScrollIndicators() {
+    const tables = document.querySelectorAll('.table-container');
+    tables.forEach(container => {
+        container.addEventListener('scroll', function() {
+            this.classList.add('scrolled');
+        });
+    });
+}
+
+// Call this after tables are loaded
+// Add this to your loadAdminDashboard, loadAllProductsAdmin, loadPaymentsReport functions
+// after the tables are rendered:
+// setTimeout(initTableScrollIndicators, 100);
+
 // Filter functions for users
 function filterUsers() {
     const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
@@ -3643,6 +3662,8 @@ async function loadAllProductsAdmin() {
         
         <div id="adminProductsTable" class="table-container"></div>
     `;
+    
+    setTimeout(initTableScrollIndicators, 100);
     
     const products = await api.getAllProducts();
     
@@ -3775,6 +3796,8 @@ async function loadPaymentsReport() {
             <i class="fas fa-download"></i> Export Report
         </button>
     `;
+    
+    setTimeout(initTableScrollIndicators, 100);
     
     const pagination = new Pagination('paymentsTable', 10);
     pagination.onPageChange = (pageData) => {
