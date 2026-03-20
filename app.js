@@ -1427,8 +1427,9 @@ function initializeImageSlider(product) {
     
     let currentIndex = 0;
     const totalImages = product.images.length;
-    let isScrolling = false;
     let scrollTimeout;
+    let isUpdatingFromButton = false;
+    let isProgrammaticScroll = false;
     
     console.log(`Slider initialized with ${totalImages} images`);
     
@@ -1455,14 +1456,11 @@ function initializeImageSlider(product) {
     
     // Scroll to specific image
     function scrollToIndex(index, smooth = true) {
-        if (index < 0 || index >= totalImages) {
-            console.log(`Invalid index: ${index}`);
-            return;
-        }
+        if (index < 0 || index >= totalImages) return;
         
         const imageItems = slider.querySelectorAll('.product-image-item');
         if (imageItems.length > index) {
-            console.log(`Scrolling to image ${index + 1}`);
+            isProgrammaticScroll = true;
             imageItems[index].scrollIntoView({
                 behavior: smooth ? 'smooth' : 'auto',
                 block: 'nearest',
@@ -1470,146 +1468,143 @@ function initializeImageSlider(product) {
             });
             currentIndex = index;
             updateIndicators(index);
-        } else {
-            console.error(`Image item at index ${index} not found`);
+            
+            // Reset flag after scroll completes
+            setTimeout(() => {
+                isProgrammaticScroll = false;
+            }, smooth ? 300 : 50);
         }
     }
     
     // Previous image
     prevBtn.addEventListener('click', () => {
-        console.log('Previous button clicked');
+        isUpdatingFromButton = true;
         if (currentIndex > 0) {
             scrollToIndex(currentIndex - 1);
         }
+        setTimeout(() => {
+            isUpdatingFromButton = false;
+        }, 300);
     });
     
     // Next image
     nextBtn.addEventListener('click', () => {
-        console.log('Next button clicked');
+        isUpdatingFromButton = true;
         if (currentIndex < totalImages - 1) {
             scrollToIndex(currentIndex + 1);
         }
+        setTimeout(() => {
+            isUpdatingFromButton = false;
+        }, 300);
     });
     
     // Click on dots to navigate
     dots.forEach((dot, index) => {
         dot.addEventListener('click', () => {
-            console.log(`Dot ${index + 1} clicked`);
+            isUpdatingFromButton = true;
             scrollToIndex(index);
+            setTimeout(() => {
+                isUpdatingFromButton = false;
+            }, 300);
         });
     });
     
-    // FIX: Only track scroll when user is actually scrolling the slider
-    // Use requestAnimationFrame for smoother performance
-    let isUserScrollingSlider = false;
-    let scrollEndTimer;
-    
-    slider.addEventListener('scroll', () => {
-        // Mark that user is scrolling the slider
-        isUserScrollingSlider = true;
+    // FIX: Use scrollend event if available, otherwise fallback to scroll with debounce
+    // This only updates when the scroll actually stops
+    function handleScrollEnd() {
+        if (isProgrammaticScroll || isUpdatingFromButton) return;
         
-        // Clear previous timer
-        clearTimeout(scrollEndTimer);
+        const imageItems = slider.querySelectorAll('.product-image-item');
+        const sliderRect = slider.getBoundingClientRect();
+        const centerPoint = sliderRect.left + sliderRect.width / 2;
         
-        // Set timer to reset flag after scrolling stops
-        scrollEndTimer = setTimeout(() => {
-            isUserScrollingSlider = false;
-        }, 150);
+        let closestIndex = 0;
+        let closestDistance = Infinity;
         
-        if (isScrolling) {
-            clearTimeout(scrollTimeout);
-        }
-        
-        isScrolling = true;
-        
-        scrollTimeout = setTimeout(() => {
-            // Only update if user is still scrolling the slider
-            if (isUserScrollingSlider) {
-                const imageItems = slider.querySelectorAll('.product-image-item');
-                const sliderRect = slider.getBoundingClientRect();
-                const centerPoint = sliderRect.left + sliderRect.width / 2;
-                
-                let closestIndex = 0;
-                let closestDistance = Infinity;
-                
-                imageItems.forEach((item, index) => {
-                    const itemRect = item.getBoundingClientRect();
-                    const itemCenter = itemRect.left + itemRect.width / 2;
-                    const distance = Math.abs(itemCenter - centerPoint);
-                    
-                    if (distance < closestDistance) {
-                        closestDistance = distance;
-                        closestIndex = index;
-                    }
-                });
-                
-                if (closestIndex !== currentIndex) {
-                    console.log(`Scroll detected, changing from ${currentIndex + 1} to ${closestIndex + 1}`);
-                    currentIndex = closestIndex;
-                    updateIndicators(currentIndex);
-                }
-            }
+        imageItems.forEach((item, index) => {
+            const itemRect = item.getBoundingClientRect();
+            const itemCenter = itemRect.left + itemRect.width / 2;
+            const distance = Math.abs(itemCenter - centerPoint);
             
-            isScrolling = false;
-        }, 50);
-    });
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = index;
+            }
+        });
+        
+        if (closestIndex !== currentIndex) {
+            console.log(`Scroll ended, updating from ${currentIndex + 1} to ${closestIndex + 1}`);
+            currentIndex = closestIndex;
+            updateIndicators(currentIndex);
+        }
+    }
     
-    // Handle touch events for swipe - ensure we don't interfere with page scroll
+    // Use scrollend event if supported (modern browsers)
+    if ('onscrollend' in slider) {
+        slider.addEventListener('scrollend', handleScrollEnd);
+    } else {
+        // Fallback for older browsers - use debounced scroll
+        let scrollEndTimer;
+        slider.addEventListener('scroll', () => {
+            clearTimeout(scrollEndTimer);
+            scrollEndTimer = setTimeout(handleScrollEnd, 150);
+        });
+    }
+    
+    // Handle touch events for swipe with better prevention
     let touchStartX = 0;
     let touchStartY = 0;
-    let touchStartTime = 0;
+    let isSwiping = false;
     
     slider.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
-        touchStartTime = Date.now();
-        // Prevent page scroll when touching the slider
-        e.stopPropagation();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isSwiping = false;
+    }, { passive: true });
+    
+    slider.addEventListener('touchmove', (e) => {
+        const touchCurrentX = e.touches[0].clientX;
+        const touchCurrentY = e.touches[0].clientY;
+        const diffX = Math.abs(touchCurrentX - touchStartX);
+        const diffY = Math.abs(touchCurrentY - touchStartY);
+        
+        // If horizontal swipe detected, prevent page scroll
+        if (diffX > diffY && diffX > 10) {
+            isSwiping = true;
+            e.preventDefault();
+        }
     }, { passive: false });
     
     slider.addEventListener('touchend', (e) => {
-        const touchEndX = e.changedTouches[0].screenX;
-        const touchEndY = e.changedTouches[0].screenY;
-        const touchEndTime = Date.now();
+        if (!isSwiping) return;
         
-        // Calculate swipe metrics
+        const touchEndX = e.changedTouches[0].clientX;
         const diffX = touchStartX - touchEndX;
-        const diffY = Math.abs(touchStartY - touchEndY);
-        const timeDiff = touchEndTime - touchStartTime;
+        const swipeThreshold = 50;
         
-        // Only trigger if horizontal swipe (not vertical scroll) and within time threshold
-        if (diffY < 50 && timeDiff < 300) {
-            const swipeThreshold = 40;
-            
-            if (Math.abs(diffX) > swipeThreshold) {
-                if (diffX > 0 && currentIndex < totalImages - 1) {
-                    // Swipe left - go to next
-                    console.log('Swipe left detected');
-                    scrollToIndex(currentIndex + 1);
-                    e.preventDefault();
-                } else if (diffX < 0 && currentIndex > 0) {
-                    // Swipe right - go to previous
-                    console.log('Swipe right detected');
-                    scrollToIndex(currentIndex - 1);
-                    e.preventDefault();
-                }
+        if (Math.abs(diffX) > swipeThreshold) {
+            if (diffX > 0 && currentIndex < totalImages - 1) {
+                // Swipe left - go to next
+                scrollToIndex(currentIndex + 1);
+            } else if (diffX < 0 && currentIndex > 0) {
+                // Swipe right - go to previous
+                scrollToIndex(currentIndex - 1);
             }
         }
-    }, { passive: false });
+        isSwiping = false;
+    });
     
     // Handle image load to ensure proper sizing
     const images = slider.querySelectorAll('.product-image-item img');
     images.forEach(img => {
         if (img.complete) {
-            // Image already loaded
-            console.log('Image already loaded:', img.src);
+            img.classList.add('loaded');
         } else {
             img.addEventListener('load', () => {
-                console.log('Image loaded:', img.src);
+                img.classList.add('loaded');
             });
             img.addEventListener('error', () => {
-                console.error('Image failed to load:', img.src);
-                // Fallback for broken images
+                img.classList.add('error');
                 img.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
             });
         }
@@ -1622,19 +1617,18 @@ function initializeImageSlider(product) {
     setTimeout(() => {
         scrollToIndex(0, false);
         console.log('Initial scroll to first image');
-    }, 200);
+    }, 100);
     
-    // Handle resize events - only if needed
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                // Recalculate positions on resize
-                scrollToIndex(currentIndex, false);
+    // Add CSS to prevent page scroll interference
+    const style = document.createElement('style');
+    style.textContent = `
+        @media (max-width: 768px) {
+            .product-images-grid {
+                touch-action: pan-y pinch-zoom;
             }
-        }, 100);
-    });
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 
