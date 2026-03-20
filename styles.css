@@ -2256,6 +2256,7 @@ tr:hover {
 }
 
 /* ============ FOOTER ============ */
+/* ============ FOOTER STYLES ============ */
 footer {
     background: var(--dark-gray);
     color: var(--white);
@@ -2278,6 +2279,41 @@ footer {
     color: var(--primary-red);
 }
 
+/* Mobile Footer - Centered */
+@media (max-width: 768px) {
+    .footer-content {
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+        gap: 0.75rem;
+    }
+    
+    .footer-content p {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+    }
+    
+    .footer-content i {
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+}
+
+/* Very small devices - extra centering */
+@media (max-width: 480px) {
+    footer {
+        padding: 1.5rem 0.75rem;
+    }
+    
+    .footer-content {
+        gap: 0.6rem;
+    }
+    
+    .footer-content p {
+        font-size: 0.85rem;
+    }
+}
 /* ============ MOBILE RESPONSIVE (Consolidated) ============ */
 @media (max-width: 1024px) {
     .product-images-grid {
