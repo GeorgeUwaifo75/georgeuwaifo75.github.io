@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>IvieAI · Friendly Chat Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <div class="hero">
+            <h1>✨ IvieAI ✨</h1>
+            <div class="sub">💬 Making chatting friendly and fun. Let's talk any and everything.</div>
+        </div>
+
+        <div class="chat-panel">
+            <!-- Response area - displayed right above input box -->
+            <div class="response-area" id="responseArea">
+                <div class="response-label">
+                    <i>🤖 Ivie says</i>
+                </div>
+                <div class="ai-message" id="aiMessage">
+                    <span class="placeholder-message">🌸 Hi there! Ask me anything — I'm here to chat! 🌸</span>
+                </div>
+            </div>
+
+            <!-- Input section -->
+            <div class="input-section">
+                <div class="input-group">
+                    <textarea 
+                        id="userInput" 
+                        rows="1" 
+                        placeholder="Type your question... (any topic)"
+                        autofocus
+                    ></textarea>
+                    <button id="sendBtn">
+                        <span>✨</span> Send
+                    </button>
+                </div>
+                <div class="input-hint">
+                    Press <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for new line
+                </div>
+            </div>
+            
+            <div class="info-footer">
+                🧠 Powered by Hugging Face · Model: <strong>GeorgeUwaifo/ivie_gpt2_new01_results</strong>
+                <br>
+                <span class="server-status" id="serverStatus">● Server: Connected</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
