@@ -62,6 +62,11 @@ class ApiService {
         // Health check every 5 minutes
         setInterval(() => this.performHealthCheck(), 300000);
         
+        
+        // Run expiration check periodically (add to constructor)
+        // Add this in your ApiService constructor:
+         setInterval(() => this.checkAndUpdateExpiredProducts(), 3600000); // Check every hour
+        
         // List of CORS proxies (fallback)
         this.proxyUrls = [
             'https://cors-anywhere.herokuapp.com/',
@@ -149,6 +154,193 @@ class ApiService {
         this.proxyUsage[proxy].used++;
         return proxy;
     }
+
+
+// Add this method to ApiService class in api.js
+
+// Check and update expired products
+async checkAndUpdateExpiredProducts() {
+    try {
+        const products = await this.getAllProducts(true);
+        const now = new Date();
+        let updatedCount = 0;
+        
+        for (const product of products) {
+            // Check if product is active and has an end date
+            if (product.activityStatus === 'Active' && product.endDate) {
+                const endDate = new Date(product.endDate);
+                
+                if (endDate < now) {
+                    // Product has expired - deactivate it
+                    product.activityStatus = 'Inactive';
+                    await this.updateProduct(product.sku, { activityStatus: 'Inactive' });
+                    updatedCount++;
+                    console.log(`📅 Product expired: ${product.name} (${product.sku})`);
+                    
+                    // Optional: Send notification to seller
+                    await this.sendExpirationNotification(product);
+                }
+            }
+        }
+        
+        if (updatedCount > 0) {
+            console.log(`✅ Updated ${updatedCount} expired products to inactive`);
+        }
+        
+        return updatedCount;
+    } catch (error) {
+        console.error('Error checking expired products:', error);
+        return 0;
+    }
+}
+
+// Send expiration notification (can be extended)
+async sendExpirationNotification(product) {
+    try {
+        const seller = await this.getUserByUserId(product.sellerId);
+        if (seller && seller.email) {
+            console.log(`📧 Would send expiration email to ${seller.email} for product ${product.name}`);
+            // Implement email notification if needed
+        }
+    } catch (error) {
+        console.error('Error sending expiration notification:', error);
+    }
+}
+
+// Renew a product (handles both free and paid renewals)
+async renewProduct(sku, paymentType = null) {
+    try {
+        const products = await this.getAllProducts(true);
+        const product = products.find(p => p.sku === sku);
+        
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+        const now = new Date();
+        let endDate = null;
+        let activityStatus = 'Inactive';
+        let paymentStatus = product.paymentStatus;
+        
+        // Check if this is a free renewal (user still has free advert slots)
+        const userProducts = await this.getProductsBySeller(product.sellerId);
+        const activeUserProducts = userProducts.filter(p => 
+            p.activityStatus === 'Active' && p.sku !== sku
+        ).length;
+        
+        // Determine if this renewal should be free or paid
+        if (paymentType === 'free' || (paymentStatus === 'free' && activeUserProducts < 2)) {
+            // Free renewal (first 2 adverts)
+            endDate = new Date();
+            endDate.setDate(endDate.getDate() + 14); // 14 days from now
+            activityStatus = 'Active';
+            paymentStatus = 'free';
+            paymentType = 'free';
+            
+            console.log(`🔄 Renewing product ${sku} as FREE advert (active for 14 days)`);
+            
+        } else if (paymentType) {
+            // Paid renewal
+            endDate = new Date();
+            
+            switch(paymentType) {
+                case 'daily':
+                    endDate.setDate(endDate.getDate() + 1);
+                    break;
+                case 'weekly':
+                    endDate.setDate(endDate.getDate() + 7);
+                    break;
+                case 'monthly':
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    break;
+                default:
+                    throw new Error('Invalid payment type for renewal');
+            }
+            
+            activityStatus = 'Active';
+            paymentStatus = 'paid';
+            
+            console.log(`🔄 Renewing product ${sku} as PAID advert (${paymentType}, active until ${endDate.toISOString()})`);
+            
+        } else {
+            throw new Error('Cannot renew product. Please select a payment plan or check your free advert eligibility.');
+        }
+        
+        // Update product with new dates
+        const updatedProduct = {
+            ...product,
+            endDate: endDate.toISOString(),
+            activityStatus: activityStatus,
+            paymentStatus: paymentStatus,
+            paymentType: paymentType,
+            dateAdvertised: now.toISOString(),
+            updatedAt: now.toISOString(),
+            renewedCount: (product.renewedCount || 0) + 1,
+            lastRenewalDate: now.toISOString()
+        };
+        
+        await this.updateProduct(sku, updatedProduct);
+        
+        console.log(`✅ Product ${sku} renewed successfully. Active until: ${endDate.toISOString()}`);
+        
+        return {
+            success: true,
+            product: updatedProduct,
+            endDate: endDate,
+            isFree: paymentType === 'free' || paymentStatus === 'free'
+        };
+        
+    } catch (error) {
+        console.error('Error renewing product:', error);
+        throw error;
+    }
+}
+
+// Get renewal eligibility for a product
+// Get renewal eligibility for a product
+async getRenewalEligibility(sku) {
+    try {
+        const product = await this.getProductBySku(sku);
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+        const userProducts = await this.getProductsBySeller(product.sellerId);
+        const activeUserProducts = userProducts.filter(p => 
+            p.activityStatus === 'Active' && p.sku !== sku
+        ).length;
+        
+        // Get admin rates
+        const admin = await this.getUserByUserId('admin01');
+        const dailyRate = admin?.dailyPayValue || 300;
+        const weeklyRate = admin?.weeklyPayValue || 1000;
+        const monthlyRate = admin?.monthlyPayValue || 2800;
+        
+        const hasFreeSlot = activeUserProducts < 2;
+        
+        return {
+            sku: sku,
+            productName: product.name,
+            currentStatus: product.activityStatus,
+            currentPaymentStatus: product.paymentStatus,
+            currentEndDate: product.endDate,
+            canRenewFree: hasFreeSlot,
+            canRenewPaid: true,
+            freeSlotsRemaining: Math.max(0, 2 - activeUserProducts),
+            isExpired: product.activityStatus !== 'Active' || 
+                      (product.endDate && new Date(product.endDate) < new Date()),
+            dailyRate: dailyRate,
+            weeklyRate: weeklyRate,
+            monthlyRate: monthlyRate
+        };
+        
+    } catch (error) {
+        console.error('Error checking renewal eligibility:', error);
+        throw error;
+    }
+}
+
+
 
     // ============ CORE FETCH WITH RETRY ============
 
@@ -732,31 +924,15 @@ async getAllProducts(forceRefresh = false) {
         return products.filter(p => p.sellerId === userId);
     }
 
-    /*
-    async getProductsByCategory(category) {
-        try {
-            const products = await this.getAllProducts();
-            const now = new Date();
-            
-            return products.filter(p => {
-                if (p.category !== category) return false;
-                if (p.activityStatus !== 'Active') return false;
-                if (p.endDate) {
-                    const endDate = new Date(p.endDate);
-                    if (endDate < now) return false;
-                }
-                return true;
-            });
-        } catch (error) {
-            console.error('Error in getProductsByCategory:', error);
-            return [];
-        }
-    } */
     
-    // In api.js - Enhanced getProductsByCategory with better debugging
+    
+// Update getProductsByCategory to ensure only active, non-expired products
 async getProductsByCategory(category) {
     try {
         console.log(`🔍 Fetching products for category: "${category}"`);
+        
+        // First, check and update expired products
+        await this.checkAndUpdateExpiredProducts();
         
         const products = await this.getAllProducts();
         console.log(`📦 Total products fetched: ${products.length}`);
@@ -777,26 +953,10 @@ async getProductsByCategory(category) {
                 notExpired = endDate > now;
             }
             
-            // Log filtering for debugging
-            if (categoryMatch) {
-                console.log(`📋 Product: ${p.name} | Category: ${p.category} | Active: ${isActive} | Not Expired: ${notExpired}`);
-            }
-            
             return categoryMatch && isActive && notExpired;
         });
         
         console.log(`✅ Found ${filtered.length} active products in category "${category}"`);
-        
-        // If no products found, try a case-insensitive match
-        if (filtered.length === 0) {
-            console.log('⚠️ No products found, trying case-insensitive match...');
-            const caseInsensitive = products.filter(p => 
-                p.category && p.category.toLowerCase() === category.toLowerCase() && 
-                p.activityStatus === 'Active'
-            );
-            console.log(`📊 Case-insensitive match found: ${caseInsensitive.length} products`);
-            return caseInsensitive;
-        }
         
         return filtered;
         
