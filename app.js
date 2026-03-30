@@ -379,6 +379,277 @@ function addSearchStyles() {
 
 
 
+// ============ RENEWAL FUNCTIONS ============
+
+// Add renewal function for product cards
+async function renewProduct(sku) {
+    console.log('Renew button clicked for product:', sku);
+    
+    try {
+        // Show loading indicator
+        showNotification('Checking renewal eligibility...', 'info');
+        
+        // Check eligibility first
+        const eligibility = await api.getRenewalEligibility(sku);
+        console.log('Renewal eligibility:', eligibility);
+        
+        if (!eligibility.isExpired && eligibility.currentStatus === 'Active') {
+            showNotification('This product is still active. No need to renew yet.', 'info');
+            return;
+        }
+        
+        // Show renewal options
+        showRenewalOptions(sku, eligibility);
+        
+    } catch (error) {
+        console.error('Error checking renewal eligibility:', error);
+        showNotification('Error checking renewal eligibility: ' + error.message, 'error');
+    }
+}
+
+// Show renewal options modal
+function showRenewalOptions(sku, eligibility) {
+    console.log('Showing renewal options for:', sku);
+    
+    // Remove any existing modal
+    const existingModal = document.querySelector('.modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.style.zIndex = '10000';
+    
+    const productName = eligibility.productName || 'this product';
+    const canRenewFree = eligibility.canRenewFree;
+    const freeSlotsLeft = eligibility.freeSlotsRemaining;
+    const isExpired = eligibility.isExpired;
+    
+    // Get payment rates
+    const dailyRate = eligibility.dailyRate || 300;
+    const weeklyRate = eligibility.weeklyRate || 1000;
+    const monthlyRate = eligibility.monthlyRate || 2800;
+    
+    let freeOptionHTML = '';
+    if (canRenewFree) {
+        freeOptionHTML = `
+            <div class="renewal-option" style="border: 2px solid #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 20px; cursor: pointer; transition: all 0.3s;" 
+                 onclick="processFreeRenewal('${sku}')"
+                 onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(76,175,80,0.3)';"
+                 onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                <h4 style="color: #4CAF50; margin-bottom: 10px;">
+                    <i class="fas fa-gift"></i> 🆓 Free Renewal
+                </h4>
+                <p>Renew for FREE as a free advert</p>
+                <p><strong>Duration:</strong> 14 days active</p>
+                <p><strong>Free slots remaining:</strong> ${freeSlotsLeft}</p>
+                <button class="btn" style="background: #4CAF50; margin-top: 10px; width: 100%;">
+                    <i class="fas fa-sync-alt"></i> Renew for Free
+                </button>
+            </div>
+        `;
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px; border-radius: 15px;">
+            <span class="close" onclick="this.closest('.modal').remove()" style="cursor: pointer;">&times;</span>
+            <h3 style="color: var(--primary-purple); margin-bottom: 10px;">
+                <i class="fas fa-calendar-plus"></i> Renew Advert
+            </h3>
+            <p style="color: #666; margin-bottom: 20px;">
+                <strong>Product:</strong> ${productName}<br>
+                ${isExpired ? '<span style="color: red;">⚠️ This advert has expired.</span>' : '<span style="color: orange;">⚠️ This advert will expire soon.</span>'}
+            </p>
+            <p style="margin-bottom: 20px;">Choose how you'd like to renew:</p>
+            
+            ${freeOptionHTML}
+            
+            <div class="renewal-option paid-options" style="border: 2px solid #FF9800; padding: 20px; border-radius: 10px;">
+                <h4 style="color: #FF9800; margin-bottom: 10px;">
+                    <i class="fas fa-credit-card"></i> 💰 Paid Renewal
+                </h4>
+                <p>Choose a payment plan to renew your advert:</p>
+                
+                <div class="payment-options" style="display: grid; gap: 12px; margin-top: 15px;">
+                    <button class="btn" style="background: var(--primary-purple); width: 100%; display: flex; justify-content: space-between; align-items: center;" 
+                            onclick="processPaidRenewal('${sku}', 'daily')">
+                        <span><i class="fas fa-sun"></i> Daily</span>
+                        <span style="font-weight: bold;">₦${dailyRate}</span>
+                        <span style="font-size: 0.8rem;">(1 day)</span>
+                    </button>
+                    <button class="btn" style="background: var(--primary-purple); width: 100%; display: flex; justify-content: space-between; align-items: center;" 
+                            onclick="processPaidRenewal('${sku}', 'weekly')">
+                        <span><i class="fas fa-calendar-week"></i> Weekly</span>
+                        <span style="font-weight: bold;">₦${weeklyRate}</span>
+                        <span style="font-size: 0.8rem;">(7 days)</span>
+                    </button>
+                    <button class="btn" style="background: var(--primary-purple); width: 100%; display: flex; justify-content: space-between; align-items: center;" 
+                            onclick="processPaidRenewal('${sku}', 'monthly')">
+                        <span><i class="fas fa-calendar-alt"></i> Monthly</span>
+                        <span style="font-weight: bold;">₦${monthlyRate}</span>
+                        <span style="font-size: 0.8rem;">(30 days)</span>
+                    </button>
+                </div>
+            </div>
+            
+            <button onclick="this.closest('.modal').remove()" class="btn" style="background: #666; margin-top: 15px; width: 100%;">Cancel</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// Process free renewal
+async function processFreeRenewal(sku) {
+    console.log('Processing free renewal for:', sku);
+    
+    try {
+        // Close modal
+        const modal = document.querySelector('.modal');
+        if (modal) modal.remove();
+        
+        // Show loading
+        showNotification('Processing free renewal...', 'info');
+        
+        // Check if user is logged in
+        if (!auth.currentUser) {
+            showNotification('Please log in to renew', 'error');
+            showAuthForm('signin');
+            return;
+        }
+        
+        // Renew the product as free
+        const result = await api.renewProduct(sku, 'free');
+        
+        if (result && result.success) {
+            showNotification('✅ Product renewed successfully! Active for 14 days.', 'success');
+            
+            // Refresh the current view
+            if (document.getElementById('userDashboardSection').classList.contains('active')) {
+                await loadUserDashboard();
+            } else if (document.getElementById('productsSection').classList.contains('active')) {
+                // If viewing products, refresh current category
+                const currentCategory = document.getElementById('currentCategoryTitle').textContent;
+                if (currentCategory) {
+                    await loadProductsByCategory(currentCategory);
+                }
+            }
+            
+            // Update category counts
+            await updateCategoryCounts();
+            
+            // Refresh product detail if open
+            const productDetailSection = document.getElementById('productDetailSection');
+            if (productDetailSection && productDetailSection.classList.contains('active')) {
+                // Reload current product detail if open
+                const currentProductSku = window.currentProductSku;
+                if (currentProductSku) {
+                    await loadProductDetail(currentProductSku);
+                }
+            }
+        } else {
+            throw new Error(result?.message || 'Renewal failed');
+        }
+        
+    } catch (error) {
+        console.error('Error in free renewal:', error);
+        showNotification('❌ Renewal failed: ' + error.message, 'error');
+    }
+}
+
+// Process paid renewal
+async function processPaidRenewal(sku, paymentType) {
+    console.log('Processing paid renewal for:', sku, 'type:', paymentType);
+    
+    try {
+        // Close modal
+        const modal = document.querySelector('.modal');
+        if (modal) modal.remove();
+        
+        // Check if user is logged in
+        if (!auth.currentUser) {
+            showNotification('Please log in to renew', 'error');
+            showAuthForm('signin');
+            return;
+        }
+        
+        // Get payment rates
+        const rates = await paymentService.getPaymentRates();
+        let amount = 0;
+        
+        switch(paymentType) {
+            case 'daily': amount = rates.daily; break;
+            case 'weekly': amount = rates.weekly; break;
+            case 'monthly': amount = rates.monthly; break;
+            default:
+                throw new Error('Invalid payment type');
+        }
+        
+        // Get product details for payment
+        const product = await api.getProductBySku(sku);
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+        // Show loading notification
+        showNotification('Initializing payment...', 'info');
+        
+        // Initialize Paystack payment
+        await paymentService.initializePayment(
+            amount,
+            auth.currentUser.email,
+            paymentType,
+            { ...product, isRenewal: true, sku: sku },
+            async (response) => {
+                // Payment success callback
+                console.log('Payment successful for renewal:', response);
+                showNotification('Payment successful! Processing renewal...', 'info');
+                
+                // Process the renewal
+                const result = await api.renewProduct(sku, paymentType);
+                
+                if (result && result.success) {
+                    showNotification('✅ Product renewed successfully!', 'success');
+                    
+                    // Record the payment
+                    await api.createPayment({
+                        productSKU: sku,
+                        userID: auth.currentUser.userId,
+                        payAmount: amount,
+                        reference: response.reference,
+                        paymentType: paymentType,
+                        paymentPurpose: 'renewal',
+                        paymentDate: new Date().toISOString()
+                    });
+                    
+                    // Refresh the view
+                    if (document.getElementById('userDashboardSection').classList.contains('active')) {
+                        await loadUserDashboard();
+                    }
+                    
+                    // Update category counts
+                    await updateCategoryCounts();
+                } else {
+                    throw new Error(result?.message || 'Renewal failed after payment');
+                }
+                
+                // Close any open modals
+                const modal = document.querySelector('.modal');
+                if (modal) modal.remove();
+            },
+            (error) => {
+                console.error('Payment failed:', error);
+                showNotification('❌ Payment failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error in paid renewal:', error);
+        showNotification('❌ Renewal failed: ' + error.message, 'error');
+    }
+}
+
+
 
 // Add this function to app.js - it's currently missing
 function initializeAuthForms() {
@@ -860,7 +1131,121 @@ dropdowns.forEach(dropdown => {
         }
     });
 }
+      
+      
+      //New addition March 30th 2026
+      
+      // Add this to your DOMContentLoaded event handler
+async function checkExpiredProductsOnLoad() {
+    console.log('🔍 Checking for expired products...');
+    const expiredCount = await api.checkAndUpdateExpiredProducts();
+    if (expiredCount > 0) {
+        console.log(`📅 ${expiredCount} expired products deactivated`);
+        // Refresh category counts if visible
+        if (document.getElementById('categoriesSection').classList.contains('active')) {
+            await updateCategoryCounts();
+        }
+    }
+}
+
+
+// ============ RENDER USER PRODUCTS TABLE ============
+// Make sure this function is defined at the top level, not inside another function
+function renderUserProductsTable(products) {
+    console.log('renderUserProductsTable called with', products?.length, 'products');
+    
+    const container = document.getElementById('userProductsTable');
+    if (!container) {
+        console.error('userProductsTable container not found');
+        return;
+    }
+    
+    if (!products || products.length === 0) {
+        container.innerHTML = '<p class="text-center">No products found</p>';
+        return;
+    }
+    
+    try {
+        const now = new Date();
         
+        container.innerHTML = `
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>SKU</th>
+                        <th>Name</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>End Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${products.map(product => {
+                        const isExpired = product.activityStatus !== 'Active' || 
+                                         (product.endDate && new Date(product.endDate) < now);
+                        const endDateDisplay = product.endDate ? new Date(product.endDate).toLocaleDateString() : 'N/A';
+                        const imageUrl = product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50';
+                        
+                        return `
+                            <tr>
+                                <td><img src="${imageUrl}" class="thumbnail" onerror="this.src='https://via.placeholder.com/50'" style="width: 50px; height: 50px; object-fit: cover;"></td>
+                                <td>${product.sku}</td>
+                                <td>${product.name}</td>
+                                <td>₦${typeof product.price === 'number' ? product.price.toLocaleString() : parseFloat(product.price).toLocaleString()}</td>
+                                <td>
+                                    <span style="color: ${isExpired ? 'red' : 'green'}; font-weight: bold;">
+                                        ${product.activityStatus} ${isExpired ? '(Expired)' : ''}
+                                    </span>
+                                </td>
+                                <td>${endDateDisplay}</td>
+                                <td>
+                                    <button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
+                                    <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
+                                    ${isExpired ? 
+                                        `<button onclick="renewProduct('${product.sku}')" class="btn-small" style="background: #4CAF50;">Renew</button>` : 
+                                        (product.paymentStatus !== 'paid' && auth.currentUser && auth.currentUser.numberOfAdverts >= 2 ? 
+                                            `<button onclick="payForAdvert('${product.sku}')" class="btn-small" style="background: #FF9800;">Pay</button>` : '')
+                                    }
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        // Initialize table scroll indicators
+        setTimeout(initTableScrollIndicators, 100);
+        
+    } catch (error) {
+        console.error('Error rendering user products table:', error);
+        container.innerHTML = '<p class="error-message">Error rendering products table</p>';
+    }
+}
+
+// Make sure it's globally available
+window.renderUserProductsTable = renderUserProductsTable;
+      
+      
+      
+// Check for expired products on load
+    await checkExpiredProductsOnLoad();
+    
+    // Set up periodic expiration check (every 30 minutes)
+    setInterval(async () => {
+        console.log('🔄 Running periodic expiration check...');
+        await checkExpiredProductsOnLoad();
+        
+        // Refresh category counts if categories section is visible
+        if (document.getElementById('categoriesSection').classList.contains('active')) {
+            await updateCategoryCounts();
+        }
+    }, 1800000); // Check every 30 minutes      
+      
+      
+      //End addition March 30th 2026  
         console.log('App initialized successfully');
         
     } catch (error) {
@@ -1182,18 +1567,29 @@ function initializeCategories() {
 
 
 
+// Update category counts to only count active products
 async function updateCategoryCounts() {
     const products = await api.getAllProducts();
+    const now = new Date();
+    
+    // Filter for active and non-expired products
+    const activeProducts = products.filter(p => {
+        const isActive = p.activityStatus === 'Active';
+        let notExpired = true;
+        if (p.endDate) {
+            notExpired = new Date(p.endDate) > now;
+        }
+        return isActive && notExpired;
+    });
     
     CATEGORIES.forEach(category => {
-        const count = products.filter(p => p.category === category && p.activityStatus === 'Active').length;
+        const count = activeProducts.filter(p => p.category === category).length;
         
-        // Create a safe ID by replacing spaces and special characters
         const safeCategoryId = category.replace(/[&\s]+/g, '-').toLowerCase();
         const countElement = document.getElementById(`count-${safeCategoryId}`);
         
         if (countElement) {
-            countElement.textContent = `${count} ads`;
+            countElement.textContent = `${count} ad${count !== 1 ? 's' : ''}`;
         }
     });
 }
@@ -2317,15 +2713,26 @@ function updateUIForUser(user) {
 
 // In loadUserDashboard function
 async function loadUserDashboard() {
-    console.log('Loading user dashboard for:', auth.currentUser.userId);
+    console.log('Loading user dashboard for:', auth.currentUser?.userId);
     
     const dashboardContent = document.getElementById('dashboardContent');
-    if (!dashboardContent) return;
+    if (!dashboardContent) {
+        console.error('Dashboard content element not found');
+        return;
+    }
     
     dashboardContent.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
     
     try {
+        // Check if auth.currentUser exists
+        if (!auth.currentUser) {
+            console.error('No user logged in');
+            dashboardContent.innerHTML = '<p class="error-message">Please log in to view dashboard.</p>';
+            return;
+        }
+        
         const products = await api.getProductsBySeller(auth.currentUser.userId);
+        console.log(`Found ${products.length} products for user`);
         
         // Calculate stats
         const activeProducts = products.filter(p => p.activityStatus === 'Active').length;
@@ -2367,21 +2774,24 @@ async function loadUserDashboard() {
             <div id="userProductsTable" class="table-container"></div>
         `;
         
-        // Initialize pagination for user products and store in global instances
-        const pagination = new Pagination('userProductsTable', 10);
-        pagination.onPageChange = (pageData) => {
-            renderUserProductsTable(pageData);
-        };
-        pagination.setData(products);
-        
-        // Store in global instances object
-        window.paginationInstances['userProductsTable'] = pagination;
+        // Initialize pagination
+        if (typeof Pagination !== 'undefined') {
+            const pagination = new Pagination('userProductsTable', 10);
+            pagination.onPageChange = (pageData) => {
+                renderUserProductsTable(pageData);
+            };
+            pagination.setData(products);
+            window.paginationInstances['userProductsTable'] = pagination;
+        } else {
+            // Fallback if Pagination class is not loaded
+            renderUserProductsTable(products);
+        }
         
         attachDashboardMenuListeners();
         
     } catch (error) {
         console.error('Error loading user dashboard:', error);
-        dashboardContent.innerHTML = '<p class="error-message">Error loading dashboard. Please try again.</p>';
+        dashboardContent.innerHTML = `<p class="error-message">Error loading dashboard: ${error.message}. Please try again.</p>`;
     }
 }
 
@@ -2419,47 +2829,6 @@ function attachDashboardMenuListeners() {
     });
 }
 
-function renderUserProductsTable(products) {
-    const container = document.getElementById('userProductsTable');
-    if (!container) return;
-    
-    if (products.length === 0) {
-        container.innerHTML = '<p class="text-center">No products found</p>';
-        return;
-    }
-    
-    container.innerHTML = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Image</th>
-                    <th>SKU</th>
-                    <th>Name</th>
-                    <th>Price</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${products.map(product => `
-                    <tr>
-                        <td><img src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/50'}" class="thumbnail"></td>
-                        <td>${product.sku}</td>
-                        <td>${product.name}</td>
-                        <td>₦${product.price}</td>
-                        <td>${product.activityStatus}</td>
-                        <td>
-                            <button onclick="editProduct('${product.sku}')" class="btn-small">Edit</button>
-                            <button onclick="deleteProduct('${product.sku}')" class="btn-small" style="background: var(--primary-red);">Delete</button>
-                            ${product.paymentStatus !== 'paid' && auth.currentUser?.numberOfAdverts >= 2 ? 
-                                `<button onclick="payForAdvert('${product.sku}')" class="btn-small" style="background: green;">Pay</button>` : ''}
-                        </td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    `;
-}
 
 function filterUserProducts() {
     const searchTerm = document.getElementById('productSearch')?.value.toLowerCase() || '';
@@ -2944,27 +3313,159 @@ async function processPayment() {
 
 
 async function payForAdvert(sku) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.style.display = 'block';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <span class="close" onclick="this.parentElement.parentElement.remove()">&times;</span>
-            <h3>Pay for Advert</h3>
-            <div class="form-group">
-                <label for="paymentType">Payment Duration</label>
-                <select id="paymentType">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                </select>
+    try {
+        // Get product details
+        const product = await api.getProductBySku(sku);
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Check if product is already paid or active
+        if (product.paymentStatus === 'paid' && product.activityStatus === 'Active') {
+            alert('This product is already active with a paid advert.');
+            return;
+        }
+        
+        // Get payment rates
+        const rates = await paymentService.getPaymentRates();
+        
+        // Show payment options modal
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'block';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close" onclick="this.parentElement.parentElement.remove()">&times;</span>
+                <h3>Pay for Advert: ${product.name}</h3>
+                <p>Select a payment plan to activate your product:</p>
+                
+                <div class="payment-options" style="display: grid; gap: 15px; margin: 20px 0;">
+                    <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="processProductPayment('${sku}', 'daily', ${rates.daily})">
+                        <h4 style="color: var(--primary-purple);">Daily Advert</h4>
+                        <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.daily}</p>
+                        <p>Valid for 1 day</p>
+                    </div>
+                    
+                    <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="processProductPayment('${sku}', 'weekly', ${rates.weekly})">
+                        <h4 style="color: var(--primary-purple);">Weekly Advert</h4>
+                        <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.weekly}</p>
+                        <p>Valid for 7 days</p>
+                    </div>
+                    
+                    <div class="payment-option" style="border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer;" onclick="processProductPayment('${sku}', 'monthly', ${rates.monthly})">
+                        <h4 style="color: var(--primary-purple);">Monthly Advert</h4>
+                        <p style="font-size: 1.5rem; font-weight: bold;">₦${rates.monthly}</p>
+                        <p>Valid for 30 days</p>
+                    </div>
+                </div>
+                
+                <button onclick="this.parentElement.parentElement.remove()" class="btn" style="background: #666;">Cancel</button>
             </div>
-            <button onclick="processExistingPayment('${sku}')" class="btn">Pay Now</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
+        `;
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        console.error('Error in payForAdvert:', error);
+        alert('Error loading payment options: ' + error.message);
+    }
 }
 
+// New function to process product payment (similar to paid renewal)
+async function processProductPayment(sku, paymentType, amount) {
+    try {
+        // Close the modal
+        const modal = document.querySelector('.modal');
+        if (modal) modal.remove();
+        
+        // Get product details
+        const product = await api.getProductBySku(sku);
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Check if user is logged in
+        if (!auth.currentUser) {
+            alert('Please log in to continue');
+            showAuthForm('signin');
+            return;
+        }
+        
+        // Show loading notification
+        showNotification('Initializing payment...', 'info');
+        
+        // Initialize Paystack payment
+        await paymentService.initializePayment(
+            amount,
+            auth.currentUser.email,
+            paymentType,
+            { ...product, isPayment: true, sku: sku },
+            async (response) => {
+                // Payment success callback
+                console.log('Payment successful:', response);
+                
+                // Show processing notification
+                showNotification('Payment successful! Activating product...', 'info');
+                
+                // Activate the product with paid status
+                const now = new Date();
+                let endDate = new Date();
+                
+                switch(paymentType) {
+                    case 'daily':
+                        endDate.setDate(endDate.getDate() + 1);
+                        break;
+                    case 'weekly':
+                        endDate.setDate(endDate.getDate() + 7);
+                        break;
+                    case 'monthly':
+                        endDate.setMonth(endDate.getMonth() + 1);
+                        break;
+                }
+                
+                // Update product
+                await api.updateProduct(sku, {
+                    paymentStatus: 'paid',
+                    paymentType: paymentType,
+                    activityStatus: 'Active',
+                    endDate: endDate.toISOString(),
+                    dateAdvertised: now.toISOString()
+                });
+                
+                // Record the payment
+                await api.createPayment({
+                    productSKU: sku,
+                    userID: auth.currentUser.userId,
+                    payAmount: amount,
+                    reference: response.reference,
+                    paymentType: paymentType,
+                    paymentPurpose: 'new_payment'
+                });
+                
+                showNotification('✅ Product activated successfully!', 'success');
+                
+                // Refresh the dashboard
+                if (document.getElementById('userDashboardSection').classList.contains('active')) {
+                    await loadUserDashboard();
+                }
+                
+                // Update category counts
+                await updateCategoryCounts();
+            },
+            (error) => {
+                console.error('Payment failed:', error);
+                showNotification('❌ Payment failed: ' + error.message, 'error');
+            }
+        );
+        
+    } catch (error) {
+        console.error('Error in processProductPayment:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
+    }
+}
+
+/*
 async function processExistingPayment(sku) {
     const paymentType = document.getElementById('paymentType').value;
     
@@ -2978,6 +3479,7 @@ async function processExistingPayment(sku) {
     
     document.querySelector('.modal').remove();
 }
+*/
 
 async function editProduct(sku) {
     const products = await api.getAllProducts();
@@ -3548,54 +4050,6 @@ function attachAdminMenuListeners() {
     });
 }
 
-// Function to render the users table
-function renderUsersTable(users) {
-    const container = document.getElementById('usersTable');
-    if (!container) return;
-    
-    if (users.length === 0) {
-        container.innerHTML = '<p class="text-center">No users found</p>';
-        return;
-    }
-    
-    container.innerHTML = `
-        <table>
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Telephone</th>
-                    <th>Group</th>
-                    <th>Status</th>
-                    <th>Adverts</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${users.map(user => `
-                    <tr>
-                        <td>${user.userId}</td>
-                        <td>${user.firstName || ''} ${user.lastName || ''}</td>
-                        <td>${user.email || ''}</td>
-                        <td>${user.telephone || ''}</td>
-                        <td>${user.userGroup === 0 ? 'Admin' : 'Merchant'}</td>
-                        <td>${user.userActivityStatus === 1 ? 'Active' : 'Inactive'}</td>
-                        <td>${user.numberOfAdverts || 0}</td>
-                        <td>
-                            <button onclick="adminEditUser('${user.userId}')" class="btn-small">Edit</button>
-                            <button onclick="adminToggleUserStatus('${user.userId}')" class="btn-small" style="background: ${user.userActivityStatus === 1 ? 'orange' : 'green'}">
-                                ${user.userActivityStatus === 1 ? 'Deactivate' : 'Activate'}
-                            </button>
-                            ${user.userId !== 'admin01' ? 
-                                `<button onclick="adminDeleteUser('${user.userId}')" class="btn-small" style="background: var(--primary-red);">Delete</button>` : ''}
-                        </td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    `;
-}
 
 
 // Add this to your app.js - handles table scroll indicator
@@ -4150,7 +4604,10 @@ window.showAuthForm = showAuthForm;
 window.editProduct = editProduct;
 window.deleteProduct = deleteProduct;
 window.payForAdvert = payForAdvert;
-window.processExistingPayment = processExistingPayment;
+window.processExistingPayment = processExistingPayment; //new
+
+window.processProductPayment = processProductPayment;  // Add this line
+
 window.handleImageUpload = handleImageUpload;
 window.sendChatMessage = sendChatMessage;
 window.adminEditUser = adminEditUser;
@@ -4159,21 +4616,15 @@ window.adminDeleteUser = adminDeleteUser;
 window.adminToggleProductStatus = adminToggleProductStatus;
 window.adminDeleteProduct = adminDeleteProduct;
 window.exportPaymentsReport = exportPaymentsReport;
-
 window.selectPaymentType = selectPaymentType;
 window.closePaymentModal = closePaymentModal;
-
 window.performSearch = performSearch;
 window.clearSearch = clearSearch;
 window.closeMobileMenu = closeMobileMenu;
-
 window.goToHome = goToHome;
 window.createNewAd = createNewAd;
-
 window.removeImage = removeImage;
 window.resetUploadedImages = resetUploadedImages;
-
-// Make pagination functions globally available
 window.filterUserProducts = filterUserProducts;
 window.clearUserProductSearch = clearUserProductSearch;
 window.changeUserProductsPerPage = changeUserProductsPerPage;
@@ -4183,11 +4634,14 @@ window.changeAdminProductsPerPage = changeAdminProductsPerPage;
 window.filterPayments = filterPayments;
 window.clearPaymentSearch = clearPaymentSearch;
 window.changePaymentsPerPage = changePaymentsPerPage;
-// Make admin pagination functions globally available
 window.filterUsers = filterUsers;
 window.clearUserSearch = clearUserSearch;
 window.changeUsersPerPage = changeUsersPerPage;
 window.attachAdminMenuListeners = attachAdminMenuListeners;
-
-// Make function globally available
 window.initializeImageSlider = initializeImageSlider;
+
+window.renewProduct = renewProduct;
+window.processFreeRenewal = processFreeRenewal;
+window.processPaidRenewal = processPaidRenewal;
+window.showRenewalOptions = showRenewalOptions;
+
