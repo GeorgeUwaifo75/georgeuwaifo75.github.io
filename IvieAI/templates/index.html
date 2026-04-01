@@ -14,7 +14,29 @@
         </div>
 
         <div class="chat-panel">
-            <!-- Response area - displayed right above input box -->
+            <!-- Export Controls Bar -->
+            <div class="export-bar">
+                <div class="session-info">
+                    <span class="session-badge">💬 Session: <span id="sessionId">Loading...</span></span>
+                    <span class="interaction-badge">📝 Messages: <span id="interactionCount">0</span></span>
+                </div>
+                <div class="button-group">
+                    <button id="newSessionBtn" class="btn-secondary" title="Start a new conversation">
+                        🆕 New Chat
+                    </button>
+                    <button id="exportTextBtn" class="btn-export" title="Export as plain text">
+                        📄 Export Text
+                    </button>
+                    <button id="exportJsonBtn" class="btn-export" title="Export as JSON">
+                        📊 Export JSON
+                    </button>
+                    <button id="viewHistoryBtn" class="btn-secondary" title="View chat history">
+                        📚 History
+                    </button>
+                </div>
+            </div>
+
+            <!-- Response area -->
             <div class="response-area" id="responseArea">
                 <div class="response-label">
                     <i>🤖 Ivie says</i>
@@ -43,12 +65,33 @@
             </div>
             
             <div class="info-footer">
-                🧠 Powered by Hugging Face · Model: <strong>GeorgeUwaifo/ivie_gpt2_new01_results</strong>
+                🧠 Powered by Hugging Face · Model: <strong>GeorgeUwaifo/ivie_gpt2_new01c_results</strong>
                 <br>
                 <span class="server-status" id="serverStatus">● Server: Connected</span>
             </div>
         </div>
     </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📚 Chat History</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="sessionsList" class="sessions-list">
+                    <div class="loading-message">Loading sessions...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeHistoryBtn" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
