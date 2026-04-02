@@ -890,13 +890,9 @@ async trackWhatsAppClick(sku) {
     }
 
     // ============ PRODUCT METHODS ============
-/*
-    async getAllProducts(forceRefresh = false) {
-        return await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
-    }
-    */
-    
+
     // In api.js - Verify getAllProducts
+    /*
 async getAllProducts(forceRefresh = false) {
     const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
     
@@ -923,10 +919,40 @@ async getAllProducts(forceRefresh = false) {
         const products = await this.getAllProducts();
         return products.filter(p => p.sellerId === userId);
     }
+    */
+    
+async getAllProducts(forceRefresh = false) {
+    const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
+
+    if (!Array.isArray(products)) return [];
+
+    // Quick check: only normalise if at least one product is missing fields
+    const needsNormalise = products.some(p =>
+        !p.sku || !p.name || !p.description || p.price === undefined ||
+        !p.category || !Array.isArray(p.images) || !p.sellerId || !p.activityStatus || !p.paymentStatus
+    );
+
+    if (!needsNormalise) return products;   // Fast path — no extra object creation
+
+    return products.map(p => ({
+        sku:            p.sku            || '',
+        name:           p.name           || '',
+        description:    p.description    || '',
+        price:          p.price          || 0,
+        category:       p.category       || '',
+        images:         Array.isArray(p.images) ? p.images : [],
+        sellerId:       p.sellerId       || '',
+        activityStatus: p.activityStatus || 'Inactive',
+        paymentStatus:  p.paymentStatus  || 'free',
+        ...p    // preserve all other fields (overrides defaults for well-formed fields)
+    }));
+}
+    
 
     
     
 // Update getProductsByCategory to ensure only active, non-expired products
+/*
 async getProductsByCategory(category) {
     try {
         console.log(`🔍 Fetching products for category: "${category}"`);
@@ -964,7 +990,35 @@ async getProductsByCategory(category) {
         console.error('❌ Error in getProductsByCategory:', error);
         return [];
     }
+}*/
+
+async getProductsByCategory(category) {
+    try {
+        console.log(`🔍 Fetching products for category: "${category}"`);
+
+        // Use cached data — do NOT force-refresh or run expiry checks here.
+        // The periodic setInterval (every 30 min) handles expiry in the background.
+        const products = await this.getAllProducts();
+        console.log(`📦 Total products fetched: ${products.length}`);
+
+        const now = new Date();
+
+        const filtered = products.filter(p => {
+            const categoryMatch = p.category === category;
+            const isActive      = p.activityStatus === 'Active';
+            const notExpired    = !p.endDate || new Date(p.endDate) > now;
+            return categoryMatch && isActive && notExpired;
+        });
+
+        console.log(`✅ Found ${filtered.length} active products in category "${category}"`);
+        return filtered;
+
+    } catch (error) {
+        console.error('❌ Error in getProductsByCategory:', error);
+        return [];
+    }
 }
+
 
     async getProductBySku(sku) {
         const products = await this.getAllProducts();
