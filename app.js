@@ -125,6 +125,7 @@ function shouldSendEmailAlert(chatData) {
 // ============ SEARCH FUNCTIONALITY ============
 
 // Initialize search
+/*
 function initializeSearch() {
     console.log('Initializing search...');
     
@@ -156,6 +157,34 @@ function initializeSearch() {
         }, 400);
     });
 }
+*/
+
+function initializeSearch() {
+    console.log('Initializing search...');
+
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn   = document.getElementById('searchButton');
+
+    if (!searchInput || !searchBtn) return;
+
+    // Search on button click
+    searchBtn.addEventListener('click', performSearch);
+
+    // Search on Enter key
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    // Real-time search with a single debounced 'input' listener
+    // (the old code had TWO listeners attached here — one was removed)
+    searchInput.addEventListener('input', debounce(() => {
+        if (searchInput.value.trim().length >= 2) {
+            performSearch();
+        }
+    }, 500));
+}
+
+
 
 // Main search function
 async function performSearch() {
@@ -286,7 +315,8 @@ function createProductCard(product) {
         </div>
     `;
     
-    card.addEventListener('click', () => loadProductDetail(product.sku));
+    //card.addEventListener('click', () => loadProductDetail(product.sku));
+    card.addEventListener('click', () => loadProductDetail(product));
     return card;
 }
 
@@ -313,7 +343,8 @@ function createSearchResultCard(product, searchTerm) {
         </div>
     `;
     
-    card.addEventListener('click', () => loadProductDetail(product.sku));
+    //card.addEventListener('click', () => loadProductDetail(product.sku));
+    card.addEventListener('click', () => loadProductDetail(product));
     return card;
 }
 
@@ -1776,6 +1807,7 @@ async function loadProductsByCategory(category) {
 
 
 // Initialize image slider for mobile only - with bottom controls
+/*
 function initializeImageSlider(product) {
     // Only initialize on mobile
     if (window.innerWidth > 768) return;
@@ -2026,9 +2058,167 @@ function initializeImageSlider(product) {
     `;
     document.head.appendChild(style);
 }
+*/
+
+function initializeImageSlider(product) {
+    if (window.innerWidth > 768) return;
+
+    console.log('Initializing mobile slider for product:', product.sku);
+
+    const allImages = document.querySelectorAll('.product-image-item img');
+    allImages.forEach(img => {
+        img.style.opacity    = '1';
+        img.style.display    = 'block';
+        img.style.visibility = 'visible';
+    });
+
+    const controls = document.getElementById('sliderControls');
+    if (controls) {
+        controls.style.display = 'flex';
+    } else {
+        console.error('Slider controls element not found');
+        return;
+    }
+
+    const slider      = document.getElementById('productImageSlider');
+    const prevBtn     = document.getElementById('prevImage');
+    const nextBtn     = document.getElementById('nextImage');
+    const dots        = document.querySelectorAll('.slider-dot');
+    const positionSpan = document.getElementById('imagePosition');
+
+    if (!slider || !prevBtn || !nextBtn || !dots.length) {
+        console.error('Slider elements not found');
+        return;
+    }
+
+    let currentIndex      = 0;
+    const totalImages     = product.images.length;
+    let isProgrammaticScroll = false;
+    let isUpdatingFromButton = false;
+
+    function updateIndicators(index) {
+        dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+        if (positionSpan) positionSpan.textContent = `${index + 1}/${totalImages}`;
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === totalImages - 1;
+    }
+
+    function scrollToIndex(index, smooth = true) {
+        if (index < 0 || index >= totalImages) return;
+        const imageItems = slider.querySelectorAll('.product-image-item');
+        if (imageItems.length > index) {
+            isProgrammaticScroll = true;
+            imageItems[index].scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'center' });
+            currentIndex = index;
+            updateIndicators(index);
+            setTimeout(() => { isProgrammaticScroll = false; }, smooth ? 300 : 50);
+        }
+    }
+
+    prevBtn.addEventListener('click', () => {
+        isUpdatingFromButton = true;
+        if (currentIndex > 0) scrollToIndex(currentIndex - 1);
+        setTimeout(() => { isUpdatingFromButton = false; }, 300);
+    });
+
+    nextBtn.addEventListener('click', () => {
+        isUpdatingFromButton = true;
+        if (currentIndex < totalImages - 1) scrollToIndex(currentIndex + 1);
+        setTimeout(() => { isUpdatingFromButton = false; }, 300);
+    });
+
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', () => {
+            isUpdatingFromButton = true;
+            scrollToIndex(index);
+            setTimeout(() => { isUpdatingFromButton = false; }, 300);
+        });
+    });
+
+    function handleScrollEnd() {
+        if (isProgrammaticScroll || isUpdatingFromButton) return;
+        const imageItems   = slider.querySelectorAll('.product-image-item');
+        const sliderRect   = slider.getBoundingClientRect();
+        const centerPoint  = sliderRect.left + sliderRect.width / 2;
+        let closestIndex   = 0;
+        let closestDistance = Infinity;
+
+        imageItems.forEach((item, index) => {
+            const itemCenter = item.getBoundingClientRect().left + item.getBoundingClientRect().width / 2;
+            const distance   = Math.abs(itemCenter - centerPoint);
+            if (distance < closestDistance) { closestDistance = distance; closestIndex = index; }
+        });
+
+        if (closestIndex !== currentIndex) {
+            currentIndex = closestIndex;
+            updateIndicators(currentIndex);
+        }
+    }
+
+    if ('onscrollend' in slider) {
+        slider.addEventListener('scrollend', handleScrollEnd);
+    } else {
+        let scrollEndTimer;
+        slider.addEventListener('scroll', () => {
+            clearTimeout(scrollEndTimer);
+            scrollEndTimer = setTimeout(handleScrollEnd, 150);
+        });
+    }
+
+    // Touch swipe support
+    let touchStartX = 0, touchStartY = 0, isSwiping = false;
+    slider.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isSwiping   = false;
+    }, { passive: true });
+    slider.addEventListener('touchmove', (e) => {
+        const diffX = Math.abs(e.touches[0].clientX - touchStartX);
+        const diffY = Math.abs(e.touches[0].clientY - touchStartY);
+        if (diffX > diffY && diffX > 10) { isSwiping = true; e.preventDefault(); }
+    }, { passive: false });
+    slider.addEventListener('touchend', (e) => {
+        if (!isSwiping) return;
+        const diffX = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diffX) > 50) {
+            if (diffX > 0 && currentIndex < totalImages - 1) scrollToIndex(currentIndex + 1);
+            else if (diffX < 0 && currentIndex > 0) scrollToIndex(currentIndex - 1);
+        }
+        isSwiping = false;
+    });
+
+    const images = slider.querySelectorAll('.product-image-item img');
+    images.forEach(img => {
+        if (img.complete) img.classList.add('loaded');
+        else {
+            img.addEventListener('load',  () => img.classList.add('loaded'));
+            img.addEventListener('error', () => {
+                img.classList.add('error');
+                img.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+            });
+        }
+    });
+
+    updateIndicators(0);
+    setTimeout(() => scrollToIndex(0, false), 100);
+
+    // ── FIX: Inject slider style only ONCE (was injected on every open) ──
+    if (!document.getElementById('sliderStyle')) {
+        const style = document.createElement('style');
+        style.id    = 'sliderStyle';
+        style.textContent = `
+            @media (max-width: 768px) {
+                .product-images-grid { touch-action: pan-y pinch-zoom; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
 
 
 
+
+/*
 async function loadProductDetail(sku) {
     try {
         const products = await api.getAllProducts();
@@ -2270,6 +2460,216 @@ const imageGridHTML = product.images && product.images.length > 0
         alert('Error loading product details. Please try again.');
     }
 }
+*/
+async function loadProductDetail(skuOrProduct) {
+    try {
+        // ── A: Re-use already-loaded product data when possible ──
+        let product;
+        if (typeof skuOrProduct === 'object' && skuOrProduct !== null) {
+            product = skuOrProduct;          // zero extra network call
+        } else {
+            const products = await api.getAllProducts();
+            product = products.find(p => p.sku === skuOrProduct);
+        }
+
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+
+        const sku = product.sku;
+        window.currentProductSku = sku;
+
+        // ── B: Fetch seller AND mark chats read in PARALLEL ──────
+        const isOwner = auth.currentUser && auth.currentUser.userId === product.sellerId;
+
+        const [seller] = await Promise.all([
+            api.getUserByUserId(product.sellerId),
+            isOwner ? api.markChatAsRead(sku, auth.currentUser.userId) : Promise.resolve()
+        ]);
+
+        const detailContainer = document.getElementById('productDetail');
+
+        // Format dates
+        const advertisedDate = new Date(product.dateAdvertised).toLocaleDateString('en-NG', {
+            year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        const endDate = product.endDate
+            ? new Date(product.endDate).toLocaleDateString('en-NG', {
+                year: 'numeric', month: 'long', day: 'numeric'
+              })
+            : 'Not set';
+
+        // Calculate days remaining
+        let daysRemaining = 'N/A';
+        if (product.endDate) {
+            const remaining = Math.ceil(
+                (new Date(product.endDate) - new Date()) / (1000 * 60 * 60 * 24)
+            );
+            daysRemaining = remaining > 0 ? `${remaining} days` : 'Expired';
+        }
+
+        // Format seller phone for WhatsApp
+        const sellerPhone    = seller?.telephone || product.sellerContact || '';
+        const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
+
+        // Image grid / slider HTML
+        const imageGridHTML = product.images && product.images.length > 0
+            ? `
+        <div class="product-image-container">
+            <div class="product-images-grid" id="productImageSlider">
+                ${product.images.map((img, index) => `
+                    <div class="product-image-item" data-index="${index}"
+                         onclick="expandImage('${img}', ${JSON.stringify(product.images).replace(/"/g, '&quot;')}, ${index})">
+                        <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="mobile-slider-controls mobile-only" id="sliderControls" style="display: none;">
+                <div class="slider-dots" id="sliderDots">
+                    ${product.images.map((_, index) => `
+                        <button class="slider-dot ${index === 0 ? 'active' : ''}"
+                                data-index="${index}" aria-label="Go to image ${index + 1}"></button>
+                    `).join('')}
+                </div>
+                <div class="slider-nav-row">
+                    <button class="slider-nav-btn" id="prevImage" disabled aria-label="Previous image">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="image-counter-pill">
+                        <i class="fas fa-images"></i>
+                        <span id="imagePosition">1/${product.images.length}</span>
+                    </span>
+                    <button class="slider-nav-btn" id="nextImage" aria-label="Next image">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`
+            : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
+
+        detailContainer.innerHTML = `
+            <div class="product-detail-container">
+                <div class="product-header">
+                    <h2>${product.name}</h2>
+                    <p class="product-sku">SKU: ${product.sku}</p>
+                </div>
+
+                ${imageGridHTML}
+
+                <div class="product-info-grid">
+                    <div class="product-description">
+                        <h3>📝 Description</h3>
+                        <p>${product.description || 'No description provided.'}</p>
+                    </div>
+                    <div class="product-price-large">
+                        <h3>💰 Price</h3>
+                        <p class="price">₦${product.price.toLocaleString()}</p>
+                    </div>
+                </div>
+
+                <div class="product-meta">
+                    <div class="meta-item"><div class="meta-label">Category</div><div class="meta-value">${product.category}</div></div>
+                    <div class="meta-item"><div class="meta-label">Location</div><div class="meta-value">${product.state || 'Nigeria'}</div></div>
+                    <div class="meta-item"><div class="meta-label">Listed on</div><div class="meta-value">${advertisedDate}</div></div>
+                    <div class="meta-item"><div class="meta-label">Ad expires</div><div class="meta-value">${endDate}</div></div>
+                    <div class="meta-item"><div class="meta-label">Time remaining</div><div class="meta-value">${daysRemaining}</div></div>
+                    <div class="meta-item"><div class="meta-label">Views</div><div class="meta-value">${product.viewCount || 0}</div></div>
+                </div>
+
+                <div class="seller-info">
+                    <h3>👤 Seller Information</h3>
+                    <div class="seller-details">
+                        <div class="seller-detail-item">
+                            <i class="fas fa-user"></i>
+                            <span>${seller ? seller.firstName + ' ' + seller.lastName : product.sellerName || 'Unknown'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>${product.state || 'Nigeria'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-phone"></i>
+                            <span>${seller ? seller.telephone : product.sellerContact || 'N/A'}</span>
+                        </div>
+                        ${formattedPhone ? `
+                        <div class="seller-detail-item whatsapp-container">
+                            <a href="https://wa.me/${formattedPhone}?text=${encodeURIComponent(generateWhatsAppMessage(product, seller))}"
+                               target="_blank" class="whatsapp-btn">
+                                <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                            </a>
+                        </div>` : ''}
+                        <div class="seller-detail-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Member since: ${seller ? new Date(seller.dateOfRegistration).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        <div class="seller-detail-item">
+                            <i class="fas fa-tag"></i>
+                            <span>${product.paymentStatus === 'free' ? 'Free Advert' : 'Paid Advert'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${socialShare.createShareButtons(product)}
+
+                <div class="chat-section">
+                    <div class="chat-header">
+                        <h3>💬 Chat with Seller</h3>
+                        ${product.unreadChatCount > 0
+                            ? `<span class="chat-notification">${product.unreadChatCount} new</span>`
+                            : ''}
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        ${product.chats && product.chats.length > 0
+                            ? product.chats.map(chat => {
+                                const isOwn = chat.sender === auth.currentUser?.userId;
+                                return `
+                                    <div class="chat-message ${isOwn ? 'own-message' : 'other-message'}">
+                                        <div class="message-sender">${chat.senderName || chat.sender}</div>
+                                        <div>${chat.message}</div>
+                                        <div class="message-time">${new Date(chat.timestamp).toLocaleString()}</div>
+                                    </div>`;
+                              }).join('')
+                            : '<p style="text-align:center;color:#666;">No messages yet. Start a conversation!</p>'}
+                    </div>
+                    ${auth.currentUser ? `
+                        <div class="chat-input">
+                            <textarea id="chatMessageInput" placeholder="Type your message..." rows="2"></textarea>
+                            <button onclick="sendChatMessage('${product.sku}')">
+                                <i class="fas fa-paper-plane"></i> Send
+                            </button>
+                        </div>` : `
+                        <p style="text-align:center;color:#666;">
+                            Please <a href="#" onclick="showAuthForm('signin')">sign in</a> to chat with the seller.
+                        </p>`}
+                </div>
+            </div>
+        `;
+
+        // ── C: Show the page NOW — view-count write is fire-and-forget ──
+        showSection('productDetailSection');
+
+        // Non-blocking: increment view count in the background
+        api.updateProduct(sku, { viewCount: (product.viewCount || 0) + 1 })
+           .catch(e => console.warn('View count update failed (non-critical):', e));
+
+        // Initialise image slider / loading handlers
+        if (window.innerWidth <= 768) {
+            initializeImageSlider(product);
+            setTimeout(handleImageLoading, 50);
+            setTimeout(handleImageLoading, 500);
+        } else {
+            setTimeout(handleImageLoading, 50);
+        }
+
+    } catch (error) {
+        console.error('Error loading product detail:', error);
+        alert('Error loading product details. Please try again.');
+    }
+}
+
 
 
 // Function to handle image loading states
