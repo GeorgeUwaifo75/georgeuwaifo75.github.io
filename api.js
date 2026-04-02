@@ -913,13 +913,13 @@ async getAllProducts(forceRefresh = false) {
     }
     
     return [];
-}
+}*/
 
     async getProductsBySeller(userId) {
         const products = await this.getAllProducts();
         return products.filter(p => p.sellerId === userId);
     }
-    */
+    
     
 async getAllProducts(forceRefresh = false) {
     const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
