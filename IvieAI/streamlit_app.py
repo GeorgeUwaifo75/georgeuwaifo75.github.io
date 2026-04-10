@@ -169,7 +169,7 @@ def load_model():
     """Load the model with caching"""
     try:
         if not TOKEN:
-            st.error("HF_API_TOKEN not found. Please set it in environment variables.")
+            st.error("HF_TOKEN not found. Please set it in environment variables.")
             return None, None
         
         with st.spinner("Loading IvieAI model... This may take a few moments..."):
