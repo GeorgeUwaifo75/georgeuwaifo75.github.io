@@ -16,7 +16,8 @@ app = Flask(__name__)
 CORS(app)
 
 MODEL_ID = "GeorgeUwaifo/ivie_gpt2_new01c_results"
-TOKEN = os.getenv('HF_TOKEN')
+#TOKEN = os.getenv('HF_TOKEN')
+TOKEN = os.getenv('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')
 
 # Global variables for model and chat history
 model = None
