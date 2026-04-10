@@ -106,7 +106,7 @@ st.markdown("""
 
 # Model configuration
 MODEL_ID = os.getenv('MODEL_ID', "GeorgeUwaifo/ivie_gpt2_new01c_results")
-TOKEN = os.getenv('HF_API_TOKEN')
+TOKEN = os.getenv('HF_TOKEN')
 
 # Initialize session state
 if 'initialized' not in st.session_state:
