@@ -21,36 +21,37 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS with three theme colors (Green, Orange, Purple)
+# Custom CSS with three theme colors (Green, White, Blue)
 st.markdown("""
 <style>
-    /* Main background with gradient using the three colors */
+    /* Main background with gradient using Green, White, Blue */
     .stApp {
-        background: linear-gradient(135deg, #1a5d3c 0%, #e67e22 50%, #7b2d8e 100%);
+        background: linear-gradient(135deg, #0d6e2e 0%, #ffffff 50%, #1565c0 100%);
     }
     
     /* Header styling */
     .main-header {
         text-align: center;
         padding: 1.5rem;
-        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
+        background: linear-gradient(135deg, #0d6e2e 0%, #ffffff 50%, #1565c0 100%);
         border-radius: 15px;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     
     .main-header h1 {
-        color: white;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        color: #0d6e2e;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         margin: 0;
     }
     
     .main-header p {
-        color: rgba(255,255,255,0.9);
+        color: #1565c0;
         margin-top: 0.5rem;
+        font-weight: 500;
     }
     
-    /* Chat message styling with theme colors */
+    /* Chat message styling */
     .chat-message {
         padding: 1rem;
         border-radius: 0.5rem;
@@ -60,21 +61,21 @@ st.markdown("""
     }
     
     .user-message {
-        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-        border-left: 4px solid #e67e22;
+        background: linear-gradient(135deg, #0d6e2e 0%, #1b8c3a 100%);
+        border-left: 4px solid #1565c0;
         color: white;
     }
     
     .assistant-message {
-        background: linear-gradient(135deg, #9b59b6 0%, #7b2d8e 100%);
-        border-left: 4px solid #e67e22;
+        background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+        border-left: 4px solid #0d6e2e;
         color: white;
     }
     
     /* Button styling */
     .stButton button {
         width: 100%;
-        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
+        background: linear-gradient(135deg, #0d6e2e 0%, #1565c0 100%);
         color: white;
         border: none;
         padding: 0.5rem 1rem;
@@ -86,23 +87,23 @@ st.markdown("""
     .stButton button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        background: linear-gradient(135deg, #27ae60 0%, #d35400 50%, #8e44ad 100%);
+        background: linear-gradient(135deg, #0b5e25 0%, #0d47a1 100%);
     }
     
     /* Session card styling */
     .session-card {
-        background: linear-gradient(135deg, rgba(46,204,113,0.1) 0%, rgba(230,126,34,0.1) 50%, rgba(155,89,182,0.1) 100%);
+        background: linear-gradient(135deg, rgba(13,110,46,0.05) 0%, rgba(255,255,255,0.9) 50%, rgba(21,101,192,0.05) 100%);
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.5rem;
-        border: 1px solid #2ecc71;
+        border: 1px solid #0d6e2e;
         transition: all 0.3s ease;
     }
     
     .session-card:hover {
         transform: translateX(5px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        border-color: #9b59b6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-color: #1565c0;
     }
     
     /* Export buttons container */
@@ -114,7 +115,7 @@ st.markdown("""
     
     /* Metric card styling */
     .metric-card {
-        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
+        background: linear-gradient(135deg, #0d6e2e 0%, #1565c0 100%);
         color: white;
         padding: 1rem;
         border-radius: 0.5rem;
@@ -131,47 +132,52 @@ st.markdown("""
     }
     
     .status-online {
-        background-color: #2ecc71;
-        box-shadow: 0 0 5px #2ecc71;
+        background-color: #0d6e2e;
+        box-shadow: 0 0 5px #0d6e2e;
     }
     
     .status-offline {
-        background-color: #e67e22;
+        background-color: #1565c0;
     }
     
     /* Sidebar styling */
     .css-1d391kg, .css-12oz5g7 {
-        background: linear-gradient(180deg, rgba(46,204,113,0.05) 0%, rgba(230,126,34,0.05) 50%, rgba(155,89,182,0.05) 100%);
+        background: linear-gradient(180deg, rgba(13,110,46,0.05) 0%, rgba(255,255,255,0.95) 50%, rgba(21,101,192,0.05) 100%);
     }
     
     /* Chat input styling */
     .stChatInputContainer {
         border-radius: 10px;
-        border: 2px solid #e67e22;
+        border: 2px solid #0d6e2e;
+    }
+    
+    .stChatInputContainer:focus-within {
+        border-color: #1565c0;
+        box-shadow: 0 0 5px rgba(21,101,192,0.3);
     }
     
     /* Info box styling */
     .stAlert {
-        background: linear-gradient(135deg, rgba(46,204,113,0.9) 0%, rgba(230,126,34,0.9) 50%, rgba(155,89,182,0.9) 100%);
-        color: white;
-        border: none;
+        background: linear-gradient(135deg, rgba(13,110,46,0.1) 0%, rgba(255,255,255,0.9) 50%, rgba(21,101,192,0.1) 100%);
+        border-left: 4px solid #0d6e2e;
+        color: #0d6e2e;
     }
     
     /* Divider styling */
     hr {
-        border-color: #e67e22;
+        border-color: #1565c0;
         border-width: 2px;
     }
     
     /* Selectbox styling */
     .stSelectbox label {
-        color: #2ecc71;
+        color: #0d6e2e;
         font-weight: 500;
     }
     
     /* Headers in sidebar */
     .sidebar-header {
-        color: #9b59b6;
+        color: #1565c0;
         font-weight: bold;
         margin-top: 1rem;
         margin-bottom: 0.5rem;
@@ -179,32 +185,32 @@ st.markdown("""
     
     /* Session info bar */
     .session-info {
-        background: linear-gradient(135deg, rgba(46,204,113,0.15) 0%, rgba(230,126,34,0.15) 50%, rgba(155,89,182,0.15) 100%);
+        background: linear-gradient(135deg, rgba(13,110,46,0.1) 0%, rgba(255,255,255,0.95) 50%, rgba(21,101,192,0.1) 100%);
         padding: 0.5rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
-        border-left: 4px solid #e67e22;
+        border-left: 4px solid #0d6e2e;
     }
     
     .session-info small {
-        color: #2ecc71;
+        color: #0d6e2e;
     }
     
     /* Welcome message styling */
     .welcome-card {
-        background: linear-gradient(135deg, rgba(46,204,113,0.1) 0%, rgba(230,126,34,0.1) 50%, rgba(155,89,182,0.1) 100%);
+        background: linear-gradient(135deg, rgba(13,110,46,0.05) 0%, rgba(255,255,255,0.95) 50%, rgba(21,101,192,0.05) 100%);
         padding: 2rem;
         border-radius: 15px;
         text-align: center;
-        border: 1px solid #e67e22;
+        border: 1px solid #0d6e2e;
     }
     
     .welcome-card h3 {
-        color: #9b59b6;
+        color: #0d6e2e;
     }
     
     .welcome-card ul {
-        color: #2ecc71;
+        color: #1565c0;
         list-style-type: none;
         padding: 0;
     }
@@ -215,11 +221,46 @@ st.markdown("""
     
     /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        color: #2ecc71;
+        color: #0d6e2e;
     }
     
     .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
-        border-bottom-color: #e67e22;
+        border-bottom-color: #1565c0;
+    }
+    
+    /* Streamlit chat message custom styling */
+    [data-testid="stChatMessage"] {
+        background: transparent !important;
+    }
+    
+    /* Spinner styling */
+    .stSpinner > div {
+        border-top-color: #0d6e2e !important;
+        border-right-color: #1565c0 !important;
+        border-bottom-color: #0d6e2e !important;
+        border-left-color: #1565c0 !important;
+    }
+    
+    /* Success message styling */
+    .stSuccess {
+        background: linear-gradient(135deg, rgba(13,110,46,0.1) 0%, rgba(255,255,255,0.9) 50%, rgba(21,101,192,0.1) 100%);
+        border-left: 4px solid #0d6e2e;
+    }
+    
+    /* Error message styling */
+    .stError {
+        background: linear-gradient(135deg, rgba(13,110,46,0.1) 0%, rgba(255,255,255,0.9) 50%, rgba(21,101,192,0.1) 100%);
+        border-left: 4px solid #1565c0;
+    }
+    
+    /* Download button styling */
+    .stDownloadButton button {
+        background: linear-gradient(135deg, #0d6e2e 0%, #1565c0 100%);
+        color: white;
+    }
+    
+    .stDownloadButton button:hover {
+        background: linear-gradient(135deg, #0b5e25 0%, #0d47a1 100%);
     }
 </style>
 """, unsafe_allow_html=True)
