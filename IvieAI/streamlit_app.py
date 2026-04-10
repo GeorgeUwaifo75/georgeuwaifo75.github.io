@@ -21,19 +21,36 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS with three theme colors (Green, Orange, Purple)
 st.markdown("""
 <style>
+    /* Main background with gradient using the three colors */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1a5d3c 0%, #e67e22 50%, #7b2d8e 100%);
     }
+    
+    /* Header styling */
     .main-header {
         text-align: center;
-        padding: 1rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 10px;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
+        border-radius: 15px;
         margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
+    
+    .main-header h1 {
+        color: white;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        margin: 0;
+    }
+    
+    .main-header p {
+        color: rgba(255,255,255,0.9);
+        margin-top: 0.5rem;
+    }
+    
+    /* Chat message styling with theme colors */
     .chat-message {
         padding: 1rem;
         border-radius: 0.5rem;
@@ -41,52 +58,70 @@ st.markdown("""
         display: flex;
         flex-direction: column;
     }
+    
     .user-message {
-        background-color: #e3f2fd;
-        border-left: 4px solid #2196f3;
+        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        border-left: 4px solid #e67e22;
+        color: white;
     }
+    
     .assistant-message {
-        background-color: #f5f5f5;
-        border-left: 4px solid #9c27b0;
+        background: linear-gradient(135deg, #9b59b6 0%, #7b2d8e 100%);
+        border-left: 4px solid #e67e22;
+        color: white;
     }
+    
+    /* Button styling */
     .stButton button {
         width: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
         color: white;
         border: none;
         padding: 0.5rem 1rem;
         border-radius: 0.5rem;
         transition: all 0.3s ease;
+        font-weight: 500;
     }
+    
     .stButton button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        background: linear-gradient(135deg, #27ae60 0%, #d35400 50%, #8e44ad 100%);
     }
+    
+    /* Session card styling */
     .session-card {
-        background-color: white;
+        background: linear-gradient(135deg, rgba(46,204,113,0.1) 0%, rgba(230,126,34,0.1) 50%, rgba(155,89,182,0.1) 100%);
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.5rem;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #2ecc71;
         transition: all 0.3s ease;
     }
+    
     .session-card:hover {
         transform: translateX(5px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border-color: #667eea;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        border-color: #9b59b6;
     }
+    
+    /* Export buttons container */
     .export-buttons {
         display: flex;
         gap: 1rem;
         margin-top: 1rem;
     }
+    
+    /* Metric card styling */
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2ecc71 0%, #e67e22 50%, #9b59b6 100%);
         color: white;
         padding: 1rem;
         border-radius: 0.5rem;
         text-align: center;
     }
+    
+    /* Status indicators */
     .status-indicator {
         display: inline-block;
         width: 10px;
@@ -94,12 +129,97 @@ st.markdown("""
         border-radius: 50%;
         margin-right: 0.5rem;
     }
+    
     .status-online {
-        background-color: #4caf50;
-        box-shadow: 0 0 5px #4caf50;
+        background-color: #2ecc71;
+        box-shadow: 0 0 5px #2ecc71;
     }
+    
     .status-offline {
-        background-color: #f44336;
+        background-color: #e67e22;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg, .css-12oz5g7 {
+        background: linear-gradient(180deg, rgba(46,204,113,0.05) 0%, rgba(230,126,34,0.05) 50%, rgba(155,89,182,0.05) 100%);
+    }
+    
+    /* Chat input styling */
+    .stChatInputContainer {
+        border-radius: 10px;
+        border: 2px solid #e67e22;
+    }
+    
+    /* Info box styling */
+    .stAlert {
+        background: linear-gradient(135deg, rgba(46,204,113,0.9) 0%, rgba(230,126,34,0.9) 50%, rgba(155,89,182,0.9) 100%);
+        color: white;
+        border: none;
+    }
+    
+    /* Divider styling */
+    hr {
+        border-color: #e67e22;
+        border-width: 2px;
+    }
+    
+    /* Selectbox styling */
+    .stSelectbox label {
+        color: #2ecc71;
+        font-weight: 500;
+    }
+    
+    /* Headers in sidebar */
+    .sidebar-header {
+        color: #9b59b6;
+        font-weight: bold;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Session info bar */
+    .session-info {
+        background: linear-gradient(135deg, rgba(46,204,113,0.15) 0%, rgba(230,126,34,0.15) 50%, rgba(155,89,182,0.15) 100%);
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid #e67e22;
+    }
+    
+    .session-info small {
+        color: #2ecc71;
+    }
+    
+    /* Welcome message styling */
+    .welcome-card {
+        background: linear-gradient(135deg, rgba(46,204,113,0.1) 0%, rgba(230,126,34,0.1) 50%, rgba(155,89,182,0.1) 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        border: 1px solid #e67e22;
+    }
+    
+    .welcome-card h3 {
+        color: #9b59b6;
+    }
+    
+    .welcome-card ul {
+        color: #2ecc71;
+        list-style-type: none;
+        padding: 0;
+    }
+    
+    .welcome-card li {
+        margin: 0.5rem 0;
+    }
+    
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        color: #2ecc71;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+        border-bottom-color: #e67e22;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -473,15 +593,20 @@ def main():
     
     # Main chat area
     if not st.session_state.model_loaded:
-        st.info("👋 Welcome to IvieAI! Click 'Load Model' in the sidebar to start chatting.")
         st.markdown("""
-        ### Features:
-        - 💬 Natural conversations
-        - 📚 Multiple chat sessions
-        - 📤 Export chats as text, JSON, or CSV
-        - 🎨 Beautiful, responsive interface
-        - ⚡ Fast responses with proper formatting
-        """)
+        <div class="welcome-card">
+            <h3>👋 Welcome to IvieAI!</h3>
+            <p>Click 'Load Model' in the sidebar to start chatting.</p>
+            <h3>✨ Features:</h3>
+            <ul>
+                <li>💬 Natural conversations</li>
+                <li>📚 Multiple chat sessions</li>
+                <li>📤 Export chats as text, JSON, or CSV</li>
+                <li>🎨 Beautiful, responsive interface</li>
+                <li>⚡ Fast responses with proper formatting</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
     else:
         # Ensure current session exists
         if not st.session_state.current_session_id or st.session_state.current_session_id not in st.session_state.chat_sessions:
@@ -490,7 +615,7 @@ def main():
         # Display current session info
         current_session = st.session_state.chat_sessions[st.session_state.current_session_id]
         st.markdown(f"""
-        <div style="background-color: #f0f2f6; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+        <div class="session-info">
             <small>
                 <strong>Current Session:</strong> {current_session.session_id[:20]}... | 
                 <strong>Messages:</strong> {len(current_session.history)} | 
