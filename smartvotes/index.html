@@ -1,0 +1,852 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartVotes Network</title>
+  <meta name="description" content="SmartVotes Network – We create elections that breed smart leaders from smart people." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <!-- EmailJS -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getStorage, ref as storRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
+    window._firebaseStorage = { getStorage, storRef, uploadBytes, getDownloadURL };
+    window._firebaseApp = null;
+    window._firebaseStorageInstance = null;
+    document.dispatchEvent(new Event('firebaseModulesLoaded'));
+  </script>
+  <!-- App Config -->
+  <script src="config2.js"></script>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════ -->
+<header id="app-header">
+  <div class="header-brand" onclick="navigate('home')" style="cursor:pointer">
+    <div class="svn-logo"><span>SVN</span></div>
+    <div class="brand-text">
+      <span class="brand-name">SmartVotes Network</span>
+      <span class="brand-tagline">We create elections that breed smart leaders from smart people.</span>
+    </div>
+  </div>
+
+  <!-- Desktop Nav -->
+  <nav id="main-nav">
+    <a class="nav-link active" data-page="home"      onclick="navigate('home')">🏠 Home</a>
+    <a class="nav-link"       data-page="auth"       onclick="navigate('auth')" id="nav-signin">🔑 Sign In</a>
+    <a class="nav-link"       data-page="about"      onclick="navigate('about')">ℹ️ About</a>
+    <button id="user-menu-btn" class="hidden" onclick="toggleUserMenu()">
+      <div class="avatar" id="header-avatar">U</div>
+      <span id="header-username">User</span>
+      <span>▾</span>
+    </button>
+  </nav>
+
+  <!-- Hamburger — no inline onclick; bound in JS with touch+click to avoid 300ms delay -->
+  <button id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+</header>
+
+<!-- User Dropdown -->
+<div id="user-dropdown" class="hidden" style="position:fixed;top:76px;right:20px;z-index:1100;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.15);border:1px solid #dde6e0;min-width:200px;overflow:hidden;">
+  <div style="padding:14px 18px;border-bottom:1px solid #f0f4f2;">
+    <div style="font-weight:700;color:#1e2d27;font-size:0.9rem" id="dd-username">—</div>
+    <div style="font-size:0.75rem;color:#8fa89a" id="dd-role">—</div>
+  </div>
+  <a style="display:flex;align-items:center;gap:10px;padding:12px 18px;font-size:0.88rem;color:#1e2d27;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#f0f4f2'" onmouseout="this.style.background=''" onclick="navigate('dashboard')">📊 Dashboard</a>
+  <a style="display:flex;align-items:center;gap:10px;padding:12px 18px;font-size:0.88rem;color:#c0392b;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#f0f4f2'" onmouseout="this.style.background=''" onclick="logout()">🚪 Logout</a>
+</div>
+
+<!-- Mobile Nav -->
+<nav id="mobile-nav" aria-hidden="true">
+  <a class="nav-link" onclick="navigate('home');closeMobileNav()">🏠 Home</a>
+  <a class="nav-link" onclick="navigate('auth');closeMobileNav()" id="mob-signin">🔑 Sign In</a>
+  <a class="nav-link" onclick="navigate('about');closeMobileNav()">ℹ️ About</a>
+  <a class="nav-link hidden" id="mob-dashboard" onclick="navigate('dashboard');closeMobileNav()">📊 Dashboard</a>
+  <a class="nav-link hidden" id="mob-logout"    onclick="logout();closeMobileNav()" style="color:#ff8a80">🚪 Logout</a>
+</nav>
+<!-- Mobile Nav Backdrop — tapping outside the drawer closes it -->
+<div id="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+
+<!-- Sidebar Overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE CONTAINER
+════════════════════════════════════════════════════════ -->
+<main id="page-container">
+
+  <!-- ══════════ HOME PAGE ══════════ -->
+  <div class="page active" id="page-home">
+    <section id="home-hero">
+      <div class="hero-bg-shapes">
+        <div class="hero-shape hero-shape-1"></div>
+        <div class="hero-shape hero-shape-2"></div>
+        <div class="hero-shape hero-shape-3"></div>
+      </div>
+      <div class="hero-content">
+        <div class="hero-badge">🗳️ Trusted Digital Voting Platform</div>
+        <h1 class="hero-title">
+          Smart Elections<br/>for <span>Smart Leaders</span>
+        </h1>
+        <p class="hero-subtitle">
+          "We create elections that breed smart leaders from smart people."
+        </p>
+        <div class="hero-cta-group">
+          <button class="btn btn-primary btn-lg" onclick="navigate('auth')">🗳️ Get Started</button>
+          <button class="btn btn-outline btn-lg" onclick="navigate('about')">Learn More</button>
+        </div>
+      </div>
+      <div class="hero-stats" style="position:absolute;bottom:0;left:0;right:0;">
+        <div class="stat-item"><span class="stat-number" id="hs-elections">—</span><span class="stat-label">Elections Run</span></div>
+        <div class="stat-item"><span class="stat-number" id="hs-voters">—</span><span class="stat-label">Registered Voters</span></div>
+        <div class="stat-item"><span class="stat-number" id="hs-votes">—</span><span class="stat-label">Votes Cast</span></div>
+        <div class="stat-item"><span class="stat-number">100%</span><span class="stat-label">Secure & Private</span></div>
+      </div>
+    </section>
+
+    <section class="section" style="background:var(--white)">
+      <div class="section-inner">
+        <h2 class="section-title">Why <span>SmartVotes?</span></h2>
+        <p class="section-sub">A platform designed for transparency, security, and democratic excellence.</p>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3 class="feature-title">Secure Voting</h3>
+            <p class="feature-desc">End-to-end encrypted voting with email verification ensures every vote is authentic and counted once.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3 class="feature-title">Real-Time Results</h3>
+            <p class="feature-desc">Watch results come in live with dynamic charts and statistics the moment polls close.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3 class="feature-title">Rich Analytics</h3>
+            <p class="feature-desc">Export comprehensive reports in Excel, PDF, and CSV for thorough post-election analysis.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">👥</div>
+            <h3 class="feature-title">Multi-Role System</h3>
+            <p class="feature-desc">Separate admin and voter roles with tailored dashboards for each type of user.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📱</div>
+            <h3 class="feature-title">Mobile First</h3>
+            <p class="feature-desc">Fully responsive design ensures a perfect experience on any device — phone, tablet, or desktop.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">✅</div>
+            <h3 class="feature-title">Email Validation</h3>
+            <p class="feature-desc">Every voter is verified through a 5-digit code sent to their registered email address.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Active Elections Preview -->
+    <section class="section" style="background:var(--off-white)">
+      <div class="section-inner">
+        <h2 class="section-title">Active <span>Elections</span></h2>
+        <p class="section-sub">Current and upcoming elections open for participation.</p>
+        <div class="elections-grid" id="home-elections-grid">
+          <div class="empty-state">
+            <div class="empty-state-icon">🗳️</div>
+            <h3>No Active Elections</h3>
+            <p>Sign in to see elections available to you.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <!-- /HOME PAGE -->
+
+  <!-- ══════════ AUTH PAGE ══════════ -->
+  <div class="page" id="page-auth">
+    <div id="auth-page">
+      <div class="auth-bg-deco">
+        <div class="auth-deco-circle"></div>
+        <div class="auth-deco-circle"></div>
+        <div class="auth-deco-circle"></div>
+      </div>
+
+      <!-- Sign In / Register Card -->
+      <div class="auth-card" id="auth-main-card">
+        <div class="auth-logo-wrap">
+          <div class="svn-logo"><span>SVN</span></div>
+          <span class="auth-app-name">SmartVotes Network</span>
+          <p class="auth-sub">We create elections that breed smart leaders from smart people.</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-signin" onclick="switchAuthTab('signin')">Sign In</button>
+          <button class="auth-tab"        id="tab-register" onclick="switchAuthTab('register')">Register</button>
+        </div>
+
+        <!-- Sign In Form -->
+        <div class="auth-form active" id="form-signin">
+          <h2 class="form-title">Welcome back</h2>
+          <p class="form-desc">Sign in to your SmartVotes account.</p>
+          <div id="signin-alert"></div>
+          <div class="form-group">
+            <label class="form-label">Email Address <span class="req">*</span></label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">📧</span>
+              <input type="email" class="form-control" id="si-email" placeholder="your@email.com" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password <span class="req">*</span></label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">🔑</span>
+              <input type="password" class="form-control" id="si-password" placeholder="••••••••" />
+              <button class="toggle-pw" onclick="togglePw('si-password',this)" type="button">👁</button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full mt-16" id="btn-signin" onclick="doSignIn()">
+            Sign In
+          </button>
+          <p class="text-center mt-16" style="font-size:0.85rem;color:var(--gray-400)">
+            New here? <a onclick="switchAuthTab('register')" style="color:var(--green-mid);cursor:pointer;font-weight:600">Create an account</a>
+          </p>
+        </div>
+
+        <!-- Register Form -->
+        <div class="auth-form" id="form-register">
+          <h2 class="form-title">Create Account</h2>
+          <p class="form-desc">Join SmartVotes and participate in smart elections.</p>
+          <div id="register-alert"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Full Name <span class="req">*</span></label>
+              <input type="text" class="form-control" id="reg-name" placeholder="John Doe" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username <span class="req">*</span></label>
+              <input type="text" class="form-control" id="reg-username" placeholder="johndoe" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email Address <span class="req">*</span></label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">📧</span>
+              <input type="email" class="form-control" id="reg-email" placeholder="your@email.com" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Password <span class="req">*</span></label>
+              <div class="input-icon-wrap">
+                <span class="input-icon">🔑</span>
+                <input type="password" class="form-control" id="reg-password" placeholder="••••••••" />
+                <button class="toggle-pw" onclick="togglePw('reg-password',this)" type="button">👁</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm Password <span class="req">*</span></label>
+              <input type="password" class="form-control" id="reg-password2" placeholder="••••••••" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Gender <span class="req">*</span></label>
+              <select class="form-control" id="reg-gender">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Age <span class="req">*</span></label>
+              <input type="number" class="form-control" id="reg-age" placeholder="18" min="18" max="120" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number <span class="req">*</span></label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">📞</span>
+              <input type="tel" class="form-control" id="reg-phone" placeholder="+234 xxx xxxx xxxx" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address <span style="color:var(--gray-400);font-weight:400">(Optional)</span></label>
+            <input type="text" class="form-control" id="reg-address" placeholder="Your address..." />
+          </div>
+          <button class="btn btn-secondary btn-full mt-8" id="btn-register" onclick="doRegister()">
+            Create Account →
+          </button>
+          <p class="text-center mt-16" style="font-size:0.85rem;color:var(--gray-400)">
+            Already have an account? <a onclick="switchAuthTab('signin')" style="color:var(--purple-mid);cursor:pointer;font-weight:600">Sign in</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Validation Code Card -->
+      <div class="auth-card hidden" id="auth-validate-card">
+        <div class="auth-logo-wrap">
+          <div style="font-size:3rem">📬</div>
+          <span class="auth-app-name">Verify Your Email</span>
+          <p class="auth-sub" id="validate-hint">We sent a 5-digit code to your email. Enter it below to activate your account.</p>
+        </div>
+        <div id="validate-alert"></div>
+        <div class="code-inputs">
+          <input class="code-input" type="text" maxlength="1" id="vc0" oninput="codeNext(this,1)" />
+          <input class="code-input" type="text" maxlength="1" id="vc1" oninput="codeNext(this,2)" onkeydown="codePrev(event,0)" />
+          <input class="code-input" type="text" maxlength="1" id="vc2" oninput="codeNext(this,3)" onkeydown="codePrev(event,1)" />
+          <input class="code-input" type="text" maxlength="1" id="vc3" oninput="codeNext(this,4)" onkeydown="codePrev(event,2)" />
+          <input class="code-input" type="text" maxlength="1" id="vc4" onkeydown="codePrev(event,3)" />
+        </div>
+        <button class="btn btn-primary btn-full" id="btn-validate" onclick="doValidateCode()">Verify Email</button>
+        <p class="text-center mt-16" style="font-size:0.83rem;color:var(--gray-400)">
+          Didn't receive a code? <a id="resend-link" onclick="resendValidationCode()" style="color:var(--green-mid);cursor:pointer;font-weight:600">Resend</a>
+        </p>
+        <button class="btn btn-ghost btn-full mt-8" onclick="backToSignIn()">← Back to Sign In</button>
+      </div>
+    </div>
+  </div>
+  <!-- /AUTH PAGE -->
+
+  <!-- ══════════ ABOUT PAGE ══════════ -->
+  <div class="page" id="page-about">
+    <div class="about-hero">
+      <h1 class="about-hero-title">About SmartVotes Network</h1>
+      <p class="about-hero-sub">"We create elections that breed smart leaders from smart people."</p>
+    </div>
+
+    <div class="about-section" style="background:var(--white)">
+      <div class="about-grid">
+        <div class="about-text-block">
+          <h2>What is <span>SmartVotes?</span></h2>
+          <p>SmartVotes Network is a cutting-edge digital election management platform designed to bring transparency, fairness, and security to the electoral process — whether for organizations, institutions, or communities.</p>
+          <p>We believe that the quality of leadership is directly tied to the quality of the election process. Our platform ensures every vote counts, every candidate is fairly represented, and every result is verifiable.</p>
+          <p>With real-time result visualization, email-verified voters, and comprehensive reporting tools, SmartVotes is the complete solution for modern democratic processes.</p>
+        </div>
+        <div class="about-visual">
+          <div class="svn-logo about-logo-lg" style="width:100px;height:100px;font-size:22px;"><span>SVN</span></div>
+          <h3>SmartVotes Network</h3>
+          <p>"We create elections that breed smart leaders from smart people."</p>
+          <div style="margin-top:20px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+            <span class="badge badge-green">✓ Secure</span>
+            <span class="badge badge-purple">✓ Transparent</span>
+            <span class="badge badge-success">✓ Verified</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-section" style="background:var(--gray-100)">
+      <div class="section-inner">
+        <h2 class="section-title">Our <span>Mission</span></h2>
+        <p class="section-sub">Built on the pillars of democratic integrity</p>
+        <div class="mission-cards">
+          <div class="mission-card">
+            <div class="icon">🎯</div>
+            <h4>Accuracy</h4>
+            <p>Every vote is counted once and only once, ensuring perfectly accurate results every time.</p>
+          </div>
+          <div class="mission-card">
+            <div class="icon">🔐</div>
+            <h4>Security</h4>
+            <p>Multi-layer verification protects the integrity of every election from fraud and manipulation.</p>
+          </div>
+          <div class="mission-card">
+            <div class="icon">🌍</div>
+            <h4>Accessibility</h4>
+            <p>Vote from any device, anywhere, at any time during the election period.</p>
+          </div>
+          <div class="mission-card">
+            <div class="icon">📈</div>
+            <h4>Transparency</h4>
+            <p>Complete audit trails and exportable reports ensure full transparency of the electoral process.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-section" style="background:var(--white)">
+      <div class="section-inner text-center">
+        <h2 class="section-title">Ready to <span>Vote Smart?</span></h2>
+        <p class="section-sub">Join thousands of users making their voices heard through SmartVotes.</p>
+        <button class="btn btn-primary btn-lg" onclick="navigate('auth')">Get Started Today →</button>
+      </div>
+    </div>
+  </div>
+  <!-- /ABOUT PAGE -->
+
+  <!-- ══════════ DASHBOARD PAGE ══════════ -->
+  <div class="page" id="page-dashboard">
+    <div id="dashboard-page">
+      <!-- Sidebar -->
+      <aside class="sidebar" id="app-sidebar">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="sb-avatar">U</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="sb-username">User</div>
+            <div class="sidebar-role" id="sb-role">Voter</div>
+          </div>
+        </div>
+
+        <!-- Admin Menu -->
+        <div id="admin-sidebar-menu" class="hidden">
+          <div class="sidebar-section-label">Administration</div>
+          <div class="sidebar-link active" data-panel="admin-overview"   onclick="showPanel('admin-overview')">  <span class="si">📊</span> Dashboard</div>
+          <div class="sidebar-link" data-panel="admin-elections"  onclick="showPanel('admin-elections')"> <span class="si">🗳️</span> Elections</div>
+          <div class="sidebar-link" data-panel="admin-categories" onclick="showPanel('admin-categories')"><span class="si">📂</span> Categories</div>
+          <div class="sidebar-link" data-panel="admin-candidates" onclick="showPanel('admin-candidates')"><span class="si">👤</span> Candidates</div>
+          <div class="sidebar-link" data-panel="admin-users"      onclick="showPanel('admin-users')">     <span class="si">👥</span> Users</div>
+          <div class="sidebar-link" data-panel="admin-results"    onclick="showPanel('admin-results')">   <span class="si">📈</span> Results</div>
+          <div class="sidebar-section-label">Tools</div>
+          <div class="sidebar-link" onclick="adminTestElection()"><span class="si">🧪</span> Test Election</div>
+          <div class="sidebar-link" onclick="adminClearTest()">   <span class="si">🧹</span> Clear Test</div>
+          <div class="sidebar-section-label">Account</div>
+          <div class="sidebar-link" onclick="logout()"><span class="si">🚪</span> Logout</div>
+        </div>
+
+        <!-- Voter Menu -->
+        <div id="voter-sidebar-menu" class="hidden">
+          <div class="sidebar-section-label">Voting</div>
+          <div class="sidebar-link active" data-panel="voter-elections" onclick="showPanel('voter-elections')"><span class="si">🗳️</span> Elections</div>
+          <div class="sidebar-link" data-panel="voter-history"   onclick="showPanel('voter-history')">  <span class="si">📋</span> My Votes</div>
+          <div class="sidebar-link" data-panel="voter-results"   onclick="showPanel('voter-results')">  <span class="si">📊</span> Results</div>
+          <div class="sidebar-section-label">Account</div>
+          <div class="sidebar-link" onclick="logout()"><span class="si">🚪</span> Logout</div>
+        </div>
+      </aside>
+
+      <!-- Main Area -->
+      <div class="dash-main">
+
+        <!-- ── ADMIN: Overview ── -->
+        <div class="dash-panel active" id="panel-admin-overview">
+          <div class="dash-header">
+            <h1 class="dash-title">Admin <span>Dashboard</span></h1>
+            <span id="admin-date" style="font-size:0.85rem;color:var(--gray-400)"></span>
+          </div>
+          <div class="stat-cards" id="admin-stat-cards">
+            <div class="stat-card"><div class="stat-card-icon green">🗳️</div><div><div class="stat-card-value" id="sc-elections">0</div><div class="stat-card-label">Elections</div></div></div>
+            <div class="stat-card"><div class="stat-card-icon purple">👥</div><div><div class="stat-card-value" id="sc-voters">0</div><div class="stat-card-label">Registered Voters</div></div></div>
+            <div class="stat-card"><div class="stat-card-icon blue">✅</div><div><div class="stat-card-value" id="sc-votes">0</div><div class="stat-card-label">Votes Cast</div></div></div>
+            <div class="stat-card"><div class="stat-card-icon orange">👤</div><div><div class="stat-card-value" id="sc-candidates">0</div><div class="stat-card-label">Candidates</div></div></div>
+          </div>
+          <div class="table-wrap">
+            <div style="padding:20px;border-bottom:1px solid var(--gray-200)">
+              <h3 style="font-family:var(--font-display);font-size:1.1rem;color:var(--gray-800)">Recent Elections</h3>
+            </div>
+            <table id="overview-elections-table">
+              <thead><tr><th>Title</th><th>Start</th><th>End</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="overview-elections-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── ADMIN: Elections ── -->
+        <div class="dash-panel" id="panel-admin-elections">
+          <div class="dash-header">
+            <h1 class="dash-title">Elections <span>Management</span></h1>
+            <button class="btn btn-primary btn-sm" onclick="openElectionModal()">＋ New Election</button>
+          </div>
+          <div class="table-wrap">
+            <div class="table-toolbar">
+              <div class="table-search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" placeholder="Search elections…" oninput="filterTable(this,'elections-tbody')" />
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>Image</th><th>Title</th><th>Start</th><th>End</th><th>Status</th><th>View</th><th>Actions</th></tr></thead>
+              <tbody id="elections-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── ADMIN: Categories ── -->
+        <div class="dash-panel" id="panel-admin-categories">
+          <div class="dash-header">
+            <h1 class="dash-title">Election <span>Categories</span></h1>
+            <button class="btn btn-primary btn-sm" onclick="openCategoryModal()">＋ New Category</button>
+          </div>
+          <div class="mb-16">
+            <label class="form-label">Select Election Event</label>
+            <select class="form-control" id="cat-election-filter" onchange="loadCategories()" style="max-width:320px">
+              <option value="">— Choose Election —</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Category Name</th><th>Description</th><th>Election</th><th>Actions</th></tr></thead>
+              <tbody id="categories-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── ADMIN: Candidates ── -->
+        <div class="dash-panel" id="panel-admin-candidates">
+          <div class="dash-header">
+            <h1 class="dash-title">Candidates <span>Management</span></h1>
+            <button class="btn btn-primary btn-sm" onclick="openCandidateModal()">＋ Add Candidate</button>
+          </div>
+          <div class="flex gap-12 mb-16 flex-wrap">
+            <div>
+              <label class="form-label">Filter by Election</label>
+              <select class="form-control" id="cand-election-filter" onchange="loadCandidates()" style="min-width:220px">
+                <option value="">— All Elections —</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Filter by Category</label>
+              <select class="form-control" id="cand-category-filter" onchange="loadCandidates()" style="min-width:200px">
+                <option value="">— All Categories —</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Photo</th><th>Full Name</th><th>Category</th><th>Election</th><th>Actions</th></tr></thead>
+              <tbody id="candidates-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── ADMIN: Users ── -->
+        <div class="dash-panel" id="panel-admin-users">
+          <div class="dash-header">
+            <h1 class="dash-title">User <span>Management</span></h1>
+          </div>
+          <div class="table-wrap">
+            <div class="table-toolbar">
+              <div class="table-search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" placeholder="Search users…" oninput="filterTable(this,'users-tbody')" />
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Gender</th><th>Age</th><th>Phone</th><th>Validated</th><th>Role</th><th>Actions</th></tr></thead>
+                <tbody id="users-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ADMIN: Results ── -->
+        <div class="dash-panel" id="panel-admin-results">
+          <div class="dash-header">
+            <h1 class="dash-title">Election <span>Results</span></h1>
+          </div>
+          <div class="mb-16">
+            <label class="form-label">Select Election to View Results</label>
+            <select class="form-control" id="result-election-select" onchange="loadResults()" style="max-width:340px">
+              <option value="">— Choose Election —</option>
+            </select>
+          </div>
+          <div id="results-content">
+            <div class="empty-state"><div class="empty-state-icon">📊</div><h3>Select an Election</h3><p>Choose an election above to view its results.</p></div>
+          </div>
+        </div>
+
+        <!-- ── VOTER: Elections ── -->
+        <div class="dash-panel" id="panel-voter-elections">
+          <div class="dash-header">
+            <h1 class="dash-title">Available <span>Elections</span></h1>
+          </div>
+          <div class="elections-grid" id="voter-elections-grid">
+            <div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No Elections Available</h3><p>Check back later for active elections.</p></div>
+          </div>
+        </div>
+
+        <!-- ── VOTER: My Votes ── -->
+        <div class="dash-panel" id="panel-voter-history">
+          <div class="dash-header">
+            <h1 class="dash-title">My <span>Voting History</span></h1>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Election</th><th>Category</th><th>Candidate Voted</th><th>Date</th></tr></thead>
+              <tbody id="voter-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── VOTER: Results ── -->
+        <div class="dash-panel" id="panel-voter-results">
+          <div class="dash-header">
+            <h1 class="dash-title">Election <span>Results</span></h1>
+          </div>
+          <div class="mb-16">
+            <label class="form-label">Select Completed Election</label>
+            <select class="form-control" id="voter-result-select" onchange="loadVoterResults()" style="max-width:340px">
+              <option value="">— Choose Election —</option>
+            </select>
+          </div>
+          <div id="voter-results-content">
+            <div class="empty-state"><div class="empty-state-icon">📊</div><h3>Select an Election</h3><p>Results are only visible after an election has ended.</p></div>
+          </div>
+        </div>
+
+      </div><!-- /dash-main -->
+    </div><!-- /dashboard-page -->
+  </div>
+  <!-- /DASHBOARD PAGE -->
+
+</main>
+
+<!-- ═══════════════════════════════════
+     FOOTER
+═══════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="svn-logo"><span>SVN</span></div>
+      <span class="footer-brand-name">SmartVotes Network</span>
+    </div>
+    <p class="footer-tagline">"We create elections that breed smart leaders from smart people."</p>
+    <div class="footer-links">
+      <a href="mailto:geocorpsys@gmail.com">📧 geocorpsys@gmail.com</a>
+      <a href="tel:+2349038197586">📞 090 38 1975 86</a>
+    </div>
+    <div class="footer-divider"></div>
+    <p class="footer-copy">© 2026 SmartVotes Network. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════
+     MODALS
+═══════════════════════════════════ -->
+
+<!-- Election Modal -->
+<div class="modal-overlay" id="modal-election">
+  <div class="modal-box modal-box-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="election-modal-title">New Election Event</h2>
+      <button class="modal-close" onclick="closeModal('modal-election')">✕</button>
+    </div>
+    <div id="election-form-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Election Title <span class="req">*</span></label>
+      <input type="text" class="form-control" id="el-title" placeholder="e.g. 2026 Student Union Election" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start Date & Time <span class="req">*</span></label>
+        <input type="datetime-local" class="form-control" id="el-start" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Date & Time <span class="req">*</span></label>
+        <input type="datetime-local" class="form-control" id="el-end" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-control" id="el-desc" rows="3" placeholder="Describe this election event…"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">View Status</label>
+        <select class="form-control" id="el-view-status">
+          <option value="hidden">Hidden</option>
+          <option value="visible">Visible</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-control" id="el-status">
+          <option value="upcoming">Upcoming</option>
+          <option value="active">Active</option>
+          <option value="ended">Ended</option>
+          <option value="test">Test</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Election Image</label>
+      <div class="upload-zone" id="el-img-zone" onclick="document.getElementById('el-img-input').click()">
+        <div class="upload-zone-icon">🖼️</div>
+        <p><strong>Click to upload</strong> or drag & drop</p>
+        <p>PNG, JPG up to 5MB</p>
+        <input type="file" id="el-img-input" accept="image/*" onchange="previewUpload(this,'el-img-preview','el-img-zone')" />
+      </div>
+      <div id="el-img-preview" class="hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-election')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-election" onclick="saveElection()">Save Election</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal-overlay" id="modal-category">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="cat-modal-title">New Category</h2>
+      <button class="modal-close" onclick="closeModal('modal-category')">✕</button>
+    </div>
+    <div id="cat-form-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Election Event <span class="req">*</span></label>
+      <select class="form-control" id="cat-election-id">
+        <option value="">— Select Election —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category Name <span class="req">*</span></label>
+      <input type="text" class="form-control" id="cat-name" placeholder="e.g. President, Vice President…" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-control" id="cat-desc" rows="2" placeholder="Describe this contested role…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-category')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-category" onclick="saveCategory()">Save Category</button>
+    </div>
+  </div>
+</div>
+
+<!-- Candidate Modal -->
+<div class="modal-overlay" id="modal-candidate">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="cand-modal-title">Add Candidate</h2>
+      <button class="modal-close" onclick="closeModal('modal-candidate')">✕</button>
+    </div>
+    <div id="cand-form-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Full Name <span class="req">*</span></label>
+      <input type="text" class="form-control" id="cand-name" placeholder="Candidate's full name" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Election Event <span class="req">*</span></label>
+      <select class="form-control" id="cand-election-id" onchange="populateCandidateCats()">
+        <option value="">— Select Election —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category Contested <span class="req">*</span></label>
+      <select class="form-control" id="cand-category-id">
+        <option value="">— Select Category —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Candidate Photo</label>
+      <div class="upload-zone" id="cand-photo-zone" onclick="document.getElementById('cand-photo-input').click()">
+        <div class="upload-zone-icon">📷</div>
+        <p><strong>Click to upload</strong> photo</p>
+        <p>PNG, JPG up to 5MB</p>
+        <input type="file" id="cand-photo-input" accept="image/*" onchange="previewUpload(this,'cand-photo-preview','cand-photo-zone')" />
+      </div>
+      <div id="cand-photo-preview" class="hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-candidate')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-candidate" onclick="saveCandidate()">Save Candidate</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Edit Modal -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title">Edit User</h2>
+      <button class="modal-close" onclick="closeModal('modal-user')">✕</button>
+    </div>
+    <div id="user-form-alert"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Full Name</label><input type="text" class="form-control" id="eu-name" /></div>
+      <div class="form-group"><label class="form-label">Username</label><input type="text" class="form-control" id="eu-username" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-control" id="eu-email" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Gender</label><select class="form-control" id="eu-gender"><option value="Male">Male</option><option value="Female">Female</option></select></div>
+      <div class="form-group"><label class="form-label">Age</label><input type="number" class="form-control" id="eu-age" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-control" id="eu-phone" /></div>
+      <div class="form-group"><label class="form-label">Validated</label><select class="form-control" id="eu-validated"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Role</label><select class="form-control" id="eu-role"><option value="voter">Voter</option><option value="admin">Admin</option></select></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUserEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-box" style="max-width:420px;text-align:center">
+    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+    <h2 class="modal-title" id="confirm-title" style="text-align:center;margin-bottom:12px">Confirm Action</h2>
+    <p class="confirm-msg" id="confirm-msg">Are you sure you want to proceed?</p>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vote Modal -->
+<div class="modal-overlay" id="modal-vote">
+  <div class="modal-box modal-box-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="vote-modal-title">Cast Your Vote</h2>
+      <button class="modal-close" onclick="closeModal('modal-vote')">✕</button>
+    </div>
+    <div id="vote-alert"></div>
+    <div id="vote-categories-area"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-vote')">Cancel</button>
+      <button class="btn btn-primary" id="btn-submit-votes" onclick="submitVotes()">🗳️ Submit Votes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test Election Picker Modal -->
+<div class="modal-overlay" id="modal-test-election">
+  <div class="modal-box" style="max-width:440px">
+    <div class="modal-header">
+      <h2 class="modal-title">Test Election</h2>
+      <button class="modal-close" onclick="closeModal('modal-test-election')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Select Election to Test</label>
+      <select class="form-control" id="test-election-select">
+        <option value="">— Choose Election —</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-test-election')">Cancel</button>
+      <button class="btn btn-warning" style="background:var(--warning);color:#fff" onclick="runTestElection()">🧪 Run Test</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- App Script -->
+<script src="app.js"></script>
+</body>
+</html>
+
