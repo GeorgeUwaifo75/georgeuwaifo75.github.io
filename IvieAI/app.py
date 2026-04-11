@@ -1,5 +1,4 @@
-# app_local.py
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
@@ -7,6 +6,7 @@ import re
 import os
 import json
 import io
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,7 +16,8 @@ app = Flask(__name__)
 CORS(app)
 
 MODEL_ID = "GeorgeUwaifo/ivie_gpt2_new01c_results"
-TOKEN = os.getenv('HF_TOKEN')
+TOKEN = os.getenv('HF_API_TOKEN')
+
 
 # Global variables for model and chat history
 model = None
@@ -165,7 +166,6 @@ def clean_and_format_response(full_response, user_message):
     
     # If still empty or invalid, try to find the first sentence after any colon
     if not ai_response or len(ai_response) < 3:
-        # Look for content after a colon on a new line or at start
         colon_patterns = [
             r'### Response:\s*(.+?)(?=\n\n|$)',
             r'Response:\s*(.+?)(?=\n\n|$)',
@@ -214,13 +214,119 @@ def clean_and_format_response(full_response, user_message):
         return "I'm here to chat! Could you rephrase that?"
     
     return ai_response
-    
+
+def split_into_sentences(text):
+    """Split response text into individual sentences for streaming."""
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    return [s.strip() for s in sentences if s.strip()]
+
+def generate_ai_response(user_message):
+    """Run model inference and return cleaned response string."""
+    inputs = tokenizer(user_message, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=150,
+            temperature=0.85,
+            top_p=0.9,
+            do_sample=True,
+            repetition_penalty=1.1,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            early_stopping=True
+        )
+    full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return clean_and_format_response(full_response, user_message)
+
+
+# ─────────────────────────────────────────────
+# Routes
+# ─────────────────────────────────────────────
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
+
+@app.route('/chat/stream', methods=['GET'])
+def chat_stream():
+    """
+    Server-Sent Events endpoint.
+    Streams the AI response sentence-by-sentence so the frontend
+    can display each sentence with a fun animation.
+
+    Query params:
+        message    – the user's text
+        session_id – (optional) existing session id
+    """
+    global model, tokenizer, current_session_id, chat_sessions
+
+    if model is None:
+        def error_stream():
+            yield f"data: {json.dumps({'error': 'Model not loaded'})}\n\n"
+        return Response(stream_with_context(error_stream()),
+                        mimetype='text/event-stream')
+
+    user_message = request.args.get('message', '').strip()
+    session_id   = request.args.get('session_id', None)
+
+    if not user_message:
+        def empty_stream():
+            yield f"data: {json.dumps({'error': 'Empty message'})}\n\n"
+        return Response(stream_with_context(empty_stream()),
+                        mimetype='text/event-stream')
+
+    # Resolve / create session
+    if session_id and session_id in chat_sessions:
+        session = chat_sessions[session_id]
+    else:
+        session = ChatSession()
+        chat_sessions[session.session_id] = session
+
+    current_session_id = session.session_id
+
+    def event_stream():
+        try:
+            # 1. Yield a "thinking" signal so the UI can show a loader
+            yield f"data: {json.dumps({'type': 'thinking', 'session_id': session.session_id})}\n\n"
+
+            # 2. Run inference (blocking – fine for a local single-user server)
+            ai_response = generate_ai_response(user_message)
+
+            # 3. Split into sentences and stream each one
+            sentences = split_into_sentences(ai_response)
+            for idx, sentence in enumerate(sentences):
+                payload = {
+                    'type':      'sentence',
+                    'index':     idx,
+                    'text':      sentence,
+                    'is_last':   idx == len(sentences) - 1,
+                    'session_id': session.session_id
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                # Small delay between sentences for dramatic effect
+                time.sleep(0.35)
+
+            # 4. Save to history & send a "done" event
+            session.add_interaction(user_message, ai_response)
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session.session_id, 'interaction_count': len(session.history)})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:150]})}\n\n"
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'   # disable nginx buffering if behind a proxy
+        }
+    )
+
+
 @app.route('/chat', methods=['POST'])
 def chat():
+    """Legacy non-streaming endpoint (kept for backward compatibility)."""
     global model, tokenizer, current_session_id, chat_sessions
     
     if model is None:
@@ -234,7 +340,6 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Please enter a message'}), 400
         
-        # Get or create session
         if session_id and session_id in chat_sessions:
             session = chat_sessions[session_id]
         else:
@@ -243,32 +348,9 @@ def chat():
         
         current_session_id = session.session_id
         
-        print(f"📝 Processing: {user_message[:50]}... (Session: {session.session_id})")
-        
-        # Tokenize input with padding
-        inputs = tokenizer(user_message, return_tensors="pt", padding=True)
-        
-        # Generate response
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=150,
-                temperature=0.85,
-                top_p=0.9,
-                do_sample=True,
-                repetition_penalty=1.1,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                early_stopping=True
-            )
-        
-        full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        ai_response = clean_and_format_response(full_response, user_message)
-        
-        # Add to chat history
+        ai_response = generate_ai_response(user_message)
         session.add_interaction(user_message, ai_response)
         
-        print(f"🤖 Response: {ai_response}")
         return jsonify({
             'response': ai_response,
             'session_id': session.session_id,
@@ -276,12 +358,11 @@ def chat():
         })
         
     except Exception as e:
-        print(f"Error: {str(e)}")
         return jsonify({'error': str(e)[:150]}), 500
+
 
 @app.route('/sessions', methods=['GET'])
 def list_sessions():
-    """List all available chat sessions"""
     sessions_list = []
     for session_id, session in chat_sessions.items():
         sessions_list.append({
@@ -290,22 +371,20 @@ def list_sessions():
             'last_updated': session.last_updated.isoformat(),
             'total_interactions': len(session.history)
         })
-    
     sessions_list.sort(key=lambda x: x['last_updated'], reverse=True)
     return jsonify({'sessions': sessions_list})
 
+
 @app.route('/session/<session_id>', methods=['GET'])
 def get_session(session_id):
-    """Get a specific chat session"""
     if session_id not in chat_sessions:
         return jsonify({'error': 'Session not found'}), 404
-    
     session = chat_sessions[session_id]
     return jsonify(session.to_json())
 
+
 @app.route('/export/<session_id>/<format>', methods=['GET'])
 def export_session(session_id, format):
-    """Export a chat session in specified format (text or json)"""
     if session_id not in chat_sessions:
         return jsonify({'error': 'Session not found'}), 404
     
@@ -334,53 +413,48 @@ def export_session(session_id, format):
     else:
         return jsonify({'error': 'Invalid format. Use "json" or "text"'}), 400
 
+
 @app.route('/session/current', methods=['GET'])
 def get_current_session():
-    """Get the current active session"""
     if not current_session_id or current_session_id not in chat_sessions:
         return jsonify({'error': 'No active session'}), 404
-    
     session = chat_sessions[current_session_id]
     return jsonify(session.to_json())
 
+
 @app.route('/session/new', methods=['POST'])
 def new_session():
-    """Create a new chat session"""
     global current_session_id
-    
     session = ChatSession()
     chat_sessions[session.session_id] = session
     current_session_id = session.session_id
-    
     return jsonify({
         'message': 'New session created',
         'session_id': session.session_id,
         'session': session.to_json()
     })
 
+
 @app.route('/session/<session_id>/delete', methods=['DELETE'])
 def delete_session(session_id):
-    """Delete a chat session"""
     global current_session_id
-    
     if session_id not in chat_sessions:
         return jsonify({'error': 'Session not found'}), 404
-    
     if current_session_id == session_id:
         current_session_id = None
-    
     del chat_sessions[session_id]
     return jsonify({'message': f'Session {session_id} deleted successfully'})
+
 
 if __name__ == '__main__':
     print("=" * 60)
     print("🚀 Starting IvieAI server with local model...")
     print(f"Model: {MODEL_ID}")
-    print("✨ Responses will always terminate with proper punctuation (.)")
-    print("💾 Chat history is now enabled with export capabilities")
+    print("✨ Responses stream sentence-by-sentence with funky animations")
+    print("💾 Chat history is enabled with export capabilities")
     
     if load_model():
         print("\n✅ Server ready! Visit: http://localhost:5000")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
     else:
         print("\n❌ Failed to load model. Please check your token and model access.")
