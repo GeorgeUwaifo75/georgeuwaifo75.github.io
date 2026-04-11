@@ -393,12 +393,57 @@ def get_complete_sentences_up_to_limit(text, max_tokens=150):
     return ' '.join(complete_sentences)
 
 def clean_and_format_response(full_response, user_message):
-    """Clean and format the AI response"""
+    """Extract, clean, and format response with proper termination"""
+    
+    # First, remove the user message from the beginning if present
     ai_response = full_response[len(user_message):].strip()
+    
+    # Remove common prefixes that the model might add
+    prefixes_to_remove = [
+        "### Response:",
+        "### Response",
+        "Response:",
+        "AI:",
+        "Assistant:",
+        "Bot:",
+        "Answer:",
+        "### Answer:",
+        "\nResponse:",
+        "\n### Response:"
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if ai_response.startswith(prefix):
+            ai_response = ai_response[len(prefix):].strip()
+        # Also check with different capitalization
+        if ai_response.lower().startswith(prefix.lower()):
+            ai_response = ai_response[len(prefix):].strip()
+    
+    # Also check if the prefix appears with a newline
+    if "### Response:" in ai_response:
+        parts = ai_response.split("### Response:", 1)
+        if len(parts) > 1:
+            ai_response = parts[1].strip()
+    
+    # If still empty or invalid, try to find the first sentence after any colon
+    if not ai_response or len(ai_response) < 3:
+        # Look for content after a colon on a new line or at start
+        colon_patterns = [
+            r'### Response:\s*(.+?)(?=\n\n|$)',
+            r'Response:\s*(.+?)(?=\n\n|$)',
+            r'AI:\s*(.+?)(?=\n\n|$)',
+            r'Assistant:\s*(.+?)(?=\n\n|$)'
+        ]
+        for pattern in colon_patterns:
+            match = re.search(pattern, full_response, re.DOTALL | re.IGNORECASE)
+            if match:
+                ai_response = match.group(1).strip()
+                break
     
     if not ai_response:
         return "I'm here to chat! Could you rephrase that?"
     
+    # Complete sentences extraction
     complete_text = get_complete_sentences_up_to_limit(ai_response, max_tokens=150)
     
     if complete_text:
@@ -415,19 +460,23 @@ def clean_and_format_response(full_response, user_message):
         else:
             ai_response = ai_response.rstrip() + '.'
     
+    # Ensure proper termination
     ai_response = ensure_period_termination(ai_response)
     
+    # Capitalize first letter
     if ai_response and ai_response[0].isalpha():
         ai_response = ai_response[0].upper() + ai_response[1:]
     
+    # Clean up extra spaces and duplicate punctuation
     ai_response = re.sub(r'\.\.+', '.', ai_response)
     ai_response = re.sub(r'\s+', ' ', ai_response)
     
+    # Final check for validity
     if len(ai_response) < 5:
         return "I'm here to chat! Could you rephrase that?"
     
     return ai_response
-
+    
 def generate_response(user_message):
     """Generate response from the model"""
     if st.session_state.model is None or st.session_state.tokenizer is None:
