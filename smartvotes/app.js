@@ -1,5 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════
    SmartVotes Network — Main Application Script
+   Concurrency-safe revision:
+     • All writes go through a serialised queue (one at a time)
+     • Every mutation does a fresh GET → merge → PUT (read-before-write)
+     • submitVotes re-fetches and checks for duplicate votes before saving
+     • doRegister re-fetches to catch concurrent duplicate registrations
+     • Exponential-backoff retry on JSONBin 429 / 5xx errors
+     • Live-polling refreshes the UI while users are logged in
    ═══════════════════════════════════════════════════════════════ */
 
 "use strict";
@@ -23,7 +30,6 @@ const JBIN_ACCESS_KEY = isRealCredential(CFG.JSONBIN_API_KEY)      ? String(CFG.
 const JBIN_BIN        = isRealCredential(CFG.JSONBIN_MAIN_BIN_ID)  ? String(CFG.JSONBIN_MAIN_BIN_ID).trim() : "";
 const JBIN_URL        = "https://api.jsonbin.io/v3";
 
-// Only attempt JSONBin calls when BIN ID + at least one valid key exist
 const JBIN_READY = !!(JBIN_BIN && (JBIN_MASTER_KEY || JBIN_ACCESS_KEY));
 
 const EJS = CFG.EMAILJS || {};
@@ -61,22 +67,44 @@ function hashStr(s) {
   return h.toString(16);
 }
 
-// ── JSONBin API ───────────────────────────────────────────────────
-// Build the correct auth header depending on which key is configured.
+// ══════════════════════════════════════════════════════════════════
+//  CONCURRENCY LAYER
+//  All JSONBin writes are serialised through a single async queue so
+//  that parallel calls from different actions (or different browser
+//  tabs that share the same bin) cannot interleave and corrupt data.
+// ══════════════════════════════════════════════════════════════════
+
+// ── Write queue ───────────────────────────────────────────────────
+// Only one write runs at a time. Any additional write requested while
+// one is in-flight is chained onto the end of the queue.
+let _writeQueue = Promise.resolve();
+
+function enqueueWrite(fn) {
+  // Chain the new write onto whatever is already queued.
+  // Errors are caught inside fn itself; we never let the queue break.
+  _writeQueue = _writeQueue.then(() => fn().catch(e =>
+    console.error("SmartVotes: enqueued write failed", e)
+  ));
+  return _writeQueue;
+}
+
+// ── JSONBin helpers ───────────────────────────────────────────────
 function jbinAuthHeaders(withContentType) {
   const h = {};
   if (JBIN_MASTER_KEY) {
-    h['X-Master-Key'] = JBIN_MASTER_KEY;   // preferred — full access
+    h['X-Master-Key'] = JBIN_MASTER_KEY;
   } else if (JBIN_ACCESS_KEY) {
-    h['X-Access-Key'] = JBIN_ACCESS_KEY;   // fallback — scoped key
+    h['X-Access-Key'] = JBIN_ACCESS_KEY;
   }
   if (withContentType) h['Content-Type'] = 'application/json';
   return h;
 }
 
+// GET — always fetches the freshest copy from JSONBin.
+// Returns the parsed record, or null on any failure.
 async function jbinGet() {
   if (!JBIN_READY) {
-    console.info("SmartVotes: JSONBin not configured — running on localStorage only.");
+    console.info("SmartVotes: JSONBin not configured — using localStorage only.");
     return null;
   }
   try {
@@ -84,36 +112,55 @@ async function jbinGet() {
       headers: jbinAuthHeaders(false)
     });
     if (!r.ok) {
-      const body = await r.text();
-      console.warn(`SmartVotes: JSONBin GET ${r.status} — falling back to localStorage. ${body}`);
-      return null;   // graceful fallback, NOT a throw
+      console.warn(`SmartVotes: JSONBin GET ${r.status}`);
+      return null;
     }
     const j = await r.json();
     return j.record || null;
   } catch (e) {
-    console.warn("SmartVotes: JSONBin GET network error — using localStorage.", e.message);
+    console.warn("SmartVotes: JSONBin GET network error.", e.message);
     return null;
   }
 }
 
+// PUT with exponential-backoff retry.
+// Retries up to MAX_RETRIES times on 429 (rate-limit) or 5xx errors.
 async function jbinPut(data) {
   if (!JBIN_READY) return false;
-  try {
-    const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}`, {
-      method:  'PUT',
-      headers: jbinAuthHeaders(true),
-      body:    JSON.stringify(data)
-    });
-    if (!r.ok) {
+
+  const MAX_RETRIES = 4;
+  let delay = 600; // ms — doubles each attempt
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}`, {
+        method:  'PUT',
+        headers: jbinAuthHeaders(true),
+        body:    JSON.stringify(data)
+      });
+
+      if (r.ok) return true;
+
+      const status = r.status;
+      if (status === 429 || status >= 500) {
+        console.warn(`SmartVotes: JSONBin PUT ${status} — retry ${attempt}/${MAX_RETRIES} in ${delay}ms`);
+        await sleep(delay);
+        delay *= 2;
+        continue;
+      }
+      // 4xx other than 429 — not retryable
       const body = await r.text();
-      console.warn(`SmartVotes: JSONBin PUT ${r.status}. ${body}`);
+      console.warn(`SmartVotes: JSONBin PUT ${status} (non-retryable). ${body}`);
       return false;
+
+    } catch (e) {
+      console.warn(`SmartVotes: JSONBin PUT network error (attempt ${attempt}).`, e.message);
+      if (attempt < MAX_RETRIES) { await sleep(delay); delay *= 2; }
     }
-    return true;
-  } catch (e) {
-    console.warn("SmartVotes: JSONBin PUT network error.", e.message);
-    return false;
   }
+
+  console.error("SmartVotes: JSONBin PUT failed after all retries.");
+  return false;
 }
 
 // ── Local Storage fallback ────────────────────────────────────────
@@ -127,21 +174,39 @@ function lsSession(u)     { localStorage.setItem('svn_session', JSON.stringify(u
 function lsSessionGet()   { try { return JSON.parse(localStorage.getItem('svn_session') || 'null'); } catch { return null; } }
 function lsSessionClear() { localStorage.removeItem('svn_session'); }
 
-// ── Data Load / Save ──────────────────────────────────────────────
+// ── Merge helper ──────────────────────────────────────────────────
+// Merges a freshly-fetched remote snapshot with the local in-memory
+// state without discarding edits the current user just made.
+// Strategy: for each collection, remote items win for records that
+// exist in remote; items that exist only locally are kept (they may
+// be mid-flight saves from this same session).
+function mergeData(remote, local) {
+  const merged = {};
+  const keys = ['users', 'elections', 'categories', 'candidates', 'votes'];
+  for (const key of keys) {
+    const remoteArr = Array.isArray(remote[key]) ? remote[key] : [];
+    const localArr  = Array.isArray(local[key])  ? local[key]  : [];
+    const remoteIds = new Set(remoteArr.map(x => x.id));
+    // Start from the remote authoritative list …
+    // … then append any local-only records (pending saves).
+    const localOnly = localArr.filter(x => !remoteIds.has(x.id));
+    merged[key] = [...remoteArr, ...localOnly];
+  }
+  return merged;
+}
+
+// ── Data Load ─────────────────────────────────────────────────────
+// Called once at startup and whenever a background poll fires.
 async function loadData() {
   let data = null;
 
-  // Step 1 — try JSONBin (only if configured; failure is silent)
   if (JBIN_READY) data = await jbinGet();
-
-  // Step 2 — fall back to localStorage
   if (!data) data = lsGet();
 
-  // Step 3 — brand-new install: seed defaults and save everywhere
   if (!data) {
     data = buildDefaultData();
     lsPut(data);
-    if (JBIN_READY) jbinPut(data); // fire-and-forget
+    if (JBIN_READY) await jbinPut(data);
   }
 
   appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...data };
@@ -149,11 +214,95 @@ async function loadData() {
   return appData;
 }
 
-async function saveData(d) {
-  d = d || appData;
-  lsPut(d);                      // save locally first — always fast
-  if (JBIN_READY) jbinPut(d);   // sync to cloud — fire-and-forget
+// ── Atomic Save (read-before-write) ──────────────────────────────
+// This is the ONLY function that writes to JSONBin. It is always
+// called inside enqueueWrite() so at most one write runs at a time.
+//
+// Steps:
+//   1. Re-fetch the latest remote snapshot.
+//   2. Merge it with the caller's intended data using mergeData().
+//   3. Apply a caller-supplied patch function (fn) on top of the merge
+//      so the caller's specific change is guaranteed to be present.
+//   4. Persist to localStorage first (fast, never fails).
+//   5. PUT the merged result back to JSONBin with retry.
+//   6. Update the global appData so the UI stays consistent.
+//
+// fn: (currentData) => currentData
+//   A pure function that applies the caller's mutation to whatever
+//   the merge produced. Returning the same object is fine.
+async function atomicSave(fn) {
+  // 1. Fetch latest remote state
+  let remote = JBIN_READY ? await jbinGet() : null;
+
+  // 2. Merge remote with local in-memory state
+  const base   = remote ? mergeData(remote, appData) : appData;
+  const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
+
+  // 3. Apply the caller's mutation on top of the merged snapshot
+  const patched = fn ? fn(merged) : merged;
+
+  // 4. Persist locally first
+  lsPut(patched);
+
+  // 5. Push to JSONBin
+  if (JBIN_READY) await jbinPut(patched);
+
+  // 6. Sync global state so all UI reads see the latest
+  appData = patched;
+  ensureAdmin();
+
+  return appData;
 }
+
+// Convenience wrapper: enqueue an atomicSave.
+// All callers use this instead of the old saveData().
+function saveData(fn) {
+  return enqueueWrite(() => atomicSave(fn));
+}
+
+// ── Background polling ────────────────────────────────────────────
+// While a user is signed in, poll JSONBin every POLL_INTERVAL ms so
+// that additions/changes made by other concurrent users are reflected
+// in the UI without a page reload.
+const POLL_INTERVAL = 20000; // 20 seconds — polite for a shared bin
+let   _pollTimer    = null;
+
+function startPolling() {
+  stopPolling();
+  _pollTimer = setInterval(async () => {
+    if (!currentUser) { stopPolling(); return; }
+    try {
+      const remote = JBIN_READY ? await jbinGet() : null;
+      if (!remote) return;
+      const refreshed = mergeData(remote, appData);
+      appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...refreshed };
+      ensureAdmin();
+      // Silently refresh whichever UI panels are currently visible
+      _refreshVisiblePanels();
+    } catch (e) {
+      console.warn("SmartVotes: background poll error", e);
+    }
+  }, POLL_INTERVAL);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+function _refreshVisiblePanels() {
+  // Only touch panels that are actually rendered — avoids blank flashes
+  if (document.getElementById('panel-admin-overview')?.classList.contains('active')) { refreshAdminStats(); renderOverviewElections(); }
+  if (document.getElementById('panel-admin-elections')?.classList.contains('active'))  renderElectionsTable();
+  if (document.getElementById('panel-admin-categories')?.classList.contains('active')) renderCategoriesTable();
+  if (document.getElementById('panel-admin-candidates')?.classList.contains('active')) renderCandidatesTable();
+  if (document.getElementById('panel-admin-users')?.classList.contains('active'))      renderUsersTable();
+  if (document.getElementById('panel-voter-elections')?.classList.contains('active'))  renderVoterElections();
+  if (document.getElementById('panel-voter-history')?.classList.contains('active'))    renderVoterHistory();
+  refreshAdminStats();
+  renderHomePage();
+}
+
+// ══════════════════════════════════════════════════════════════════
 
 function buildDefaultData() {
   return {
@@ -189,7 +338,9 @@ function ensureAdmin() {
       gender: "Male", age: 30, phone: "09038197586", address: "",
       role: "admin", validated: "Yes", validation_code: "", created: now()
     });
-    saveData();
+    // Do not call saveData() here — it would cause a recursive enqueue.
+    // ensureAdmin() only runs immediately after a load/merge, so the
+    // next real saveData() call will persist the admin row naturally.
   }
 }
 
@@ -283,6 +434,10 @@ async function doSignIn() {
   const password = v('si-password');
   if (!email || !password) { showAlert('signin-alert', 'Please fill in all fields.', 'error'); return; }
 
+  // Always load the latest data before authenticating so we pick up
+  // accounts that may have been created by other concurrent sessions.
+  await loadData();
+
   const user = appData.users.find(u =>
     (u.email.toLowerCase() === email || u.username?.toLowerCase() === email) &&
     u.password === hashStr(password)
@@ -322,12 +477,18 @@ async function doValidateCode() {
   if (entered.length < 5) { showAlert('validate-alert', 'Please enter all 5 digits.', 'error'); return; }
 
   if (entered === pendingValidationUser.validation_code) {
-    pendingValidationUser.validated       = 'Yes';
-    pendingValidationUser.validation_code = '';
-    await saveData();
+    // Atomic: re-fetch → mark validated → save
+    await saveData(data => {
+      const u = data.users.find(x => x.id === pendingValidationUser.id);
+      if (u) { u.validated = 'Yes'; u.validation_code = ''; }
+      return data;
+    });
+    // Sync local reference
+    const updated = appData.users.find(x => x.id === pendingValidationUser.id);
+    if (updated) { updated.validated = 'Yes'; updated.validation_code = ''; }
     showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
     await sleep(1200);
-    loginSuccess(pendingValidationUser);
+    loginSuccess(updated || pendingValidationUser);
     pendingValidationUser = null;
   } else {
     showAlert('validate-alert', 'Incorrect code. Please try again.', 'error');
@@ -337,8 +498,13 @@ async function doValidateCode() {
 async function resendValidationCode() {
   if (!pendingValidationUser) return;
   const code = randomCode();
+  // Atomic: re-fetch → update code → save
+  await saveData(data => {
+    const u = data.users.find(x => x.id === pendingValidationUser.id);
+    if (u) u.validation_code = code;
+    return data;
+  });
   pendingValidationUser.validation_code = code;
-  await saveData();
   await sendValidationEmail(pendingValidationUser.email, pendingValidationUser.name, code);
   showToast('New validation code sent!', 'success');
 }
@@ -347,6 +513,7 @@ function loginSuccess(user) {
   currentUser = user;
   lsSession(user);
   updateHeaderForUser(user);
+  startPolling();   // begin background sync while this user is active
   navigate('dashboard');
   showToast(`Welcome back, ${user.name}! 👋`, 'success');
 }
@@ -384,14 +551,12 @@ function updateHeaderForUser(user) {
 function toggleUserMenu() { document.getElementById('user-dropdown')?.classList.toggle('hidden'); }
 
 // Close user dropdown when clicking/tapping outside it.
-// FIX: explicitly ignore clicks on the hamburger so this listener never
-// fights with the mobile nav toggle handler.
 document.addEventListener('click', e => {
   const dd     = document.getElementById('user-dropdown');
   const btn    = document.getElementById('user-menu-btn');
   const burger = document.getElementById('hamburger');
   if (!dd) return;
-  if (burger?.contains(e.target)) return;   // let hamburger handle itself
+  if (burger?.contains(e.target)) return;
   if (!dd.contains(e.target) && !btn?.contains(e.target)) {
     dd.classList.add('hidden');
   }
@@ -415,14 +580,23 @@ async function doRegister() {
   if (password !== password2) { showAlert('register-alert', 'Passwords do not match.', 'error'); return; }
   if (password.length < 6)    { showAlert('register-alert', 'Password must be at least 6 characters.', 'error'); return; }
   if (age < 18)               { showAlert('register-alert', 'You must be at least 18 years old.', 'error'); return; }
+
+  setLoading('btn-register', true, 'Creating Account…');
+
+  // Re-fetch the latest user list before the duplicate check so that
+  // two concurrent registrations with the same email/username are both
+  // caught even if they started simultaneously.
+  await loadData();
+
   if (appData.users.find(u => u.email.toLowerCase() === email)) {
+    setLoading('btn-register', false, 'Create Account →');
     showAlert('register-alert', 'This email is already registered.', 'error'); return;
   }
   if (appData.users.find(u => u.username?.toLowerCase() === username.toLowerCase())) {
+    setLoading('btn-register', false, 'Create Account →');
     showAlert('register-alert', 'This username is already taken.', 'error'); return;
   }
 
-  setLoading('btn-register', true, 'Creating Account…');
   const code    = randomCode();
   const newUser = {
     id: uid(), name, username, email,
@@ -430,10 +604,35 @@ async function doRegister() {
     gender, age, phone, address, role: 'voter',
     validated: 'No', validation_code: code, created: now()
   };
-  appData.users.push(newUser);
-  await saveData();
-  await sendValidationEmail(email, name, code);
+
+  // Atomic save: re-fetch → second duplicate check inside the write lock
+  // → append user → save. This is the definitive race-condition guard.
+  let saved = false;
+  let conflictMsg = '';
+
+  await saveData(data => {
+    // Second check inside the serialised write — final guard
+    if (data.users.find(u => u.email.toLowerCase() === email)) {
+      conflictMsg = 'email'; return data; // abort mutation, return unchanged
+    }
+    if (data.users.find(u => u.username?.toLowerCase() === username.toLowerCase())) {
+      conflictMsg = 'username'; return data;
+    }
+    data.users.push(newUser);
+    saved = true;
+    return data;
+  });
+
   setLoading('btn-register', false, 'Create Account →');
+
+  if (conflictMsg === 'email') {
+    showAlert('register-alert', 'This email is already registered (another user just signed up).', 'error'); return;
+  }
+  if (conflictMsg === 'username') {
+    showAlert('register-alert', 'This username was just taken. Please choose another.', 'error'); return;
+  }
+
+  await sendValidationEmail(email, name, code);
   showToast('Account created! Check your email for the verification code.', 'success');
   pendingValidationUser = newUser;
   showValidationCard(email);
@@ -441,6 +640,7 @@ async function doRegister() {
 
 // ── Logout ────────────────────────────────────────────────────────
 function logout() {
+  stopPolling();
   currentUser = null;
   lsSessionClear();
   updateHeaderForUser(null);
@@ -583,31 +783,38 @@ async function saveElection() {
   const imgInput = document.getElementById('el-img-input');
   if (imgInput?.files?.length) imageUrl = await firebaseUpload(imgInput.files[0], `elections/${uid()}`);
 
-  if (editingId) {
-    const idx = appData.elections.findIndex(e => e.id === editingId);
-    if (idx >= 0) appData.elections[idx] = { ...appData.elections[idx], title, start, end,
-      description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
-      updated: now(), ...(imageUrl ? { image: imageUrl } : {}) };
-  } else {
-    appData.elections.push({ id: uid(), title, start, end,
-      description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
-      image: imageUrl, created: now() });
-  }
+  const capId = editingId; // capture before async gap
 
-  await saveData();
+  await saveData(data => {
+    if (capId) {
+      const idx = data.elections.findIndex(e => e.id === capId);
+      if (idx >= 0) data.elections[idx] = { ...data.elections[idx], title, start, end,
+        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
+        updated: now(), ...(imageUrl ? { image: imageUrl } : {}) };
+    } else {
+      data.elections.push({ id: uid(), title, start, end,
+        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
+        image: imageUrl, created: now() });
+    }
+    return data;
+  });
+
   setLoading('btn-save-election', false, 'Save Election');
   closeModal('modal-election');
   renderElectionsTable(); renderOverviewElections(); refreshAdminStats(); populateElectionSelects();
-  showToast(editingId ? 'Election updated!' : 'Election created!', 'success');
+  showToast(capId ? 'Election updated!' : 'Election created!', 'success');
   editingId = null;
 }
 
 async function toggleViewStatus(id) {
+  await saveData(data => {
+    const e = data.elections.find(x => x.id === id);
+    if (e) e.viewStatus = e.viewStatus === 'visible' ? 'hidden' : 'visible';
+    return data;
+  });
+  renderElectionsTable();
   const e = appData.elections.find(x => x.id === id);
-  if (!e) return;
-  e.viewStatus = e.viewStatus === 'visible' ? 'hidden' : 'visible';
-  await saveData(); renderElectionsTable();
-  showToast(`Election is now ${e.viewStatus}.`, 'info');
+  showToast(`Election is now ${e?.viewStatus || 'updated'}.`, 'info');
 }
 
 // ── Categories ────────────────────────────────────────────────────
@@ -659,16 +866,22 @@ async function saveCategory() {
   const elId = v('cat-election-id'), name = v('cat-name').trim();
   if (!elId||!name) { showAlert('cat-form-alert','Election and name are required.','error'); return; }
   setLoading('btn-save-category', true, 'Saving…');
-  if (editingId) {
-    const idx = appData.categories.findIndex(c => c.id === editingId);
-    if (idx >= 0) appData.categories[idx] = { ...appData.categories[idx], electionId: elId, name, description: v('cat-desc'), updated: now() };
-  } else {
-    appData.categories.push({ id: uid(), electionId: elId, name, description: v('cat-desc'), created: now() });
-  }
-  await saveData();
+
+  const capId = editingId;
+
+  await saveData(data => {
+    if (capId) {
+      const idx = data.categories.findIndex(c => c.id === capId);
+      if (idx >= 0) data.categories[idx] = { ...data.categories[idx], electionId: elId, name, description: v('cat-desc'), updated: now() };
+    } else {
+      data.categories.push({ id: uid(), electionId: elId, name, description: v('cat-desc'), created: now() });
+    }
+    return data;
+  });
+
   setLoading('btn-save-category', false, 'Save Category');
   closeModal('modal-category'); renderCategoriesTable(); populateCandidateFilters();
-  showToast(editingId ? 'Category updated!' : 'Category created!', 'success');
+  showToast(capId ? 'Category updated!' : 'Category created!', 'success');
   editingId = null;
 }
 
@@ -736,19 +949,26 @@ async function saveCandidate() {
   const name = v('cand-name').trim(), elId = v('cand-election-id'), catId = v('cand-category-id');
   if (!name||!elId||!catId) { showAlert('cand-form-alert','All fields are required.','error'); return; }
   setLoading('btn-save-candidate', true, 'Saving…');
+
   let photoUrl = '';
   const pInput = document.getElementById('cand-photo-input');
   if (pInput?.files?.length) photoUrl = await firebaseUpload(pInput.files[0], `candidates/${uid()}`);
-  if (editingId) {
-    const idx = appData.candidates.findIndex(c => c.id === editingId);
-    if (idx >= 0) appData.candidates[idx] = { ...appData.candidates[idx], name, electionId: elId, categoryId: catId, updated: now(), ...(photoUrl ? { photo: photoUrl } : {}) };
-  } else {
-    appData.candidates.push({ id: uid(), name, electionId: elId, categoryId: catId, photo: photoUrl, created: now() });
-  }
-  await saveData();
+
+  const capId = editingId;
+
+  await saveData(data => {
+    if (capId) {
+      const idx = data.candidates.findIndex(c => c.id === capId);
+      if (idx >= 0) data.candidates[idx] = { ...data.candidates[idx], name, electionId: elId, categoryId: catId, updated: now(), ...(photoUrl ? { photo: photoUrl } : {}) };
+    } else {
+      data.candidates.push({ id: uid(), name, electionId: elId, categoryId: catId, photo: photoUrl, created: now() });
+    }
+    return data;
+  });
+
   setLoading('btn-save-candidate', false, 'Save Candidate');
   closeModal('modal-candidate'); renderCandidatesTable(); refreshAdminStats();
-  showToast(editingId ? 'Candidate updated!' : 'Candidate added!', 'success');
+  showToast(capId ? 'Candidate updated!' : 'Candidate added!', 'success');
   editingId = null;
 }
 
@@ -785,24 +1005,52 @@ function openUserEdit(id) {
 }
 
 async function saveUserEdit() {
-  const u = appData.users.find(x => x.id === editingUserId);
-  if (!u) return;
-  u.name = v('eu-name').trim(); u.username = v('eu-username').trim(); u.email = v('eu-email').trim();
-  u.gender = v('eu-gender'); u.age = parseInt(v('eu-age'))||u.age; u.phone = v('eu-phone').trim();
-  u.validated = v('eu-validated'); u.role = v('eu-role'); u.updated = now();
-  await saveData(); closeModal('modal-user'); renderUsersTable();
+  const capUserId = editingUserId;
+
+  await saveData(data => {
+    const u = data.users.find(x => x.id === capUserId);
+    if (!u) return data;
+    u.name = v('eu-name').trim(); u.username = v('eu-username').trim(); u.email = v('eu-email').trim();
+    u.gender = v('eu-gender'); u.age = parseInt(v('eu-age'))||u.age; u.phone = v('eu-phone').trim();
+    u.validated = v('eu-validated'); u.role = v('eu-role'); u.updated = now();
+    return data;
+  });
+
+  closeModal('modal-user'); renderUsersTable();
   showToast('User updated!', 'success'); editingUserId = null;
 }
 
 // ── Delete confirm ────────────────────────────────────────────────
 function confirmDelete(type, id) {
-  const msgs = { election:'This will permanently delete the election and all its categories, candidates and votes.', category:'This will delete this category and its candidates.', candidate:'This will delete this candidate.', user:'This will permanently delete this user account.' };
+  const msgs = {
+    election:  'This will permanently delete the election and all its categories, candidates and votes.',
+    category:  'This will delete this category and its candidates.',
+    candidate: 'This will delete this candidate.',
+    user:      'This will permanently delete this user account.'
+  };
   openConfirmModal(`Delete ${type}?`, msgs[type]||'Are you sure?', '⚠️', async () => {
-    if (type==='election')  { appData.elections=appData.elections.filter(e=>e.id!==id); appData.categories=appData.categories.filter(c=>c.electionId!==id); appData.candidates=appData.candidates.filter(c=>c.electionId!==id); appData.votes=appData.votes.filter(v=>v.electionId!==id); renderElectionsTable(); renderOverviewElections(); }
-    else if (type==='category')  { appData.categories=appData.categories.filter(c=>c.id!==id); appData.candidates=appData.candidates.filter(c=>c.categoryId!==id); renderCategoriesTable(); }
-    else if (type==='candidate') { appData.candidates=appData.candidates.filter(c=>c.id!==id); renderCandidatesTable(); }
-    else if (type==='user')      { appData.users=appData.users.filter(u=>u.id!==id); renderUsersTable(); }
-    await saveData(); refreshAdminStats();
+    await saveData(data => {
+      if (type === 'election')  {
+        data.elections  = data.elections.filter(e => e.id !== id);
+        data.categories = data.categories.filter(c => c.electionId !== id);
+        data.candidates = data.candidates.filter(c => c.electionId !== id);
+        data.votes      = data.votes.filter(v => v.electionId !== id);
+      } else if (type === 'category')  {
+        data.categories = data.categories.filter(c => c.id !== id);
+        data.candidates = data.candidates.filter(c => c.categoryId !== id);
+      } else if (type === 'candidate') {
+        data.candidates = data.candidates.filter(c => c.id !== id);
+      } else if (type === 'user') {
+        data.users = data.users.filter(u => u.id !== id);
+      }
+      return data;
+    });
+
+    if (type === 'election')  { renderElectionsTable(); renderOverviewElections(); }
+    if (type === 'category')  renderCategoriesTable();
+    if (type === 'candidate') renderCandidatesTable();
+    if (type === 'user')      renderUsersTable();
+    refreshAdminStats();
     showToast(`${type} deleted.`, 'success');
   });
 }
@@ -867,7 +1115,6 @@ function renderResults(elId, container, isAdmin) {
     <button class="btn btn-sm btn-ghost" onclick="exportResultsCSV('${elId}')">📋 CSV</button>
   </div>` : '';
 
-  // ── Build one canvas per category so each category gets its own charts ──
   const categoryChartDivs = resultData.map(rd => `
     <div class="chart-container" style="margin-top:20px">
       <h3 class="chart-title">🏆 ${esc(rd.cat.name)} — ${rd.total} vote${rd.total !== 1 ? 's' : ''}</h3>
@@ -898,10 +1145,6 @@ function renderResults(elId, container, isAdmin) {
     ${categoryChartDivs}`;
 
   setTimeout(() => {
-    // ── FIX: Overview charts show EVERY candidate across all categories ──
-    // Previously only the top candidate per category was pushed, hiding all
-    // others. Now we iterate every candidate in every category so all bars
-    // and pie slices are rendered with accurate vote counts.
     const overviewLabels = [];
     const overviewBar    = [];
     const overviewPie    = [];
@@ -910,199 +1153,142 @@ function renderResults(elId, container, isAdmin) {
       rd.candData.forEach(c => {
         overviewLabels.push(`${rd.cat.name}: ${c.name}`);
         overviewBar.push(c.votes);
-        overviewPie.push(c.votes || 0);   // 0 kept so slice still appears
+        overviewPie.push(c.votes || 0);
       });
     });
 
-    // Colour palette — spread hues evenly across all candidates
     const totalEntries   = overviewLabels.length;
     const overviewColors = overviewLabels.map((_, i) =>
       `hsl(${Math.round((i / totalEntries) * 360)},62%,52%)`
     );
 
-    // ── Overview bar chart (all candidates) ──
     destroyChart(`result-bar-chart-${elId}`);
     const barCtx = document.getElementById(`result-bar-chart-${elId}`)?.getContext('2d');
     if (barCtx && overviewLabels.length) {
       charts[`result-bar-chart-${elId}`] = new Chart(barCtx, {
         type: 'bar',
-        data: {
-          labels: overviewLabels,
-          datasets: [{
-            label: 'Votes',
-            data:  overviewBar,
-            backgroundColor: overviewColors,
-            borderRadius: 8
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            title:  { display: true, text: 'All Candidates — Vote Counts' }
-          },
-          scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
-          }
-        }
+        data: { labels: overviewLabels, datasets: [{ label: 'Votes', data: overviewBar, backgroundColor: overviewColors, borderRadius: 8 }] },
+        options: { responsive: true, plugins: { legend: { display: false }, title: { display: true, text: 'All Candidates — Vote Counts' } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } } }
       });
     }
 
-    // ── Overview pie chart (all candidates) ──
     destroyChart(`result-pie-chart-${elId}`);
     const pieCtx = document.getElementById(`result-pie-chart-${elId}`)?.getContext('2d');
     if (pieCtx && overviewLabels.length) {
       charts[`result-pie-chart-${elId}`] = new Chart(pieCtx, {
         type: 'pie',
-        data: {
-          labels: overviewLabels,
-          datasets: [{
-            data:            overviewPie,
-            backgroundColor: overviewColors
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-            title:  { display: true, text: 'Vote Share — All Candidates' }
-          }
-        }
+        data: { labels: overviewLabels, datasets: [{ data: overviewPie, backgroundColor: overviewColors }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }, title: { display: true, text: 'Vote Share — All Candidates' } } }
       });
     }
 
-    // ── Per-category charts: one bar + one pie per category ──
     resultData.forEach(rd => {
       if (!rd.candData.length) return;
-
       const catLabels = rd.candData.map(c => c.name);
       const catVotes  = rd.candData.map(c => c.votes);
-      const catTotal  = rd.total;
-      const catColors = rd.candData.map((_, i) =>
-        `hsl(${Math.round((i / rd.candData.length) * 300 + 140)},60%,50%)`
-      );
+      const catColors = rd.candData.map((_, i) => `hsl(${Math.round((i / rd.candData.length) * 300 + 140)},60%,50%)`);
 
-      // Per-category bar
       destroyChart(`cat-bar-${elId}-${rd.cat.id}`);
       const catBarCtx = document.getElementById(`cat-bar-${elId}-${rd.cat.id}`)?.getContext('2d');
       if (catBarCtx) {
         charts[`cat-bar-${elId}-${rd.cat.id}`] = new Chart(catBarCtx, {
           type: 'bar',
-          data: {
-            labels: catLabels,
-            datasets: [{
-              label: 'Votes',
-              data:  catVotes,
-              backgroundColor: catColors,
-              borderRadius: 8
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { display: false },
-              title:  { display: true, text: `${rd.cat.name} — Vote Counts` }
-            },
-            scales: {
-              y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
-            }
-          }
+          data: { labels: catLabels, datasets: [{ label: 'Votes', data: catVotes, backgroundColor: catColors, borderRadius: 8 }] },
+          options: { responsive: true, plugins: { legend: { display: false }, title: { display: true, text: `${rd.cat.name} — Vote Counts` } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } } }
         });
       }
 
-      // Per-category pie
       destroyChart(`cat-pie-${elId}-${rd.cat.id}`);
       const catPieCtx = document.getElementById(`cat-pie-${elId}-${rd.cat.id}`)?.getContext('2d');
       if (catPieCtx) {
         charts[`cat-pie-${elId}-${rd.cat.id}`] = new Chart(catPieCtx, {
           type: 'pie',
-          data: {
-            labels: catLabels,
-            datasets: [{
-              data:            catVotes.map(v => v || 0),
-              backgroundColor: catColors
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-              title:  { display: true, text: `${rd.cat.name} — Vote Share` },
-              tooltip: {
-                callbacks: {
-                  label: ctx => {
-                    const val = ctx.parsed;
-                    const pct = catTotal ? Math.round(val / catTotal * 100) : 0;
-                    return ` ${ctx.label}: ${val} vote${val !== 1 ? 's' : ''} (${pct}%)`;
-                  }
-                }
-              }
-            }
-          }
+          data: { labels: catLabels, datasets: [{ data: catVotes, backgroundColor: catColors }] },
+          options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }, title: { display: true, text: `${rd.cat.name} — Vote Share` } } }
         });
       }
     });
   }, 100);
 }
 
-function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
-
-// ── Export ────────────────────────────────────────────────────────
-function getResultsRows(elId) {
-  const cats=appData.categories.filter(c=>c.electionId===elId), cands=appData.candidates.filter(c=>c.electionId===elId), votes=appData.votes.filter(v=>v.electionId===elId);
-  const rows=[['Category','Candidate','Votes','Percentage']];
-  cats.forEach(cat=>{ const catCands=cands.filter(c=>c.categoryId===cat.id), total=votes.filter(v=>v.categoryId===cat.id).length; catCands.forEach(c=>{ const count=votes.filter(v=>v.candidateId===c.id).length; rows.push([cat.name,c.name,count,total?`${Math.round(count/total*100)}%`:'0%']); }); });
-  return rows;
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
 }
-function exportResultsExcel(elId) { const el=appData.elections.find(e=>e.id===elId),rows=getResultsRows(elId),ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Results'); XLSX.writeFile(wb,`${el?.title||'Election'}_Results.xlsx`); showToast('Excel exported!','success'); }
-function exportResultsCSV(elId)   { const el=appData.elections.find(e=>e.id===elId),rows=getResultsRows(elId),csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n'); downloadFile(`${el?.title||'Election'}_Results.csv`,csv,'text/csv'); showToast('CSV exported!','success'); }
-function exportResultsPDF(elId)   { const el=appData.elections.find(e=>e.id===elId),rows=getResultsRows(elId),{jsPDF}=window.jspdf,doc=new jsPDF(); doc.setFontSize(16); doc.text(`${el?.title||'Election'} — Results`,14,18); doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`,14,26); doc.autoTable({head:[rows[0]],body:rows.slice(1),startY:32}); doc.save(`${el?.title||'Election'}_Results.pdf`); showToast('PDF exported!','success'); }
-function downloadFile(name,content,type) { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 
 // ── Voter Elections ───────────────────────────────────────────────
 function renderVoterElections() {
   const grid = document.getElementById('voter-elections-grid');
-  if (!grid) return;
-  const available = appData.elections.filter(e => { const s=computeStatus(e); return s==='active'||s==='test'; });
-  if (!available.length) { grid.innerHTML=`<div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No Active Elections</h3><p>Check back later for elections open for voting.</p></div>`; return; }
-  grid.innerHTML = available.map(e => `
-    <div class="election-card">
-      <div class="election-card-img">${e.image?`<img src="${e.image}" alt="${esc(e.title)}"/>`:'🗳️'} ${statusBadge(e)}</div>
+  if (!grid || !currentUser) return;
+  const visible = appData.elections.filter(e => {
+    const s = computeStatus(e);
+    return (s === 'active' || s === 'test') && (e.viewStatus === 'visible' || s === 'test');
+  });
+  if (!visible.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No active elections</h3><p>Check back later for open elections.</p></div>`;
+    return;
+  }
+  grid.innerHTML = visible.map(e => {
+    const myVotes   = appData.votes.filter(v => v.voterId === currentUser.id && v.electionId === e.id);
+    const cats      = appData.categories.filter(c => c.electionId === e.id);
+    const hasVoted  = myVotes.length > 0;
+    const allCats   = cats.every(cat => myVotes.some(mv => mv.categoryId === cat.id));
+    const status    = computeStatus(e);
+    return `<div class="election-card">
+      ${e.image ? `<div class="election-card-img"><img src="${e.image}" alt="${esc(e.title)}"/></div>` : ''}
       <div class="election-card-body">
+        <div class="election-card-meta">${statusBadge(e)}</div>
         <h3 class="election-card-title">${esc(e.title)}</h3>
-        <p class="election-card-desc">${esc(e.description||'')}</p>
-        <div class="election-time">🕐 ${fmtDT(e.start)} → ${fmtDT(e.end)}</div>
+        ${e.description ? `<p class="election-card-desc">${esc(e.description)}</p>` : ''}
+        <div class="election-progress">
+          <div class="progress-track"><div class="progress-fill" style="width:${cats.length ? Math.round(myVotes.length/cats.length*100) : 0}%"></div></div>
+          <small class="text-muted">${myVotes.length}/${cats.length} categories voted</small>
+        </div>
+        <div class="election-card-footer">
+          <span style="font-size:0.8rem;color:var(--gray-400)">Ends: ${fmtDT(e.end)}</span>
+          ${allCats
+            ? `<span class="badge badge-success">✅ Voted</span>`
+            : `<button class="btn btn-primary btn-sm" onclick="openVoteModal('${e.id}')">🗳️ Vote Now</button>`}
+        </div>
       </div>
-      <div class="election-card-footer">
-        ${hasVoted(e.id)?'<span class="badge badge-success">✅ You voted</span>':`<button class="btn btn-primary btn-sm" onclick="openVoteModal('${e.id}')">🗳️ Vote Now</button>`}
-      </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
-
-function hasVoted(elId) { return appData.votes.some(v => v.electionId===elId && v.voterId===currentUser?.id); }
 
 function renderHomePage() {
   const grid = document.getElementById('home-elections-grid');
   if (!grid) return;
-  const active = appData.elections.filter(e => computeStatus(e)==='active' && e.viewStatus==='visible');
-  if (!active.length) { grid.innerHTML=`<div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No Active Elections</h3><p>Sign in to see elections available to you.</p></div>`; return; }
-  grid.innerHTML = active.map(e => `
+  const visible = appData.elections.filter(e => e.viewStatus === 'visible');
+  if (!visible.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No Active Elections</h3><p>Sign in to see elections available to you.</p></div>`;
+    return;
+  }
+  grid.innerHTML = visible.map(e => `
     <div class="election-card">
-      <div class="election-card-img">${e.image?`<img src="${e.image}"/>`:'🗳️'} ${statusBadge(e)}</div>
-      <div class="election-card-body"><h3 class="election-card-title">${esc(e.title)}</h3><p class="election-card-desc">${esc(e.description||'')}</p><div class="election-time">🕐 ${fmtDT(e.start)} → ${fmtDT(e.end)}</div></div>
-      <div class="election-card-footer"><button class="btn btn-primary btn-sm" onclick="navigate('auth')">Sign in to Vote</button></div>
+      ${e.image ? `<div class="election-card-img"><img src="${e.image}" alt="${esc(e.title)}"/></div>` : ''}
+      <div class="election-card-body">
+        <div class="election-card-meta">${statusBadge(e)}</div>
+        <h3 class="election-card-title">${esc(e.title)}</h3>
+        ${e.description ? `<p class="election-card-desc">${esc(e.description)}</p>` : ''}
+        <div class="election-card-footer">
+          <span style="font-size:0.8rem;color:var(--gray-400)">Ends: ${fmtDT(e.end)}</span>
+          <button class="btn btn-primary btn-sm" onclick="navigate('auth')">🗳️ Sign In to Vote</button>
+        </div>
+      </div>
     </div>`).join('');
 }
 
 // ── Vote Modal ────────────────────────────────────────────────────
 function openVoteModal(elId) {
   const el = appData.elections.find(e => e.id === elId);
-  if (!el) return;
-  if (hasVoted(elId)) { showToast('You have already voted in this election.','warning'); return; }
-  votingElection = el; voteSelections = {};
-  const cats=appData.categories.filter(c=>c.electionId===elId), cands=appData.candidates.filter(c=>c.electionId===elId);
+  if (!el || !currentUser) return;
+  votingElection = el;
+  voteSelections = {};
+  setText('vote-modal-title', `🗳️ ${el.title}`);
   clearAlert('vote-alert');
-  document.getElementById('vote-modal-title').textContent = `🗳️ ${el.title}`;
+
+  const cats  = appData.categories.filter(c => c.electionId === elId);
+  const cands = appData.candidates.filter(c => c.electionId === elId);
+
   document.getElementById('vote-categories-area').innerHTML = cats.map(cat => {
     const catCands = cands.filter(c => c.categoryId === cat.id);
     return `<div style="margin-bottom:28px">
@@ -1128,19 +1314,60 @@ function selectCandidate(catId, candId) {
   document.getElementById(`cand-${catId}-${candId}`)?.classList.add('selected');
 }
 
+// ── Submit Votes (fully atomic, duplicate-safe) ───────────────────
 async function submitVotes() {
   if (!currentUser || !votingElection) return;
-  const cats = appData.categories.filter(c => c.electionId === votingElection.id);
-  const unvoted = cats.filter(cat => !voteSelections[cat.id] && appData.candidates.filter(c => c.categoryId === cat.id).length > 0);
-  if (unvoted.length) { showAlert('vote-alert', `Please select a candidate for: ${unvoted.map(c=>c.name).join(', ')}`, 'error'); return; }
+
+  const cats    = appData.categories.filter(c => c.electionId === votingElection.id);
+  const unvoted = cats.filter(cat =>
+    !voteSelections[cat.id] &&
+    appData.candidates.filter(c => c.categoryId === cat.id).length > 0
+  );
+  if (unvoted.length) {
+    showAlert('vote-alert', `Please select a candidate for: ${unvoted.map(c => c.name).join(', ')}`, 'error');
+    return;
+  }
+
   setLoading('btn-submit-votes', true, 'Submitting…');
-  const timestamp = now();
-  Object.entries(voteSelections).forEach(([catId, candId]) => {
-    appData.votes.push({ id: uid(), electionId: votingElection.id, categoryId: catId, candidateId: candId, voterId: currentUser.id, timestamp });
+  const voterId    = currentUser.id;
+  const elId       = votingElection.id;
+  const timestamp  = now();
+  const selections = { ...voteSelections }; // snapshot before async gap
+
+  let duplicateError = false;
+
+  await saveData(data => {
+    // Re-check: has this voter already voted in any of these categories?
+    // This guard runs inside the write-serialised atomicSave, so it is
+    // evaluated against the very latest remote snapshot — not stale state.
+    const existing = data.votes.filter(v => v.voterId === voterId && v.electionId === elId);
+    const alreadyVotedCats = new Set(existing.map(v => v.categoryId));
+
+    const newVotes = Object.entries(selections)
+      .filter(([catId]) => !alreadyVotedCats.has(catId)) // skip already-voted cats
+      .map(([catId, candId]) => ({
+        id: uid(), electionId: elId, categoryId: catId,
+        candidateId: candId, voterId, timestamp
+      }));
+
+    if (!newVotes.length) {
+      // Every category was already voted — concurrent double-submit
+      duplicateError = true;
+      return data; // abort, do not modify
+    }
+
+    data.votes.push(...newVotes);
+    return data;
   });
-  await saveData();
-  voteSelections = {};
+
   setLoading('btn-submit-votes', false, '🗳️ Submit Votes');
+
+  if (duplicateError) {
+    showAlert('vote-alert', 'You have already voted in this election.', 'error');
+    return;
+  }
+
+  voteSelections = {};
   closeModal('modal-vote');
   showToast('🎉 Your vote has been cast successfully!', 'success');
   renderVoterElections(); renderVoterHistory();
@@ -1166,108 +1393,120 @@ function populateVoterResultSelect() {
 
 // ── Test Election ─────────────────────────────────────────────────
 function adminTestElection() { populateElectionSelects(); openModal('modal-test-election'); }
+
 async function runTestElection() {
   const elId = v('test-election-select');
   if (!elId) { showToast('Select an election.','warning'); return; }
+  await saveData(data => {
+    const el = data.elections.find(e => e.id === elId);
+    if (el) el.status = 'test';
+    return data;
+  });
+  closeModal('modal-test-election'); renderElectionsTable();
   const el = appData.elections.find(e => e.id === elId);
-  if (!el) return;
-  el.status = 'test';
-  await saveData(); closeModal('modal-test-election'); renderElectionsTable();
-  showToast(`"${el.title}" is now in test mode.`, 'info');
+  showToast(`"${el?.title}" is now in test mode.`, 'info');
 }
 
 async function adminClearTest() {
   const testEls = appData.elections.filter(e => e.status === 'test');
   if (!testEls.length) { showToast('No test elections to clear.','info'); return; }
   openConfirmModal('Clear Test Elections?', `This will clear test status and all test votes for ${testEls.length} election(s).`, '🧹', async () => {
-    testEls.forEach(e => { e.status='upcoming'; appData.votes=appData.votes.filter(v=>v.electionId!==e.id); });
-    await saveData(); renderElectionsTable(); refreshAdminStats();
+    const testIds = new Set(testEls.map(e => e.id));
+    await saveData(data => {
+      data.elections.forEach(e => { if (testIds.has(e.id)) e.status = 'upcoming'; });
+      data.votes = data.votes.filter(v => !testIds.has(v.electionId));
+      return data;
+    });
+    renderElectionsTable(); refreshAdminStats();
     showToast('Test data cleared.', 'success');
   });
 }
 
-// ── Mobile Nav ────────────────────────────────────────────────────
-// FIX SUMMARY — four problems resolved here:
-//
-// 1. REPEATED TAPS: The old hamburger used onclick="toggleMobileNav()".
-//    On mobile, onclick fires ~300ms after the touchend (tap delay), and
-//    the event bubbles to the document-level click listener which was
-//    closing things it shouldn't. We now bind via addEventListener using
-//    the 'touchend' event (fires instantly, no delay) with a fallback
-//    'click' for pointer devices, and call stopPropagation() so the event
-//    never reaches parent listeners.
-//
-// 2. FLICKERING: The CSS #mobile-nav previously had display:none by default
-//    and display:flex in the media query. Toggling display forces a full
-//    layout + paint pass every open/close cycle, which flickers on mobile
-//    GPUs. The new CSS keeps display:flex always and only animates
-//    transform:translateX (GPU composited — zero repaint, zero flicker).
-//
-// 3. NO OUTSIDE-TAP-TO-CLOSE: Added #mobile-nav-overlay backdrop that covers
-//    the page content when the drawer is open. Tapping it closes the nav.
-//
-// 4. BODY SCROLL WHILE NAV OPEN: When the drawer is open, the page behind
-//    it could still scroll on iOS, causing a jarring experience. We now
-//    lock body overflow while the nav is open and restore it on close.
+// ── Export helpers (unchanged) ────────────────────────────────────
+function exportResultsExcel(elId) {
+  const wb  = XLSX.utils.book_new();
+  const el  = appData.elections.find(e => e.id === elId);
+  const cats = appData.categories.filter(c => c.electionId === elId);
+  cats.forEach(cat => {
+    const cands = appData.candidates.filter(c => c.categoryId === cat.id);
+    const votes = appData.votes.filter(v => v.categoryId === cat.id);
+    const rows  = cands.map(c => ({ Candidate: c.name, Votes: votes.filter(v => v.candidateId === c.id).length, Percentage: votes.length ? `${Math.round(votes.filter(v=>v.candidateId===c.id).length/votes.length*100)}%` : '0%' }));
+    rows.sort((a,b) => b.Votes - a.Votes);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), cat.name.slice(0,31));
+  });
+  XLSX.writeFile(wb, `${el?.title||'results'}_results.xlsx`);
+}
 
+function exportResultsCSV(elId) {
+  const el   = appData.elections.find(e => e.id === elId);
+  const cats = appData.categories.filter(c => c.electionId === elId);
+  let csv    = 'Category,Candidate,Votes,Percentage\n';
+  cats.forEach(cat => {
+    const cands = appData.candidates.filter(c => c.categoryId === cat.id);
+    const votes = appData.votes.filter(v => v.categoryId === cat.id);
+    cands.forEach(c => {
+      const cnt = votes.filter(v => v.candidateId === c.id).length;
+      csv += `"${cat.name}","${c.name}",${cnt},${votes.length ? Math.round(cnt/votes.length*100) : 0}%\n`;
+    });
+  });
+  const a  = document.createElement('a');
+  a.href   = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `${el?.title||'results'}_results.csv`;
+  a.click();
+}
+
+function exportResultsPDF(elId) {
+  const { jsPDF } = window.jspdf;
+  const doc  = new jsPDF();
+  const el   = appData.elections.find(e => e.id === elId);
+  const cats = appData.categories.filter(c => c.electionId === elId);
+  doc.setFontSize(18); doc.text(el?.title || 'Election Results', 14, 20);
+  doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+  let y = 36;
+  cats.forEach(cat => {
+    doc.setFontSize(13); doc.text(cat.name, 14, y); y += 6;
+    const cands = appData.candidates.filter(c => c.categoryId === cat.id);
+    const votes = appData.votes.filter(v => v.categoryId === cat.id);
+    const rows  = cands.map(c => {
+      const cnt = votes.filter(v => v.candidateId === c.id).length;
+      return [c.name, cnt, votes.length ? `${Math.round(cnt/votes.length*100)}%` : '0%'];
+    }).sort((a,b) => b[1]-a[1]);
+    doc.autoTable({ startY: y, head: [['Candidate','Votes','%']], body: rows, margin: { left: 14 }, styles: { fontSize: 10 } });
+    y = doc.lastAutoTable.finalY + 10;
+  });
+  doc.save(`${el?.title||'results'}_results.pdf`);
+}
+
+// ── Mobile Nav ────────────────────────────────────────────────────
 let _mobileNavOpen = false;
 
 function openMobileNav() {
   if (_mobileNavOpen) return;
   _mobileNavOpen = true;
-
-  const nav      = document.getElementById('mobile-nav');
-  const overlay  = document.getElementById('mobile-nav-overlay');
-  const burger   = document.getElementById('hamburger');
-
-  nav?.classList.add('open');
-  overlay?.classList.add('open');
-  burger?.classList.add('is-open');
-  burger?.setAttribute('aria-expanded', 'true');
-  nav?.setAttribute('aria-hidden', 'false');
-
-  // Prevent the page from scrolling behind the open drawer (critical on iOS)
+  const nav = document.getElementById('mobile-nav'), overlay = document.getElementById('mobile-nav-overlay'), burger = document.getElementById('hamburger');
+  nav?.classList.add('open'); overlay?.classList.add('open'); burger?.classList.add('is-open');
+  burger?.setAttribute('aria-expanded', 'true'); nav?.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
 }
 
 function closeMobileNav() {
   if (!_mobileNavOpen) return;
   _mobileNavOpen = false;
-
-  const nav      = document.getElementById('mobile-nav');
-  const overlay  = document.getElementById('mobile-nav-overlay');
-  const burger   = document.getElementById('hamburger');
-
-  nav?.classList.remove('open');
-  overlay?.classList.remove('open');
-  burger?.classList.remove('is-open');
-  burger?.setAttribute('aria-expanded', 'false');
-  nav?.setAttribute('aria-hidden', 'true');
-
+  const nav = document.getElementById('mobile-nav'), overlay = document.getElementById('mobile-nav-overlay'), burger = document.getElementById('hamburger');
+  nav?.classList.remove('open'); overlay?.classList.remove('open'); burger?.classList.remove('is-open');
+  burger?.setAttribute('aria-expanded', 'false'); nav?.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
 }
 
-function toggleMobileNav() {
-  _mobileNavOpen ? closeMobileNav() : openMobileNav();
-}
+function toggleMobileNav() { _mobileNavOpen ? closeMobileNav() : openMobileNav(); }
 
-// Bind hamburger with touchend (no 300ms delay) + click fallback.
-// We do this in a DOMContentLoaded-safe way so the element exists.
 function _initHamburger() {
   const burger = document.getElementById('hamburger');
   if (!burger) return;
-
   let _touchHandled = false;
-
-  // touchend fires immediately on tap — no 300ms delay
   burger.addEventListener('touchend', (e) => {
-    e.preventDefault();        // prevent the ghost click that follows
-    e.stopPropagation();
-    _touchHandled = true;
-    toggleMobileNav();
+    e.preventDefault(); e.stopPropagation(); _touchHandled = true; toggleMobileNav();
   }, { passive: false });
-
-  // click handles mouse/trackpad; skip if already handled by touchend
   burger.addEventListener('click', (e) => {
     e.stopPropagation();
     if (_touchHandled) { _touchHandled = false; return; }
@@ -1275,10 +1514,8 @@ function _initHamburger() {
   });
 }
 
-// Close nav when Escape key is pressed
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && _mobileNavOpen) closeMobileNav();
-});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _mobileNavOpen) closeMobileNav(); });
+
 // ── Sidebar (dashboard mobile) ────────────────────────────────────
 function closeSidebar() {
   document.getElementById('app-sidebar')?.classList.remove('open');
@@ -1355,15 +1592,17 @@ function esc(str)         { if(!str) return ''; return String(str).replace(/&/g,
 
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
-  await loadData();   // always succeeds — falls back to localStorage if JSONBin fails
-
-  // Bind hamburger touch+click (must run after DOM is ready)
+  await loadData();
   _initHamburger();
 
   const session = lsSessionGet();
   if (session) {
     const user = appData.users.find(u => u.id === session.id);
-    if (user) { currentUser = user; updateHeaderForUser(user); }
+    if (user) {
+      currentUser = user;
+      updateHeaderForUser(user);
+      startPolling(); // resume background sync for returning session
+    }
   }
 
   refreshAdminStats();
@@ -1374,4 +1613,3 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-
