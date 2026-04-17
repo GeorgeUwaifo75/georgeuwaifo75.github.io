@@ -416,122 +416,166 @@ const App = {
   },
 
   async openTripDetail(tripId, trips, users) {
-    if (!Auth.isLoggedIn()) {
-      this.showToast('Please sign in to view trip details and chat with drivers.', 'warning');
-      this.navigate('signin');
-      return;
-    }
-    const trip = trips.find(t => t.id === tripId);
-    const driver = users.find(u => u.id === trip?.driverId);
-    if (!trip || !driver) return;
+  if (!Auth.isLoggedIn()) {
+    this.showToast('Please sign in to view trip details and chat with drivers.', 'warning');
+    this.navigate('signin');
+    return;
+  }
+  const trip = trips.find(t => t.id === tripId);
+  const driver = users.find(u => u.id === trip?.driverId);
+  if (!trip || !driver) return;
 
-    // Compact date: "Mon, 21 Apr 2025"
-    const depDate = new Date(trip.departureDate).toLocaleDateString('en-NG', {
-      weekday:'short', day:'numeric', month:'short', year:'numeric'
+  // Compact date: "Mon, 21 Apr 2025"
+  const depDate = new Date(trip.departureDate).toLocaleDateString('en-NG', {
+    weekday:'short', day:'numeric', month:'short', year:'numeric'
+  });
+  const initials = driver.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+
+  // Car photos - larger sizes now!
+  const carPhotos = driver.carPhotos || {};
+  const photoKeys = ['front', 'back', 'side', 'interior'];
+  const photoLabels = {
+    front: 'Front View',
+    back: 'Back View',
+    side: 'Side View',
+    interior: 'Interior'
+  };
+  
+  // Build larger thumbnails (120px width, 80px height)
+  const thumbs = photoKeys
+    .filter(k => carPhotos[k])
+    .map(k => `
+      <div class="trip-photo-thumb" data-photo-url="${carPhotos[k]}" data-photo-label="${photoLabels[k]}">
+        <img src="${carPhotos[k]}" alt="${k}" loading="lazy">
+        <span class="photo-label">${photoLabels[k]}</span>
+        <div class="photo-expand-icon">🔍</div>
+      </div>
+    `)
+    .join('');
+    
+  const thumbStrip = thumbs
+    ? `<div class="trip-photos-strip">${thumbs}</div>`
+    : '';
+
+  // Helper: compact label+value cell
+  const cell = (label, value) =>
+    `<div style="background:var(--off-white);border-radius:6px;padding:7px 9px;">
+       <div style="font-size:0.6rem;font-weight:800;color:var(--gray);text-transform:uppercase;
+                   letter-spacing:0.8px;margin-bottom:2px;">${label}</div>
+       <div style="font-weight:700;font-size:0.82rem;color:var(--text);">${value}</div>
+     </div>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  // Click backdrop to close
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.innerHTML = `
+    <div class="modal trip-detail-modal">
+
+      <!-- Compact header -->
+      <div class="modal-header" style="padding:10px 14px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:0.95rem;font-weight:900;letter-spacing:0.3px;">🚗 Trip Details</div>
+          <span style="font-size:0.7rem;background:rgba(255,255,255,0.18);
+                       padding:2px 8px;border-radius:20px;font-weight:700;">
+            ${trip.originState} → ${trip.destination}
+          </span>
+        </div>
+        <button onclick="this.closest('.modal-overlay').remove()"
+                style="background:rgba(255,255,255,0.18);border:none;color:white;
+                       width:26px;height:26px;border-radius:50%;cursor:pointer;
+                       font-size:0.85rem;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+
+      <!-- Scrollable body -->
+      <div class="modal-body trip-detail-body">
+
+        ${thumbStrip}
+
+        <!-- 6-cell info grid -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+          ${cell('From', trip.originState)}
+          ${cell('To', trip.destination)}
+          ${cell('Seats', trip.availableSeats || '—')}
+          ${cell('Date', depDate)}
+          ${cell('Time', trip.departureTime || 'TBD')}
+          ${cell('Pickup', trip.departurePoint || 'TBD')}
+        </div>
+
+        <!-- Driver strip -->
+        <div style="display:flex;align-items:center;gap:9px;
+                    background:var(--off-white);border-radius:7px;padding:8px 10px;
+                    margin-bottom:${trip.notes ? '8px' : '0'};">
+          <div class="driver-avatar-sm" style="width:30px;height:30px;font-size:0.72rem;flex-shrink:0;">
+            ${initials}
+          </div>
+          <div style="min-width:0;">
+            <div style="font-weight:800;font-size:0.82rem;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${driver.fullName}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-light);">
+              ${driver.carType || ''} ${driver.carYear || ''}
+            </div>
+          </div>
+        </div>
+
+        ${trip.notes ? `
+        <div style="font-size:0.78rem;color:var(--text-light);line-height:1.5;
+                    background:rgba(26,60,143,0.04);border-radius:6px;padding:7px 9px;
+                    border-left:3px solid var(--blue-light);">
+          ${trip.notes}
+        </div>` : ''}
+
+      </div><!-- /body -->
+
+      <!-- Footer -->
+      <div class="modal-footer" style="padding:9px 14px;gap:8px;">
+        <button class="btn btn-outline btn-sm"
+                style="font-size:0.78rem;padding:7px 14px;"
+                onclick="this.closest('.modal-overlay').remove()">Close</button>
+        <button class="btn btn-primary btn-sm"
+                style="font-size:0.78rem;padding:7px 14px;"
+                onclick="App.openChatModal('${trip.id}','${driver.id}');
+                         this.closest('.modal-overlay').remove()">
+          💬 Chat with Driver
+        </button>
+      </div>
+
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Add click-to-expand functionality for photos
+  const photoThumbs = overlay.querySelectorAll('.trip-photo-thumb');
+  photoThumbs.forEach(thumb => {
+    thumb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const photoUrl = thumb.dataset.photoUrl;
+      const photoLabel = thumb.dataset.photoLabel;
+      if (photoUrl) {
+        this.showFullSizeImage(photoUrl, photoLabel);
+      }
     });
-    const initials = driver.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  });
+},
 
-    // Thumbnail strip of car photos (max 4, small squares)
-    const carPhotos = driver.carPhotos || {};
-    const thumbs = ['front','back','side','interior']
-      .filter(k => carPhotos[k])
-      .map(k => `<img src="${carPhotos[k]}" alt="${k}"
-            style="width:54px;height:40px;object-fit:cover;border-radius:4px;
-                   border:1.5px solid var(--light-gray);flex-shrink:0;">`)
-      .join('');
-    const thumbStrip = thumbs
-      ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${thumbs}</div>`
-      : '';
-
-    // Helper: compact label+value cell
-    const cell = (label, value) =>
-      `<div style="background:var(--off-white);border-radius:6px;padding:7px 9px;">
-         <div style="font-size:0.6rem;font-weight:800;color:var(--gray);text-transform:uppercase;
-                     letter-spacing:0.8px;margin-bottom:2px;">${label}</div>
-         <div style="font-weight:700;font-size:0.82rem;color:var(--text);">${value}</div>
-       </div>`;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    // Click backdrop to close
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-    overlay.innerHTML = `
-      <div class="modal trip-detail-modal">
-
-        <!-- Compact header -->
-        <div class="modal-header" style="padding:10px 14px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div style="font-size:0.95rem;font-weight:900;letter-spacing:0.3px;">🚗 Trip Details</div>
-            <span style="font-size:0.7rem;background:rgba(255,255,255,0.18);
-                         padding:2px 8px;border-radius:20px;font-weight:700;">
-              ${trip.originState} → ${trip.destination}
-            </span>
-          </div>
-          <button onclick="this.closest('.modal-overlay').remove()"
-                  style="background:rgba(255,255,255,0.18);border:none;color:white;
-                         width:26px;height:26px;border-radius:50%;cursor:pointer;
-                         font-size:0.85rem;display:flex;align-items:center;justify-content:center;">✕</button>
-        </div>
-
-        <!-- Scrollable body -->
-        <div class="modal-body trip-detail-body">
-
-          ${thumbStrip}
-
-          <!-- 6-cell info grid -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
-            ${cell('From', trip.originState)}
-            ${cell('To', trip.destination)}
-            ${cell('Seats', trip.availableSeats || '—')}
-            ${cell('Date', depDate)}
-            ${cell('Time', trip.departureTime || 'TBD')}
-            ${cell('Pickup', trip.departurePoint || 'TBD')}
-          </div>
-
-          <!-- Driver strip -->
-          <div style="display:flex;align-items:center;gap:9px;
-                      background:var(--off-white);border-radius:7px;padding:8px 10px;
-                      margin-bottom:${trip.notes ? '8px' : '0'};">
-            <div class="driver-avatar-sm" style="width:30px;height:30px;font-size:0.72rem;flex-shrink:0;">
-              ${initials}
-            </div>
-            <div style="min-width:0;">
-              <div style="font-weight:800;font-size:0.82rem;
-                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${driver.fullName}
-              </div>
-              <div style="font-size:0.72rem;color:var(--text-light);">
-                ${driver.carType || ''} ${driver.carYear || ''}
-              </div>
-            </div>
-          </div>
-
-          ${trip.notes ? `
-          <div style="font-size:0.78rem;color:var(--text-light);line-height:1.5;
-                      background:rgba(26,60,143,0.04);border-radius:6px;padding:7px 9px;
-                      border-left:3px solid var(--blue-light);">
-            ${trip.notes}
-          </div>` : ''}
-
-        </div><!-- /body -->
-
-        <!-- Footer -->
-        <div class="modal-footer" style="padding:9px 14px;gap:8px;">
-          <button class="btn btn-outline btn-sm"
-                  style="font-size:0.78rem;padding:7px 14px;"
-                  onclick="this.closest('.modal-overlay').remove()">Close</button>
-          <button class="btn btn-primary btn-sm"
-                  style="font-size:0.78rem;padding:7px 14px;"
-                  onclick="App.openChatModal('${trip.id}','${driver.id}');
-                           this.closest('.modal-overlay').remove()">
-            💬 Chat with Driver
-          </button>
-        </div>
-
-      </div>`;
-    document.body.appendChild(overlay);
-  },
+// New method to show full-size image in a modal
+showFullSizeImage(imageUrl, label) {
+  const fullImgOverlay = document.createElement('div');
+  fullImgOverlay.className = 'full-image-overlay';
+  fullImgOverlay.innerHTML = `
+    <div class="full-image-container">
+      <button class="full-image-close" onclick="this.closest('.full-image-overlay').remove()">✕</button>
+      <img src="${imageUrl}" alt="${label}" class="full-image">
+      <div class="full-image-caption">${label}</div>
+    </div>
+  `;
+  fullImgOverlay.addEventListener('click', (e) => {
+    if (e.target === fullImgOverlay) fullImgOverlay.remove();
+  });
+  document.body.appendChild(fullImgOverlay);
+},
 
   // ── Chat Modal ──
   async openChatModal(tripId, driverId) {
