@@ -415,7 +415,7 @@ const App = {
     </div>`;
   },
 
-  async openTripDetail(tripId, trips, users) {
+async openTripDetail(tripId, trips, users) {
   if (!Auth.isLoggedIn()) {
     this.showToast('Please sign in to view trip details and chat with drivers.', 'warning');
     this.navigate('signin');
@@ -431,7 +431,7 @@ const App = {
   });
   const initials = driver.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
 
-  // Car photos - larger sizes now!
+  // Car photos - store all available photos in an array for navigation
   const carPhotos = driver.carPhotos || {};
   const photoKeys = ['front', 'back', 'side', 'interior'];
   const photoLabels = {
@@ -441,17 +441,23 @@ const App = {
     interior: 'Interior'
   };
   
-  // Build larger thumbnails (120px width, 80px height)
-  const thumbs = photoKeys
+  // Build array of available photos for navigation
+  const availablePhotos = photoKeys
     .filter(k => carPhotos[k])
-    .map(k => `
-      <div class="trip-photo-thumb" data-photo-url="${carPhotos[k]}" data-photo-label="${photoLabels[k]}">
-        <img src="${carPhotos[k]}" alt="${k}" loading="lazy">
-        <span class="photo-label">${photoLabels[k]}</span>
-        <div class="photo-expand-icon">🔍</div>
-      </div>
-    `)
-    .join('');
+    .map(k => ({
+      url: carPhotos[k],
+      label: photoLabels[k],
+      key: k
+    }));
+  
+  // Build larger thumbnails (120px width, 80px height)
+  const thumbs = availablePhotos.map((photo, idx) => `
+    <div class="trip-photo-thumb" data-photo-index="${idx}" data-photo-url="${photo.url}" data-photo-label="${photo.label}">
+      <img src="${photo.url}" alt="${photo.label}" loading="lazy">
+      <span class="photo-label">${photo.label}</span>
+      <div class="photo-expand-icon">🔍</div>
+    </div>
+  `).join('');
     
   const thumbStrip = thumbs
     ? `<div class="trip-photos-strip">${thumbs}</div>`
@@ -469,6 +475,9 @@ const App = {
   overlay.className = 'modal-overlay';
   // Click backdrop to close
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Store availablePhotos data on the overlay for the image viewer
+  overlay.dataset.photos = JSON.stringify(availablePhotos);
 
   overlay.innerHTML = `
     <div class="modal trip-detail-modal">
@@ -546,35 +555,158 @@ const App = {
     </div>`;
   document.body.appendChild(overlay);
 
-  // Add click-to-expand functionality for photos
+  // Add click-to-expand functionality for photos with navigation
   const photoThumbs = overlay.querySelectorAll('.trip-photo-thumb');
   photoThumbs.forEach(thumb => {
     thumb.addEventListener('click', (e) => {
       e.stopPropagation();
-      const photoUrl = thumb.dataset.photoUrl;
-      const photoLabel = thumb.dataset.photoLabel;
-      if (photoUrl) {
-        this.showFullSizeImage(photoUrl, photoLabel);
+      const photoIndex = parseInt(thumb.dataset.photoIndex);
+      if (!isNaN(photoIndex)) {
+        this.showFullSizeImageWithNav(availablePhotos, photoIndex);
       }
     });
   });
 },
 
-// New method to show full-size image in a modal
-showFullSizeImage(imageUrl, label) {
+// New method to show full-size image with next/previous navigation
+showFullSizeImageWithNav(photos, startIndex) {
+  if (!photos || photos.length === 0) return;
+  
+  let currentIndex = startIndex;
+  const totalPhotos = photos.length;
+  
+  // Create the full image overlay container
   const fullImgOverlay = document.createElement('div');
   fullImgOverlay.className = 'full-image-overlay';
+  fullImgOverlay.id = 'full-image-overlay';
+  
+  // Build navigation buttons (only show if more than one photo)
+  const navButtons = totalPhotos > 1 ? `
+    <button class="full-image-nav full-image-prev" id="full-image-prev">‹</button>
+    <button class="full-image-nav full-image-next" id="full-image-next">›</button>
+    <div class="full-image-counter">${currentIndex + 1} / ${totalPhotos}</div>
+  ` : '';
+  
   fullImgOverlay.innerHTML = `
     <div class="full-image-container">
-      <button class="full-image-close" onclick="this.closest('.full-image-overlay').remove()">✕</button>
-      <img src="${imageUrl}" alt="${label}" class="full-image">
-      <div class="full-image-caption">${label}</div>
+      <button class="full-image-close" onclick="App.closeFullImageViewer()">✕</button>
+      ${navButtons}
+      <img src="${photos[currentIndex].url}" alt="${photos[currentIndex].label}" class="full-image" id="full-image">
+      <div class="full-image-caption" id="full-image-caption">${photos[currentIndex].label}</div>
     </div>
   `;
-  fullImgOverlay.addEventListener('click', (e) => {
-    if (e.target === fullImgOverlay) fullImgOverlay.remove();
-  });
+  
   document.body.appendChild(fullImgOverlay);
+  
+  // Store photos data globally for navigation
+  window._currentPhotoSet = photos;
+  window._currentPhotoIndex = currentIndex;
+  
+  // Add click outside to close
+  fullImgOverlay.addEventListener('click', (e) => {
+    if (e.target === fullImgOverlay) {
+      this.closeFullImageViewer();
+    }
+  });
+  
+  // Add navigation event listeners if multiple photos
+  if (totalPhotos > 1) {
+    const prevBtn = document.getElementById('full-image-prev');
+    const nextBtn = document.getElementById('full-image-next');
+    
+    if (prevBtn) {
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.navigateFullImage(-1);
+      });
+    }
+    
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.navigateFullImage(1);
+      });
+    }
+    
+    // Keyboard navigation
+    const keyHandler = (e) => {
+      if (!document.getElementById('full-image-overlay')) {
+        document.removeEventListener('keydown', keyHandler);
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        this.navigateFullImage(-1);
+      } else if (e.key === 'ArrowRight') {
+        this.navigateFullImage(1);
+      } else if (e.key === 'Escape') {
+        this.closeFullImageViewer();
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
+    
+    // Also support swipe on touch devices
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    fullImgOverlay.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+    
+    fullImgOverlay.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      const swipeDistance = touchEndX - touchStartX;
+      if (Math.abs(swipeDistance) > 50) {
+        if (swipeDistance > 0) {
+          this.navigateFullImage(-1); // Swipe right for previous
+        } else {
+          this.navigateFullImage(1);  // Swipe left for next
+        }
+      }
+    });
+  }
+},
+
+// Navigate through full-size images
+navigateFullImage(direction) {
+  if (!window._currentPhotoSet) return;
+  
+  const photos = window._currentPhotoSet;
+  let newIndex = window._currentPhotoIndex + direction;
+  
+  // Wrap around
+  if (newIndex < 0) newIndex = photos.length - 1;
+  if (newIndex >= photos.length) newIndex = 0;
+  
+  window._currentPhotoIndex = newIndex;
+  
+  // Update image and caption with fade effect
+  const imgElement = document.getElementById('full-image');
+  const captionElement = document.getElementById('full-image-caption');
+  const counterElement = document.querySelector('.full-image-counter');
+  
+  if (imgElement) {
+    // Add fade out effect
+    imgElement.style.opacity = '0';
+    
+    setTimeout(() => {
+      imgElement.src = photos[newIndex].url;
+      if (captionElement) captionElement.textContent = photos[newIndex].label;
+      if (counterElement && photos.length > 1) {
+        counterElement.textContent = `${newIndex + 1} / ${photos.length}`;
+      }
+      imgElement.style.opacity = '1';
+    }, 150);
+  }
+},
+
+// Close full image viewer
+closeFullImageViewer() {
+  const overlay = document.getElementById('full-image-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+  window._currentPhotoSet = null;
+  window._currentPhotoIndex = null;
 },
 
   // ── Chat Modal ──
