@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Naybor Travel Express - Delivering on neighborly and friendly travels to Nigerians.">
+  <meta name="theme-color" content="#1A3C8F">
+  <title>Naybor Travel Express</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231A3C8F'/><text y='.9em' x='50%' text-anchor='middle' font-size='55' fill='white'>🚗</text></svg>">
+
+  <!-- External Libraries -->
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+  <!-- EmailJS -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <!-- Paystack -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     NAVIGATION
+════════════════════════════════════════════ -->
+<nav id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <!-- Logo -->
+      <a class="nav-logo" href="#" onclick="App.navigate('home'); return false;">
+        <div class="logo-circle">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Car body -->
+            <rect x="4" y="17" width="32" height="12" rx="3" fill="white" opacity="0.9"/>
+            <path d="M10 17 L14 10 H26 L30 17Z" fill="white" opacity="0.9"/>
+            <!-- Windows -->
+            <path d="M15 17 L17 12 H23 L25 17Z" fill="#1A3C8F" opacity="0.7"/>
+            <!-- Wheels -->
+            <circle cx="11" cy="29" r="4" fill="#D72B2B"/>
+            <circle cx="29" cy="29" r="4" fill="#D72B2B"/>
+            <circle cx="11" cy="29" r="2" fill="white"/>
+            <circle cx="29" cy="29" r="2" fill="white"/>
+            <!-- Flash bolt -->
+            <path d="M22 14 L19 20 L21.5 20 L18 26 L24 18 L21 18Z" fill="#FFD700"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <div class="brand">Naybor Travel</div>
+          <div class="tagline">Express · Nigeria</div>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <div class="nav-links">
+        <a class="nav-link active" data-page="home" href="#">Home</a>
+        <a class="nav-link" data-page="signin" href="#">Sign In</a>
+        <a class="nav-link" data-page="about" href="#">About</a>
+      </div>
+
+      <!-- User Area -->
+      <div class="nav-user-area" id="nav-user-area"></div>
+
+      <!-- Hamburger -->
+      <div class="hamburger" id="hamburger">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile Nav -->
+<div class="mobile-nav" id="mobile-nav">
+  <a class="nav-link" data-page="home" href="#">🏠 Home</a>
+  <a class="nav-link" data-page="signin" href="#">🔑 Sign In</a>
+  <a class="nav-link" data-page="about" href="#">ℹ️ About</a>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE: HOME
+════════════════════════════════════════════ -->
+<main id="page-home" class="page active">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span>🇳🇬</span> Nigeria's Neighborly Travel Network
+        </div>
+        <h1>NAYBOR<br><span>TRAVEL</span><br>EXPRESS</h1>
+        <p>Delivering on neighborly and friendly travels to Nigerians. Connect with trusted drivers in your community for intercity trips across all 36 states.</p>
+        <div class="hero-cta">
+          <button class="btn btn-primary btn-lg" onclick="App.navigate('signin')">
+            🚗 Find a Ride
+          </button>
+          <button class="btn btn-outline btn-lg" style="border-color:white;color:white" onclick="App.navigate('about')">
+            Learn More
+          </button>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-item"><div class="num">36</div><div class="label">States Covered</div></div>
+          <div class="stat-item"><div class="num">100%</div><div class="label">Verified Drivers</div></div>
+          <div class="stat-item"><div class="num">₦0</div><div class="label">Platform Fee</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-road"></div>
+  </section>
+
+  <!-- Search Bar -->
+  <section class="search-bar-section">
+    <div class="container">
+      <form id="search-form" class="search-bar">
+        <div class="search-field">
+          <label>FROM STATE</label>
+          <select id="filter-from">
+            <option value="">All States</option>
+          </select>
+        </div>
+        <div class="search-field">
+          <label>TO DESTINATION</label>
+          <select id="filter-to">
+            <option value="">All Destinations</option>
+          </select>
+        </div>
+        <div class="search-field">
+          <label>TRAVEL DATE</label>
+          <input type="date" id="filter-date">
+        </div>
+        <button type="submit" class="btn btn-primary" style="flex-shrink:0">
+          🔍 Search
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Trips Listing -->
+  <section class="trips-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">AVAILABLE TRIPS</h2>
+        <span style="font-size:0.85rem;color:var(--text-light);font-weight:600">Future departures only</span>
+      </div>
+      <div id="trips-container">
+        <div class="empty-state">
+          <div class="spinner" style="margin: 0 auto 16px"></div>
+          <p>Loading available trips...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section style="background:var(--white);padding:70px 0">
+    <div class="container">
+      <div class="text-center" style="margin-bottom:40px">
+        <h2 style="font-family:var(--font-display);font-size:2.5rem;color:var(--blue);letter-spacing:1px">HOW IT WORKS</h2>
+        <p style="color:var(--text-light);margin-top:8px">Simple, safe, and neighborly intercity travel</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px">
+        <div style="text-align:center;padding:28px">
+          <div style="font-size:3rem;margin-bottom:16px">📝</div>
+          <h3 style="font-weight:800;margin-bottom:10px;color:var(--blue)">1. Register</h3>
+          <p style="color:var(--text-light);font-size:0.9rem;line-height:1.6">Sign up as a driver or passenger. Drivers get verified before activation.</p>
+        </div>
+        <div style="text-align:center;padding:28px">
+          <div style="font-size:3rem;margin-bottom:16px">📍</div>
+          <h3 style="font-weight:800;margin-bottom:10px;color:var(--blue)">2. Post or Find</h3>
+          <p style="color:var(--text-light);font-size:0.9rem;line-height:1.6">Drivers post trips; passengers search for routes matching their destination.</p>
+        </div>
+        <div style="text-align:center;padding:28px">
+          <div style="font-size:3rem;margin-bottom:16px">💬</div>
+          <h3 style="font-weight:800;margin-bottom:10px;color:var(--blue)">3. Connect</h3>
+          <p style="color:var(--text-light);font-size:0.9rem;line-height:1.6">Chat securely through the platform. Drivers are alerted via email.</p>
+        </div>
+        <div style="text-align:center;padding:28px">
+          <div style="font-size:3rem;margin-bottom:16px">🚗</div>
+          <h3 style="font-weight:800;margin-bottom:10px;color:var(--blue)">4. Travel</h3>
+          <p style="color:var(--text-light);font-size:0.9rem;line-height:1.6">Meet at the agreed pickup point and enjoy a safe, neighborly journey!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE: SIGN IN / SIGN UP
+════════════════════════════════════════════ -->
+<div id="page-signin" class="page">
+  <div class="form-page">
+    <div class="form-card" style="max-width:600px">
+      <div class="form-card-header">
+        <div style="display:flex;justify-content:center;margin-bottom:16px">
+          <div class="logo-circle" style="width:64px;height:64px">
+            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:40px;height:40px">
+              <rect x="4" y="17" width="32" height="12" rx="3" fill="white" opacity="0.9"/>
+              <path d="M10 17 L14 10 H26 L30 17Z" fill="white" opacity="0.9"/>
+              <path d="M15 17 L17 12 H23 L25 17Z" fill="#1A3C8F" opacity="0.7"/>
+              <circle cx="11" cy="29" r="4" fill="#D72B2B"/>
+              <circle cx="29" cy="29" r="4" fill="#D72B2B"/>
+              <circle cx="11" cy="29" r="2" fill="white"/>
+              <circle cx="29" cy="29" r="2" fill="white"/>
+              <path d="M22 14 L19 20 L21.5 20 L18 26 L24 18 L21 18Z" fill="#FFD700"/>
+            </svg>
+          </div>
+        </div>
+        <h2>Naybor Travel Express</h2>
+        <p>Your neighborly travel companion across Nigeria</p>
+      </div>
+
+      <div class="form-card-body">
+        <!-- Tab Switcher -->
+        <div class="tab-switcher">
+          <button class="tab-btn active" data-tab="signin" onclick="App.switchAuthTab('signin')">Sign In</button>
+          <button class="tab-btn" data-tab="signup" onclick="App.switchAuthTab('signup')">Create Account</button>
+        </div>
+
+        <!-- ── SIGN IN PANEL ── -->
+        <div id="signin-panel">
+          <form id="signin-form" onsubmit="App.handleSignIn(event)">
+            <div class="form-group">
+              <label class="form-label">Email Address / Username <span class="req">*</span></label>
+              <input type="text" id="signin-email" class="form-input" placeholder="your@email.com" required autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password <span class="req">*</span></label>
+              <input type="password" id="signin-password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <button type="submit" id="signin-btn" class="btn btn-primary btn-block btn-lg">Sign In</button>
+          </form>
+          <p style="text-align:center;margin-top:20px;font-size:0.85rem;color:var(--text-light)">
+            New to Naybor Travel? <a href="#" onclick="App.switchAuthTab('signup'); return false;" style="color:var(--blue);font-weight:700">Create an account →</a>
+          </p>
+        </div>
+
+        <!-- ── SIGN UP PANEL ── -->
+        <div id="signup-panel" style="display:none">
+          <form id="signup-form" onsubmit="App.handleSignUp(event)">
+            <!-- Account Type -->
+            <div class="form-group">
+              <label class="form-label">I am registering as <span class="req">*</span></label>
+              <select id="signup-user-type" class="form-input" required>
+                <option value="passenger">🧳 Passenger — I want to find rides</option>
+                <option value="driver">🚗 Driver — I offer rides in my car</option>
+              </select>
+            </div>
+
+            <!-- Common Fields -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Full Name <span class="req">*</span></label>
+                <input type="text" id="signup-name" class="form-input" placeholder="e.g. Chukwuemeka Obi" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone Number <span class="req">*</span></label>
+                <input type="tel" id="signup-phone" class="form-input" placeholder="090 XXXX XXXX" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address <span class="req">*</span></label>
+              <input type="email" id="signup-email" class="form-input" placeholder="your@email.com" required autocomplete="email">
+            </div>
+
+            <!-- Passenger-only -->
+            <div class="form-group" id="passenger-only-fields">
+              <label class="form-label">Gender</label>
+              <select id="signup-gender" class="form-input">
+                <option value="">Prefer not to say</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <!-- Password -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Password <span class="req">*</span></label>
+                <input type="password" id="signup-password" class="form-input" placeholder="Min. 8 characters" required minlength="8" autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirm Password <span class="req">*</span></label>
+                <input type="password" id="signup-confirm-password" class="form-input" placeholder="Repeat password" required autocomplete="new-password">
+              </div>
+            </div>
+
+            <!-- Driver-only Fields -->
+            <div id="driver-fields" style="display:none">
+              <div style="background:rgba(26,60,143,0.05);border-radius:10px;padding:16px;margin-bottom:20px;border-left:3px solid var(--blue)">
+                <p style="font-size:0.82rem;font-weight:700;color:var(--blue)">🚗 Driver Registration</p>
+                <p style="font-size:0.78rem;color:var(--text-light);margin-top:4px">Your account will be reviewed by an administrator before activation. You'll receive an email with the decision.</p>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Car Type / Model <span class="req">*</span></label>
+                  <input type="text" id="signup-car-type" class="form-input" placeholder="e.g. Toyota Camry">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Year of Car <span class="req">*</span></label>
+                  <input type="number" id="signup-car-year" class="form-input" placeholder="e.g. 2019" min="1990" max="2026">
+                </div>
+              </div>
+
+              <!-- ── Driver's Licence ── -->
+              <div class="form-group">
+                <div class="photo-slot" id="slot-license">
+                  <div class="photo-slot-label">
+                    <span class="slot-icon">🪪</span>
+                    Driver's Licence Photo <span class="req">*</span>
+                  </div>
+                  <div class="photo-drop-zone" id="zone-license" onclick="PhotoUpload.trigger('license')">
+                    <input type="file" id="signup-license" accept="image/*,.pdf" onchange="PhotoUpload.onFileSelected('license', this)">
+                    <!-- idle prompt -->
+                    <div class="photo-prompt">
+                      <div class="prompt-icon">📁</div>
+                      <div class="prompt-title">Click or drag &amp; drop</div>
+                      <div class="prompt-sub">JPG, PNG or PDF · max 5 MB</div>
+                    </div>
+                    <!-- preview image -->
+                    <img class="photo-preview-img" id="prev-license" alt="Licence preview">
+                    <!-- success badge -->
+                    <div class="photo-success-badge">✓</div>
+                    <!-- remove button -->
+                    <button type="button" class="photo-remove-btn" onclick="PhotoUpload.remove('license', event)" title="Remove">✕</button>
+                    <!-- hover overlay -->
+                    <div class="photo-preview-overlay">
+                      <div class="overlay-icon">🔄</div>
+                      <div class="overlay-text">Replace photo</div>
+                    </div>
+                    <!-- uploading ring -->
+                    <div class="photo-progress-wrap">
+                      <svg class="progress-ring" viewBox="0 0 52 52">
+                        <circle class="progress-ring-bg" cx="26" cy="26" r="22"/>
+                        <circle class="progress-ring-fill indeterminate" id="ring-license" cx="26" cy="26" r="22"/>
+                      </svg>
+                      <div class="progress-label" id="prog-label-license">Reading…</div>
+                    </div>
+                  </div>
+                  <!-- file info strip -->
+                  <div class="photo-file-info" id="finfo-license">
+                    <span class="fi-icon">📄</span>
+                    <span class="fi-name" id="fname-license">—</span>
+                    <span class="fi-size" id="fsize-license"></span>
+                    <span class="fi-ok">✓ Ready</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── 4 Car Photos ── -->
+              <div class="form-group">
+                <div class="photo-slot-label" style="margin-bottom:10px">
+                  <span class="slot-icon">📸</span>
+                  Car Photos — all 4 views required <span class="req">*</span>
+                </div>
+                <div class="car-photos-grid">
+
+                  <!-- Front -->
+                  <div class="photo-slot" id="slot-front">
+                    <div class="photo-drop-zone" id="zone-front" onclick="PhotoUpload.trigger('front')">
+                      <input type="file" id="car-front" accept="image/*" onchange="PhotoUpload.onFileSelected('front', this)">
+                      <div class="photo-prompt">
+                        <div class="prompt-icon">🚗</div>
+                        <div class="prompt-title">Front View</div>
+                        <div class="prompt-sub">Click or drag</div>
+                      </div>
+                      <img class="photo-preview-img" id="prev-front" alt="Front view">
+                      <div class="photo-success-badge">✓</div>
+                      <button type="button" class="photo-remove-btn" onclick="PhotoUpload.remove('front', event)" title="Remove">✕</button>
+                      <div class="photo-preview-overlay">
+                        <div class="overlay-icon">🔄</div>
+                        <div class="overlay-text">Replace</div>
+                      </div>
+                      <div class="photo-progress-wrap">
+                        <svg class="progress-ring" viewBox="0 0 52 52">
+                          <circle class="progress-ring-bg" cx="26" cy="26" r="22"/>
+                          <circle class="progress-ring-fill indeterminate" id="ring-front" cx="26" cy="26" r="22"/>
+                        </svg>
+                        <div class="progress-label">Reading…</div>
+                      </div>
+                    </div>
+                    <div class="photo-file-info" id="finfo-front">
+                      <span class="fi-icon">🖼️</span>
+                      <span class="fi-name" id="fname-front">—</span>
+                      <span class="fi-size" id="fsize-front"></span>
+                      <span class="fi-ok">✓</span>
+                    </div>
+                  </div>
+
+                  <!-- Back -->
+                  <div class="photo-slot" id="slot-back">
+                    <div class="photo-drop-zone" id="zone-back" onclick="PhotoUpload.trigger('back')">
+                      <input type="file" id="car-back" accept="image/*" onchange="PhotoUpload.onFileSelected('back', this)">
+                      <div class="photo-prompt">
+                        <div class="prompt-icon">🔙</div>
+                        <div class="prompt-title">Back View</div>
+                        <div class="prompt-sub">Click or drag</div>
+                      </div>
+                      <img class="photo-preview-img" id="prev-back" alt="Back view">
+                      <div class="photo-success-badge">✓</div>
+                      <button type="button" class="photo-remove-btn" onclick="PhotoUpload.remove('back', event)" title="Remove">✕</button>
+                      <div class="photo-preview-overlay">
+                        <div class="overlay-icon">🔄</div>
+                        <div class="overlay-text">Replace</div>
+                      </div>
+                      <div class="photo-progress-wrap">
+                        <svg class="progress-ring" viewBox="0 0 52 52">
+                          <circle class="progress-ring-bg" cx="26" cy="26" r="22"/>
+                          <circle class="progress-ring-fill indeterminate" id="ring-back" cx="26" cy="26" r="22"/>
+                        </svg>
+                        <div class="progress-label">Reading…</div>
+                      </div>
+                    </div>
+                    <div class="photo-file-info" id="finfo-back">
+                      <span class="fi-icon">🖼️</span>
+                      <span class="fi-name" id="fname-back">—</span>
+                      <span class="fi-size" id="fsize-back"></span>
+                      <span class="fi-ok">✓</span>
+                    </div>
+                  </div>
+
+                  <!-- Side -->
+                  <div class="photo-slot" id="slot-side">
+                    <div class="photo-drop-zone" id="zone-side" onclick="PhotoUpload.trigger('side')">
+                      <input type="file" id="car-side" accept="image/*" onchange="PhotoUpload.onFileSelected('side', this)">
+                      <div class="photo-prompt">
+                        <div class="prompt-icon">↔️</div>
+                        <div class="prompt-title">Side View</div>
+                        <div class="prompt-sub">Click or drag</div>
+                      </div>
+                      <img class="photo-preview-img" id="prev-side" alt="Side view">
+                      <div class="photo-success-badge">✓</div>
+                      <button type="button" class="photo-remove-btn" onclick="PhotoUpload.remove('side', event)" title="Remove">✕</button>
+                      <div class="photo-preview-overlay">
+                        <div class="overlay-icon">🔄</div>
+                        <div class="overlay-text">Replace</div>
+                      </div>
+                      <div class="photo-progress-wrap">
+                        <svg class="progress-ring" viewBox="0 0 52 52">
+                          <circle class="progress-ring-bg" cx="26" cy="26" r="22"/>
+                          <circle class="progress-ring-fill indeterminate" id="ring-side" cx="26" cy="26" r="22"/>
+                        </svg>
+                        <div class="progress-label">Reading…</div>
+                      </div>
+                    </div>
+                    <div class="photo-file-info" id="finfo-side">
+                      <span class="fi-icon">🖼️</span>
+                      <span class="fi-name" id="fname-side">—</span>
+                      <span class="fi-size" id="fsize-side"></span>
+                      <span class="fi-ok">✓</span>
+                    </div>
+                  </div>
+
+                  <!-- Interior -->
+                  <div class="photo-slot" id="slot-interior">
+                    <div class="photo-drop-zone" id="zone-interior" onclick="PhotoUpload.trigger('interior')">
+                      <input type="file" id="car-interior" accept="image/*" onchange="PhotoUpload.onFileSelected('interior', this)">
+                      <div class="photo-prompt">
+                        <div class="prompt-icon">🪑</div>
+                        <div class="prompt-title">Interior</div>
+                        <div class="prompt-sub">Click or drag</div>
+                      </div>
+                      <img class="photo-preview-img" id="prev-interior" alt="Interior view">
+                      <div class="photo-success-badge">✓</div>
+                      <button type="button" class="photo-remove-btn" onclick="PhotoUpload.remove('interior', event)" title="Remove">✕</button>
+                      <div class="photo-preview-overlay">
+                        <div class="overlay-icon">🔄</div>
+                        <div class="overlay-text">Replace</div>
+                      </div>
+                      <div class="photo-progress-wrap">
+                        <svg class="progress-ring" viewBox="0 0 52 52">
+                          <circle class="progress-ring-bg" cx="26" cy="26" r="22"/>
+                          <circle class="progress-ring-fill indeterminate" id="ring-interior" cx="26" cy="26" r="22"/>
+                        </svg>
+                        <div class="progress-label">Reading…</div>
+                      </div>
+                    </div>
+                    <div class="photo-file-info" id="finfo-interior">
+                      <span class="fi-icon">🖼️</span>
+                      <span class="fi-name" id="fname-interior">—</span>
+                      <span class="fi-size" id="fsize-interior"></span>
+                      <span class="fi-ok">✓</span>
+                    </div>
+                  </div>
+
+                </div><!-- /car-photos-grid -->
+              </div>
+
+              <!-- Upload progress summary (shown while submitting) -->
+              <div class="upload-progress-bar-wrap" id="upload-progress-wrap">
+                <div class="upload-progress-header">
+                  <span class="upload-progress-title">📤 Uploading photos…</span>
+                  <span class="upload-progress-pct" id="upload-pct">0%</span>
+                </div>
+                <div class="upload-progress-track">
+                  <div class="upload-progress-fill" id="upload-fill"></div>
+                </div>
+                <div class="upload-progress-steps" id="upload-steps"></div>
+              </div>
+
+            </div><!-- /driver-fields -->
+
+            <button type="submit" id="signup-btn" class="btn btn-secondary btn-block btn-lg">Create Account</button>
+          </form>
+          <p style="text-align:center;margin-top:20px;font-size:0.85rem;color:var(--text-light)">
+            Already have an account? <a href="#" onclick="App.switchAuthTab('signin'); return false;" style="color:var(--blue);font-weight:700">Sign in →</a>
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE: ABOUT
+════════════════════════════════════════════ -->
+<div id="page-about" class="page">
+  <div class="about-hero">
+    <div class="container">
+      <div class="logo-circle" style="width:80px;height:80px;margin:0 auto 20px">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:50px;height:50px">
+          <rect x="4" y="17" width="32" height="12" rx="3" fill="white" opacity="0.9"/>
+          <path d="M10 17 L14 10 H26 L30 17Z" fill="white" opacity="0.9"/>
+          <path d="M15 17 L17 12 H23 L25 17Z" fill="#1A3C8F" opacity="0.7"/>
+          <circle cx="11" cy="29" r="4" fill="#D72B2B"/>
+          <circle cx="29" cy="29" r="4" fill="#D72B2B"/>
+          <circle cx="11" cy="29" r="2" fill="white"/>
+          <circle cx="29" cy="29" r="2" fill="white"/>
+          <path d="M22 14 L19 20 L21.5 20 L18 26 L24 18 L21 18Z" fill="#FFD700"/>
+        </svg>
+      </div>
+      <h1>About Naybor Travel Express</h1>
+      <p style="max-width:600px;margin:0 auto;font-size:1.1rem;opacity:0.9;line-height:1.6">
+        "Delivering on neighborly and friendly travels to Nigerians."
+      </p>
+    </div>
+  </div>
+
+  <section class="about-section">
+    <div class="container">
+      <div style="max-width:700px;margin:0 auto;text-align:center">
+        <h2 style="font-family:var(--font-display);font-size:2rem;color:var(--blue);margin-bottom:20px;letter-spacing:1px">OUR MISSION</h2>
+        <p style="font-size:1.05rem;line-height:1.8;color:var(--text-light)">
+          Naybor Travel Express is a community-driven intercity travel platform built for Nigerians, by Nigerians.
+          We believe that your neighbor's car ride can be your safest, most affordable, and most friendly way to travel
+          across states — from Lagos to Abuja, from Kano to Port Harcourt, and everywhere in between.
+        </p>
+        <p style="font-size:1.05rem;line-height:1.8;color:var(--text-light);margin-top:16px">
+          We connect verified drivers — everyday people who use their personal vehicles to offer travel services — 
+          with passengers seeking reliable intercity transport. Every driver on our platform is manually reviewed 
+          and approved by our administration team, ensuring safety and trust.
+        </p>
+      </div>
+
+      <div class="about-grid">
+        <div class="about-card">
+          <div class="icon">🛡️</div>
+          <h3>Safety First</h3>
+          <p>Every driver is verified with a valid license and vehicle photos before they can offer any trips on the platform.</p>
+        </div>
+        <div class="about-card red">
+          <div class="icon">🤝</div>
+          <h3>Community Trust</h3>
+          <p>We believe in neighborly trust. Drivers and passengers connect through a transparent, admin-monitored platform.</p>
+        </div>
+        <div class="about-card">
+          <div class="icon">🗺️</div>
+          <h3>All 36 States</h3>
+          <p>Whether you're travelling from Lagos to Enugu or Sokoto to Kaduna, our network spans the entire Nigerian territory.</p>
+        </div>
+        <div class="about-card red">
+          <div class="icon">💬</div>
+          <h3>Direct Communication</h3>
+          <p>Passengers can chat directly with drivers through our secure in-app messaging system before committing to a trip.</p>
+        </div>
+        <div class="about-card">
+          <div class="icon">⚡</div>
+          <h3>Fast & Reliable</h3>
+          <p>Real-time trip listings updated constantly. Find available rides for your route in seconds.</p>
+        </div>
+        <div class="about-card red">
+          <div class="icon">💳</div>
+          <h3>Secure Payments</h3>
+          <p>Powered by Paystack — Nigeria's most trusted payment processor for any platform fees.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:linear-gradient(135deg,var(--blue),var(--red));padding:60px 0;text-align:center;color:white">
+    <div class="container">
+      <h2 style="font-family:var(--font-display);font-size:2.5rem;letter-spacing:1px;margin-bottom:16px">READY TO TRAVEL?</h2>
+      <p style="opacity:0.9;margin-bottom:30px;font-size:1.05rem">Join thousands of Nigerians traveling safely and affordably.</p>
+      <button class="btn btn-primary btn-lg" onclick="App.navigate('signin')" style="margin-right:12px">Get Started</button>
+      <button class="btn" style="background:rgba(255,255,255,0.15);color:white;border:2px solid white;padding:16px 40px;border-radius:999px;font-weight:700" onclick="App.navigate('home')">Browse Trips</button>
+    </div>
+  </section>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE: DASHBOARD (dynamic content)
+════════════════════════════════════════════ -->
+<div id="page-dashboard" class="page">
+  <div id="dashboard-content">
+    <div class="empty-state" style="padding:100px 20px">
+      <div class="spinner" style="margin:0 auto 20px"></div>
+      <p>Loading your dashboard...</p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">NAYBOR TRAVEL EXPRESS</div>
+      <div class="footer-contact">
+        <a href="mailto:geocorpsys@gmail.com">📧 geocorpsys@gmail.com</a>
+        <a href="tel:+2349038197586">📞 090 38 1975 86</a>
+      </div>
+      <div class="footer-copy">© 2026 Naybor Travel Express. All rights reserved.</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ════════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════════ -->
+<script src="config2.js"></script>
+<script src="services.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
