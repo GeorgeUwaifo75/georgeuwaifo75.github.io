@@ -1198,3 +1198,210 @@ footer {
   .form-card-body { padding: 24px 20px; }
   .dash-panel { padding: 16px; }
 }
+
+/* ── Trip Photos Strip (Larger thumbnails) ── */
+.trip-photos-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  justify-content: flex-start;
+}
+
+.trip-photo-thumb {
+  position: relative;
+  width: 120px;
+  height: 90px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
+  border: 2px solid var(--light-gray);
+  background: var(--off-white);
+  flex-shrink: 0;
+}
+
+.trip-photo-thumb:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow);
+  border-color: var(--blue);
+}
+
+.trip-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trip-photo-thumb .photo-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.trip-photo-thumb .photo-expand-icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity var(--transition);
+  color: white;
+}
+
+.trip-photo-thumb:hover .photo-expand-icon {
+  opacity: 1;
+}
+
+/* ── Full Size Image Modal ── */
+.full-image-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  cursor: pointer;
+}
+
+.full-image-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: transparent;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: zoomIn 0.25s ease;
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.full-image {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  display: block;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  background: var(--white);
+}
+
+.full-image-close {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  z-index: 10;
+}
+
+.full-image-close:hover {
+  background: var(--red);
+  border-color: var(--red);
+  transform: scale(1.05);
+}
+
+.full-image-caption {
+  position: absolute;
+  bottom: -32px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-full);
+  width: fit-content;
+  margin: 0 auto;
+  backdrop-filter: blur(4px);
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 640px) {
+  .trip-photo-thumb {
+    width: 100px;
+    height: 75px;
+  }
+  
+  .full-image-container {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  
+  .full-image {
+    max-width: 95vw;
+    max-height: 85vh;
+  }
+  
+  .full-image-close {
+    top: -30px;
+    right: -30px;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+  
+  .full-image-caption {
+    bottom: -28px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .trip-photo-thumb {
+    width: 80px;
+    height: 60px;
+  }
+  
+  .trip-photo-thumb .photo-label {
+    font-size: 0.55rem;
+    padding: 2px 4px;
+  }
+  
+  .full-image-overlay {
+    padding: 20px;
+  }
+}
