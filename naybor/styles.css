@@ -1487,3 +1487,160 @@ footer {
     font-size: 0.7rem;
   }
 }
+/* ── Completed Trip Rows (Passenger My Trips) ── */
+.completed-trip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: var(--off-white);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  border: 1px solid var(--light-gray);
+  transition: box-shadow var(--transition);
+}
+.completed-trip-row:hover { box-shadow: var(--shadow-sm); }
+.completed-trip-info { flex: 1; min-width: 0; }
+.completed-trip-route {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--blue);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.completed-trip-route .arrow { color: var(--red); }
+.completed-trip-meta {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+.completed-trip-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.review-submitted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(34,197,94,0.12);
+  color: #15803d;
+  border: 1px solid rgba(34,197,94,0.3);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+/* ── Review Modal ── */
+.review-modal {
+  max-width: 460px;
+  width: calc(100vw - 32px);
+}
+.review-trip-info {
+  background: var(--off-white);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+.review-route {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+.review-driver-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+}
+.review-section-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+.review-vote-section { margin-bottom: 20px; }
+.review-thumbs {
+  display: flex;
+  gap: 14px;
+}
+.thumb-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border-radius: var(--radius);
+  border: 2.5px solid var(--light-gray);
+  background: var(--off-white);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-size: 2.2rem;
+  font-family: var(--font-ui);
+}
+.thumb-btn span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+.thumb-btn:hover { transform: translateY(-2px); }
+.thumb-btn.thumb-up:hover,
+.thumb-btn.thumb-up.active {
+  border-color: #22c55e;
+  background: rgba(34,197,94,0.08);
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.15);
+}
+.thumb-btn.thumb-up.active span { color: #15803d; }
+.thumb-btn.thumb-down:hover,
+.thumb-btn.thumb-down.active {
+  border-color: var(--red);
+  background: rgba(215,43,43,0.07);
+  box-shadow: 0 0 0 3px rgba(215,43,43,0.12);
+}
+.thumb-btn.thumb-down.active span { color: var(--red-dark); }
+.review-comment-section { margin-bottom: 4px; }
+.review-textarea {
+  resize: vertical;
+  min-height: 90px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.review-char-count {
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--text-light);
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* ── Admin Review vote badges ── */
+.review-vote-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.vote-up   { background: rgba(34,197,94,0.14);  color: #15803d; }
+.vote-down { background: rgba(215,43,43,0.12);  color: var(--red-dark); }
+
+@media (max-width: 600px) {
+  .completed-trip-row { flex-direction: column; align-items: flex-start; }
+  .completed-trip-actions { align-items: flex-start; }
+  .review-thumbs { gap: 10px; }
+}
