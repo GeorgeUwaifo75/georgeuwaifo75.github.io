@@ -980,6 +980,58 @@ ul, ol { list-style: none; }
   box-shadow: var(--shadow-sm);
 }
 .message .time { font-size: 0.68rem; opacity: 0.6; margin-top: 4px; text-align: right; }
+
+/* ── Chat identity tags ── */
+.msg-sender-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: 0.85;
+}
+.driver-tag  { color: #FFD700; }  /* gold tag on driver bubbles  */
+.passenger-tag { color: #90cdf4; } /* sky-blue tag on passenger bubbles */
+
+/* Passenger bubbles — sent (right) */
+.message.sent.msg-passenger {
+  background: linear-gradient(135deg, #2554C7, #1A3C8F);
+  color: white;
+  border-bottom-right-radius: 4px;
+  align-self: flex-end;
+}
+.message.sent.msg-passenger .passenger-tag { color: #90cdf4; }
+
+/* Driver bubbles — sent (right) */
+.message.sent.msg-driver {
+  background: linear-gradient(135deg, #B01E1E, #D72B2B);
+  color: white;
+  border-bottom-right-radius: 4px;
+  align-self: flex-end;
+}
+.message.sent.msg-driver .driver-tag { color: #FFD700; }
+
+/* Received passenger message (shown on driver's screen) */
+.message.received.msg-passenger {
+  background: #EBF4FF;
+  color: var(--text);
+  border: 1.5px solid #BEE3F8;
+  border-bottom-left-radius: 4px;
+  align-self: flex-start;
+  box-shadow: var(--shadow-sm);
+}
+.message.received.msg-passenger .passenger-tag { color: #2554C7; }
+
+/* Received driver message (shown on passenger's screen) */
+.message.received.msg-driver {
+  background: #FFF5F5;
+  color: var(--text);
+  border: 1.5px solid #FED7D7;
+  border-bottom-left-radius: 4px;
+  align-self: flex-start;
+  box-shadow: var(--shadow-sm);
+}
+.message.received.msg-driver .driver-tag { color: #B01E1E; }
 .chat-input-area {
   padding: 14px 16px;
   border-top: 1px solid var(--light-gray);
