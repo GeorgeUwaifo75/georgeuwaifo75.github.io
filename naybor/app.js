@@ -711,51 +711,50 @@ closeFullImageViewer() {
 
   // ── Chat Modal ──
   async openChatModal(tripId, driverId) {
-    if (!Auth.isLoggedIn() || Auth.isDriver()) {
-      this.showToast('Passengers only feature.', 'warning');
-      return;
+  if (!Auth.isLoggedIn() || Auth.isDriver()) {
+    this.showToast('Passengers only feature.', 'warning');
+    return;
+  }
+
+  const passengerId = Auth.currentUser.id;
+  showLoader();
+
+  try {
+    // Single DB read — derive everything from this snapshot
+    const db       = await DB.getDB();
+    const settings = db.settings || CONFIG.APP_SETTINGS;
+    const allChats = (db.chats || []).filter(c => c.tripId === tripId);
+
+    const uniquePassengers = [...new Set(allChats.map(c => c.passengerId))];
+    const isNewPassenger   = !uniquePassengers.includes(passengerId);
+    const freeLimit        = settings.free_chat_limit || 2;
+
+    // getOrCreateChatThread is serialised inside the write queue
+    const thread = await DB.getOrCreateChatThread(tripId, passengerId, driverId);
+
+    hideLoader();
+    this.renderChatModal(thread, tripId, driverId, passengerId);
+
+    // Fire-and-forget email alert (non-blocking)
+    if (isNewPassenger) {
+      const driver  = (db.users || []).find(u => u.id === driverId);
+      const trip    = (db.trips || []).find(t => t.id === tripId);
+      if (driver && trip) {
+        EmailService.sendChatAlert(
+          driver.email,
+          driver.fullName,
+          Auth.currentUser.fullName,
+          `${trip.originState} → ${trip.destination}`
+        ).catch(err => console.log('Chat alert email failed:', err));
+      }
     }
+  } catch (e) {
+    hideLoader();
+    this.showToast('Could not open chat: ' + e.message, 'error');
+  }
+},
 
-    const passengerId = Auth.currentUser.id;
-    showLoader();
 
-    try {
-      const [thread, settings] = await Promise.all([
-        DB.getOrCreateChatThread(tripId, passengerId, driverId),
-        DB.getSettings()
-      ]);
-
-      // Check if payment required (driver side check in dashboard)
-      // Count unique passengers who've chatted this trip
-      const allChats = await DB.getChatsForTrip(tripId);
-      const uniquePassengers = [...new Set(allChats.map(c => c.passengerId))];
-      const isNewPassenger = !uniquePassengers.includes(passengerId);
-      const freeLimit = settings.free_chat_limit || 2;
-
-      // Check if driver needs to pay (driver's concern - we just show chat to passenger)
-      hideLoader();
-      this.renderChatModal(thread, tripId, driverId, passengerId);
-
-      // Notify driver via email
-      try {
-        const driver = await DB.getUserById(driverId);
-        const trip = (await DB.getActiveTrips()).find(t => t.id === tripId);
-        if (driver && trip && isNewPassenger) {
-          await EmailService.sendChatAlert(
-            driver.email,
-            driver.fullName,
-            Auth.currentUser.fullName,
-            `${trip.originState} → ${trip.destination}`,
-            null
-          );
-        }
-      } catch(e) { console.log('Email alert failed:', e); }
-
-    } catch(e) {
-      hideLoader();
-      this.showToast('Could not open chat: ' + e.message, 'error');
-    }
-  },
 
   renderChatModal(thread, tripId, driverId, passengerId) {
     const overlay = document.createElement('div');
@@ -1607,69 +1606,74 @@ closeFullImageViewer() {
     }
   },
 
-  async renderDriverChats(main, myTrips, settings) {
-    const db = await DB.getDB();
-    const allChats = db.chats || [];
-    const users = db.users || [];
+ async renderDriverChats(main, myTrips, settings, dbSnapshot) {
+  // Use the passed-in snapshot if available; otherwise fetch
+  const db       = dbSnapshot || await DB.getDB();
+  const allChats = db.chats   || [];
+  const users    = db.users   || [];
 
-    const myTripIds = myTrips.map(t => t.id);
-    const myChats = allChats.filter(c => myTripIds.includes(c.tripId));
+  const myTripIds = myTrips.map(t => t.id);
+  const myChats   = allChats.filter(c => myTripIds.includes(c.tripId));
 
-    // Group by trip
-    const byTrip = {};
-    myChats.forEach(c => {
-      if (!byTrip[c.tripId]) byTrip[c.tripId] = [];
-      byTrip[c.tripId].push(c);
-    });
+  // Group by trip
+  const byTrip = {};
+  myChats.forEach(c => {
+    (byTrip[c.tripId] = byTrip[c.tripId] || []).push(c);
+  });
 
-    let html = `<div class="dash-header"><h1>PASSENGER CHATS</h1><p>Conversations from your trip listings</p></div>`;
+  let html = `<div class="dash-header"><h1>PASSENGER CHATS</h1><p>Conversations from your trip listings</p></div>`;
 
-    if (!myChats.length) {
-      html += `<div class="empty-state"><div class="icon">💬</div><h3>No chats yet</h3><p>Passengers haven't messaged you yet.</p></div>`;
-      main.innerHTML = html;
-      return;
-    }
-
-    for (const [tripId, chats] of Object.entries(byTrip)) {
-      const trip = myTrips.find(t => t.id === tripId);
-      if (!trip) continue;
-      const uniquePassengers = [...new Set(chats.map(c => c.passengerId))];
-      const freeLimit = settings.free_chat_limit || 2;
-      const isPaidUp = uniquePassengers.length <= freeLimit;
-
-      html += `<div class="dash-panel">
-        <div class="dash-panel-title">🚗 ${trip.originState} → ${trip.destination} <span style="font-size:0.75rem;font-weight:400;color:var(--text-light)">${new Date(trip.departureDate).toLocaleDateString('en-NG')}</span></div>
-        <div style="margin-bottom:12px;font-size:0.85rem;color:var(--text-light)">${uniquePassengers.length} passenger(s) chatting · ${isPaidUp ? `<span style="color:green">✓ Within free limit (${freeLimit})</span>` : `<span style="color:var(--red)">⚠️ ${uniquePassengers.length - freeLimit} extra (₦${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)} owed)</span>`}</div>`;
-
-      if (!isPaidUp) {
-        html += `<div class="payment-prompt" style="margin-bottom:16px">
-          <div class="icon">💳</div>
-          <div class="text">
-            <h4>Payment Required</h4>
-            <p>You have exceeded your free chat limit. Pay ₦${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)} to continue accessing these chats.</p>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="App.driverPayForChats('${tripId}', ${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)})">Pay Now</button>
-        </div>`;
-      }
-
-      chats.forEach(chat => {
-        const passenger = users.find(u => u.id === chat.passengerId);
-        const lastMsg = chat.messages[chat.messages.length - 1];
-        html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--off-white);border-radius:8px;margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="driver-avatar-sm">${passenger?.fullName?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() || '??'}</div>
-            <div>
-              <div style="font-weight:700;font-size:0.9rem">${passenger?.fullName || 'Passenger'}</div>
-              <div style="font-size:0.78rem;color:var(--text-light)">${lastMsg ? lastMsg.text.substring(0,40) + '...' : 'No messages yet'}</div>
-            </div>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="App.driverOpenChat('${chat.id}')">Reply</button>
-        </div>`;
-      });
-      html += `</div>`;
-    }
+  if (!myChats.length) {
+    html += `<div class="empty-state"><div class="icon">💬</div><h3>No chats yet</h3><p>Passengers haven't messaged you yet.</p></div>`;
     main.innerHTML = html;
-  },
+    return;
+  }
+
+  for (const [tripId, chats] of Object.entries(byTrip)) {
+    const trip = myTrips.find(t => t.id === tripId);
+    if (!trip) continue;
+    const uniquePassengers = [...new Set(chats.map(c => c.passengerId))];
+    const freeLimit        = settings.free_chat_limit || 2;
+    const isPaidUp         = uniquePassengers.length <= freeLimit;
+
+    html += `<div class="dash-panel">
+      <div class="dash-panel-title">🚗 ${trip.originState} → ${trip.destination} <span style="font-size:0.75rem;font-weight:400;color:var(--text-light)">${new Date(trip.departureDate).toLocaleDateString('en-NG')}</span></div>
+      <div style="margin-bottom:12px;font-size:0.85rem;color:var(--text-light)">${uniquePassengers.length} passenger(s) chatting · ${isPaidUp
+        ? `<span style="color:green">✓ Within free limit (${freeLimit})</span>`
+        : `<span style="color:var(--red)">⚠️ ${uniquePassengers.length - freeLimit} extra (₦${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)} owed)</span>`
+      }</div>`;
+
+    if (!isPaidUp) {
+      html += `<div class="payment-prompt" style="margin-bottom:16px">
+        <div class="icon">💳</div>
+        <div class="text">
+          <h4>Payment Required</h4>
+          <p>You have exceeded your free chat limit. Pay ₦${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)} to continue accessing these chats.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="App.driverPayForChats('${tripId}', ${(uniquePassengers.length - freeLimit) * (settings.driver_chat_fee || 650)})">Pay Now</button>
+      </div>`;
+    }
+
+    chats.forEach(chat => {
+      const passenger = users.find(u => u.id === chat.passengerId);
+      const lastMsg   = chat.messages[chat.messages.length - 1];
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--off-white);border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="driver-avatar-sm">${passenger?.fullName?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() || '??'}</div>
+          <div>
+            <div style="font-weight:700;font-size:0.9rem">${passenger?.fullName || 'Passenger'}</div>
+            <div style="font-size:0.78rem;color:var(--text-light)">${lastMsg ? lastMsg.text.substring(0,40) + '...' : 'No messages yet'}</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="App.driverOpenChat('${chat.id}')">Reply</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  main.innerHTML = html;
+},
+
+
 
   async driverOpenChat(chatId) {
     showLoader();
@@ -2000,43 +2004,42 @@ closeFullImageViewer() {
     }
   },
 
-  async passengerSearchTrips() {
-    const container = document.getElementById('passenger-trips-container');
-    if (!container) return;
-    container.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
+ async passengerSearchTrips() {
+  const container = document.getElementById('passenger-trips-container');
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
 
-    const origin = document.getElementById('ps-origin')?.value;
-    const dest = document.getElementById('ps-dest')?.value;
-    const date = document.getElementById('ps-date')?.value;
+  const origin = document.getElementById('ps-origin')?.value;
+  const dest   = document.getElementById('ps-dest')?.value;
+  const date   = document.getElementById('ps-date')?.value;
 
-    try {
-      let trips = await DB.getActiveTrips();
-      const users = await DB.getUsers();
+  try {
+    let { trips, users } = await DB.getActiveTripsAndUsers();
 
-      if (origin) trips = trips.filter(t => t.originState === origin);
-      if (dest) trips = trips.filter(t => t.destination === dest);
-      if (date) trips = trips.filter(t => t.departureDate === date);
+    if (origin) trips = trips.filter(t => t.originState === origin);
+    if (dest)   trips = trips.filter(t => t.destination === dest);
+    if (date)   trips = trips.filter(t => t.departureDate === date);
 
-      if (!trips.length) {
-        container.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><h3>No trips found</h3><p>Try different search criteria.</p></div>`;
-        return;
-      }
-
-      container.innerHTML = `<div class="trips-grid">${trips.map(t => {
-        const driver = users.find(u => u.id === t.driverId);
-        return this.renderTripCard(t, driver);
-      }).join('')}</div>`;
-
-      container.querySelectorAll('.trip-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const tripId = card.dataset.tripId;
-          this.openTripDetail(tripId, trips, users);
-        });
-      });
-    } catch(e) {
-      container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    if (!trips.length) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><h3>No trips found</h3><p>Try different search criteria.</p></div>`;
+      return;
     }
-  },
+
+    container.innerHTML = `<div class="trips-grid">${trips.map(t => {
+      const driver = users.find(u => u.id === t.driverId);
+      return this.renderTripCard(t, driver);
+    }).join('')}</div>`;
+
+    container.querySelectorAll('.trip-card').forEach(card => {
+      card.addEventListener('click', () => {
+        this.openTripDetail(card.dataset.tripId, trips, users);
+      });
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+  }
+},
+
 
   // ── Review Modal ──
   async openReviewModal(tripId, driverId, isEdit) {
