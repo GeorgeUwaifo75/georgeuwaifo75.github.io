@@ -745,7 +745,8 @@ closeFullImageViewer() {
             driver.email,
             driver.fullName,
             Auth.currentUser.fullName,
-            `${trip.originState} → ${trip.destination}`
+            `${trip.originState} → ${trip.destination}`,
+            null
           );
         }
       } catch(e) { console.log('Email alert failed:', e); }
@@ -763,8 +764,12 @@ closeFullImageViewer() {
 
     const msgsHtml = thread.messages.map(m => {
       const isSent = m.senderId === passengerId;
+      const isDriver = m.senderId === driverId;
+      const senderRole = isDriver ? 'driver' : 'passenger';
+      const senderLabel = m.senderName || (isSent ? 'You' : (isDriver ? 'Driver' : 'Passenger'));
       const time = new Date(m.timestamp).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-      return `<div class="message ${isSent ? 'sent' : 'received'}">
+      return `<div class="message ${isSent ? 'sent' : 'received'} msg-${senderRole}">
+        <div class="msg-sender-tag ${senderRole}-tag">${isSent ? 'You' : senderLabel}</div>
         ${m.text}
         <div class="time">${time}</div>
       </div>`;
@@ -803,8 +808,28 @@ closeFullImageViewer() {
           text
         });
         const time = new Date().toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-        msgs.innerHTML += `<div class="message sent">${text}<div class="time">${time}</div></div>`;
+        msgs.innerHTML += `<div class="message sent msg-passenger">
+          <div class="msg-sender-tag passenger-tag">You</div>
+          ${text}<div class="time">${time}</div>
+        </div>`;
         msgs.scrollTop = msgs.scrollHeight;
+
+        // Email alert to driver on every message sent
+        try {
+          const driver = await DB.getUserById(driverId);
+          const allTrips = await DB.getActiveTrips();
+          const trip = allTrips.find(t => t.id === tripId);
+          if (driver) {
+            await EmailService.sendChatAlert(
+              driver.email,
+              driver.fullName,
+              Auth.currentUser.fullName,
+              trip ? `${trip.originState} → ${trip.destination}` : 'your trip',
+              text
+            );
+          }
+        } catch(emailErr) { console.log('Email alert failed:', emailErr); }
+
       } catch(e) {
         this.showToast('Failed to send message', 'error');
       }
@@ -1618,8 +1643,14 @@ closeFullImageViewer() {
 
       const msgsHtml = chat.messages.map(m => {
         const isSent = m.senderId === Auth.currentUser.id;
+        const isDriver = m.senderId === Auth.currentUser.id;
+        const senderRole = isSent ? 'driver' : 'passenger';
+        const senderLabel = m.senderName || (isSent ? 'You' : (passenger?.fullName || 'Passenger'));
         const time = new Date(m.timestamp).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-        return `<div class="message ${isSent ? 'sent' : 'received'}">${m.text}<div class="time">${time}</div></div>`;
+        return `<div class="message ${isSent ? 'sent' : 'received'} msg-${senderRole}">
+          <div class="msg-sender-tag ${senderRole}-tag">${isSent ? 'You' : senderLabel}</div>
+          ${m.text}<div class="time">${time}</div>
+        </div>`;
       }).join('');
 
       overlay.innerHTML = `
@@ -1647,8 +1678,27 @@ closeFullImageViewer() {
         try {
           await DB.addMessage(chatId, { senderId: Auth.currentUser.id, senderName: Auth.currentUser.fullName, text });
           const time = new Date().toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-          msgs.innerHTML += `<div class="message sent">${text}<div class="time">${time}</div></div>`;
+          msgs.innerHTML += `<div class="message sent msg-driver">
+            <div class="msg-sender-tag driver-tag">You</div>
+            ${text}<div class="time">${time}</div>
+          </div>`;
           msgs.scrollTop = msgs.scrollHeight;
+
+          // Email alert to passenger on every driver reply
+          try {
+            if (passenger) {
+              const db2 = await DB.getDB();
+              const tripObj = (db2.trips || []).find(t => t.id === chat.tripId);
+              await EmailService.sendChatAlert(
+                passenger.email,
+                passenger.fullName,
+                Auth.currentUser.fullName,
+                tripObj ? `${tripObj.originState} → ${tripObj.destination}` : 'your trip',
+                text
+              );
+            }
+          } catch(emailErr) { console.log('Email alert failed:', emailErr); }
+
         } catch(e) { this.showToast('Failed to send', 'error'); }
       };
 
