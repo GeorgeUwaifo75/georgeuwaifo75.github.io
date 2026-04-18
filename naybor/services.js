@@ -354,16 +354,17 @@ const EmailService = {
     );
   },
 
-  async sendChatAlert(driverEmail, driverName, passengerName, tripRoute) {
+  async sendChatAlert(recipientEmail, recipientName, senderName, tripRoute, messagePreview) {
     if (typeof emailjs === 'undefined') return;
+    const preview = messagePreview ? `\n\nMessage: "${messagePreview}"` : '';
     return emailjs.send(
       CONFIG.EMAILJS.SERVICE_ID,
       CONFIG.EMAILJS.TEMPLATE_ID_CHAT,
       {
-        to_email: driverEmail,
-        to_name:  driverName,
-        subject:  '💬 New Passenger Message — Naybor Travel Express',
-        message:  `${passengerName} has sent you a message regarding your trip: ${tripRoute}. Please log in to reply.`
+        to_email: recipientEmail,
+        to_name:  recipientName,
+        subject:  `💬 New Message from ${senderName} — Naybor Travel Express`,
+        message:  `${senderName} has sent you a message regarding the trip: ${tripRoute}.${preview}\n\nPlease log in to reply.`
       }
     );
   }
