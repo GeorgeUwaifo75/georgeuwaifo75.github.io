@@ -1101,6 +1101,7 @@ closeFullImageViewer() {
             <div class="sidebar-menu-item" onclick="App.adminPanel('passengers')"><span class="icon">👥</span> Passengers</div>
             <div class="sidebar-menu-item" onclick="App.adminPanel('trips')"><span class="icon">🗺️</span> All Trips</div>
             <div class="sidebar-menu-item" onclick="App.adminPanel('payments')"><span class="icon">💳</span> Payments</div>
+            <div class="sidebar-menu-item" onclick="App.adminPanel('reviews')"><span class="icon">⭐</span> Trip Reviews</div>
             <div class="sidebar-section-title">Settings</div>
             <div class="sidebar-menu-item" onclick="App.adminPanel('settings')"><span class="icon">⚙️</span> App Settings</div>
             <div class="sidebar-menu-item" onclick="App.logout()"><span class="icon">🚪</span> Sign Out</div>
@@ -1275,6 +1276,49 @@ closeFullImageViewer() {
                 </tbody>
               </table>
               </div>` : '<div class="empty-state"><div class="icon">💳</div><h3>No payments yet</h3></div>'}
+            </div>`;
+          break;
+
+        case 'reviews':
+          const allReviews = db.reviews || [];
+          const thumbsUp   = allReviews.filter(r => r.vote === 'up').length;
+          const thumbsDown = allReviews.filter(r => r.vote === 'down').length;
+          const withComment = allReviews.filter(r => r.comment && r.comment.trim()).length;
+          main.innerHTML = `
+            <div class="dash-header"><h1>TRIP REVIEWS</h1><p>Passenger feedback on completed trips</p></div>
+            <div class="stats-row">
+              <div class="stat-card"><div class="val">${allReviews.length}</div><div class="lbl">Total Reviews</div></div>
+              <div class="stat-card"><div class="val" style="color:#22c55e">${thumbsUp}</div><div class="lbl">👍 Thumbs Up</div></div>
+              <div class="stat-card red"><div class="val">${thumbsDown}</div><div class="lbl">👎 Thumbs Down</div></div>
+              <div class="stat-card"><div class="val">${withComment}</div><div class="lbl">With Comments</div></div>
+            </div>
+            <div class="dash-panel">
+              <div class="dash-panel-title">⭐ All Feedback</div>
+              ${allReviews.length ? `
+              <div style="overflow-x:auto">
+              <table class="data-table">
+                <thead><tr><th>Passenger</th><th>Driver</th><th>Route</th><th>Date</th><th>Vote</th><th>Comment</th></tr></thead>
+                <tbody>
+                  ${allReviews.map(r => {
+                    const passenger = users.find(u => u.id === r.passengerId);
+                    const driver = users.find(u => u.id === r.driverId);
+                    const trip = trips.find(t => t.id === r.tripId);
+                    return `<tr>
+                      <td><strong>${passenger?.fullName || '—'}</strong></td>
+                      <td>${driver?.fullName || '—'}</td>
+                      <td>${trip ? trip.originState + ' → ' + trip.destination : r.tripId}</td>
+                      <td style="font-size:0.78rem">${new Date(r.createdAt).toLocaleDateString('en-NG')}</td>
+                      <td>
+                        <span class="review-vote-badge ${r.vote === 'up' ? 'vote-up' : 'vote-down'}">
+                          ${r.vote === 'up' ? '👍 Positive' : '👎 Negative'}
+                        </span>
+                      </td>
+                      <td style="font-size:0.82rem;max-width:220px;white-space:normal">${r.comment ? r.comment : '<span style="color:var(--gray)">—</span>'}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+              </div>` : '<div class="empty-state"><div class="icon">⭐</div><h3>No reviews yet</h3><p>Passengers will leave feedback after trips complete.</p></div>'}
             </div>`;
           break;
 
@@ -1800,6 +1844,7 @@ closeFullImageViewer() {
           <div class="sidebar-menu">
             <div class="sidebar-section-title">My Account</div>
             <div class="sidebar-menu-item active" onclick="App.passengerPanel('search')"><span class="icon">🔍</span> Find Trips</div>
+            <div class="sidebar-menu-item" onclick="App.passengerPanel('my-trips')"><span class="icon">🗓️</span> My Trips</div>
             <div class="sidebar-menu-item" onclick="App.passengerPanel('my-chats')"><span class="icon">💬</span> My Chats</div>
             <div class="sidebar-menu-item" onclick="App.logout()"><span class="icon">🚪</span> Sign Out</div>
           </div>
@@ -1853,6 +1898,67 @@ closeFullImageViewer() {
           await this.passengerSearchTrips();
         });
         await this.passengerSearchTrips();
+        break;
+
+      case 'my-trips':
+        showLoader();
+        try {
+          const db2 = await DB.getDB();
+          const allTrips2 = db2.trips || [];
+          const allUsers2 = db2.users || [];
+          const allReviews2 = db2.reviews || [];
+          const myChats2 = (db2.chats || []).filter(c => c.passengerId === u.id);
+          const myTripIds2 = [...new Set(myChats2.map(c => c.tripId))];
+          const myTrips2 = allTrips2.filter(t => myTripIds2.includes(t.id));
+          // Completed = cancelled OR departure date already passed
+          const today2 = new Date(); today2.setHours(0,0,0,0);
+          const completedTrips = myTrips2.filter(t => {
+            const dep = new Date(t.departureDate); dep.setHours(0,0,0,0);
+            return dep < today2 || t.status === 'cancelled';
+          });
+          hideLoader();
+
+          main.innerHTML = `<div class="dash-header"><h1>MY TRIPS</h1><p>Rate and review your completed journeys</p></div>`;
+          if (!completedTrips.length) {
+            main.innerHTML += `<div class="empty-state"><div class="icon">🗓️</div><h3>No completed trips yet</h3><p>Your past trips will appear here once travel dates have passed.</p></div>`;
+            return;
+          }
+
+          let html2 = '<div class="dash-panel"><div class="dash-panel-title">✅ Completed Trips</div>';
+          completedTrips.forEach(trip => {
+            const driver2 = allUsers2.find(u2 => u2.id === trip.driverId);
+            const existingReview = allReviews2.find(r => r.passengerId === u.id && r.tripId === trip.id);
+            const depDate2 = new Date(trip.departureDate).toLocaleDateString('en-NG', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+            const initials2 = driver2 ? driver2.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() : '??';
+            html2 += `
+              <div class="completed-trip-row">
+                <div class="completed-trip-info">
+                  <div class="completed-trip-route">${trip.originState} <span class="arrow">→</span> ${trip.destination}</div>
+                  <div class="completed-trip-meta">📅 ${depDate2}</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                    <div class="driver-avatar-sm" style="width:28px;height:28px;font-size:0.68rem">${initials2}</div>
+                    <span style="font-size:0.82rem;font-weight:600">${driver2?.fullName || 'Driver'}</span>
+                  </div>
+                </div>
+                <div class="completed-trip-actions">
+                  ${existingReview ? `
+                    <div class="review-submitted-badge">
+                      <span>${existingReview.vote === 'up' ? '👍' : '👎'}</span>
+                      <span>Review submitted</span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="App.openReviewModal('${trip.id}','${trip.driverId}',true)">Edit Review</button>
+                  ` : `
+                    <button class="btn btn-primary btn-sm" onclick="App.openReviewModal('${trip.id}','${trip.driverId}',false)">Rate This Trip ⭐</button>
+                  `}
+                </div>
+              </div>`;
+          });
+          html2 += '</div>';
+          main.innerHTML += html2;
+        } catch(e) {
+          hideLoader();
+          main.innerHTML += `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+        }
         break;
 
       case 'my-chats':
@@ -1929,6 +2035,132 @@ closeFullImageViewer() {
       });
     } catch(e) {
       container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    }
+  },
+
+  // ── Review Modal ──
+  async openReviewModal(tripId, driverId, isEdit) {
+    showLoader();
+    try {
+      const db = await DB.getDB();
+      const trip = (db.trips || []).find(t => t.id === tripId);
+      const driver = (db.users || []).find(u => u.id === driverId);
+      const existing = (db.reviews || []).find(
+        r => r.passengerId === Auth.currentUser.id && r.tripId === tripId
+      );
+      hideLoader();
+
+      const currentVote = existing?.vote || null;
+      const currentComment = existing?.comment || '';
+      const routeLabel = trip ? `${trip.originState} → ${trip.destination}` : 'this trip';
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay review-overlay';
+      overlay.id = 'review-overlay';
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+      overlay.innerHTML = `
+        <div class="modal review-modal">
+          <div class="modal-header" style="background:linear-gradient(135deg,var(--blue),var(--blue-light))">
+            <h3>⭐ Rate Your Trip</h3>
+            <button onclick="document.getElementById('review-overlay').remove()"
+                    style="background:rgba(255,255,255,0.15);border:none;color:white;width:28px;height:28px;
+                           border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="review-trip-info">
+              <div class="review-route">${routeLabel}</div>
+              <div class="review-driver-line">
+                <div class="driver-avatar-sm" style="width:28px;height:28px;font-size:0.68rem">
+                  ${driver ? driver.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() : '??'}
+                </div>
+                <span>${driver?.fullName || 'Driver'}</span>
+              </div>
+            </div>
+
+            <div class="review-vote-section">
+              <div class="review-section-label">How was your trip?</div>
+              <div class="review-thumbs">
+                <button class="thumb-btn thumb-up ${currentVote === 'up' ? 'active' : ''}" id="thumb-up" onclick="App._selectVote('up')">
+                  👍
+                  <span>Good Trip</span>
+                </button>
+                <button class="thumb-btn thumb-down ${currentVote === 'down' ? 'active' : ''}" id="thumb-down" onclick="App._selectVote('down')">
+                  👎
+                  <span>Poor Trip</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="review-comment-section">
+              <div class="review-section-label">Leave a comment <span style="font-weight:400;opacity:0.6">(optional)</span></div>
+              <textarea id="review-comment" class="form-input review-textarea"
+                placeholder="Share your experience — e.g. punctuality, comfort, driver attitude..."
+                maxlength="400">${currentComment}</textarea>
+              <div class="review-char-count"><span id="review-char">0</span>/400</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('review-overlay').remove()">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="review-submit-btn"
+                    onclick="App.submitReview('${tripId}','${driverId}')">
+              ${isEdit ? 'Update Review' : 'Submit Review'}
+            </button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      // Restore vote state
+      if (currentVote) this._reviewVote = currentVote;
+      else this._reviewVote = null;
+
+      // Char counter
+      const ta = document.getElementById('review-comment');
+      const charEl = document.getElementById('review-char');
+      if (ta && charEl) {
+        charEl.textContent = ta.value.length;
+        ta.addEventListener('input', () => { charEl.textContent = ta.value.length; });
+      }
+    } catch(e) {
+      hideLoader();
+      this.showToast('Could not open review form: ' + e.message, 'error');
+    }
+  },
+
+  _reviewVote: null,
+
+  _selectVote(vote) {
+    this._reviewVote = vote;
+    document.getElementById('thumb-up')?.classList.toggle('active', vote === 'up');
+    document.getElementById('thumb-down')?.classList.toggle('active', vote === 'down');
+  },
+
+  async submitReview(tripId, driverId) {
+    if (!this._reviewVote) {
+      this.showToast('Please select 👍 or 👎 before submitting.', 'warning');
+      return;
+    }
+    const comment = document.getElementById('review-comment')?.value.trim() || '';
+    const btn = document.getElementById('review-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    try {
+      await DB.createReview({
+        tripId,
+        driverId,
+        passengerId: Auth.currentUser.id,
+        passengerName: Auth.currentUser.fullName,
+        vote: this._reviewVote,
+        comment
+      });
+      document.getElementById('review-overlay')?.remove();
+      this._reviewVote = null;
+      this.showToast('Review submitted! Thank you for your feedback.', 'success');
+      // Refresh the My Trips panel
+      this.passengerPanel('my-trips');
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Review'; }
+      this.showToast('Failed to save review: ' + e.message, 'error');
     }
   },
 
