@@ -225,6 +225,38 @@ const DB = {
     db.payments.push(payment);
     await this.saveDB(db);
     return payment;
+  },
+
+  // ── Reviews ──────────────────────────────────────────────
+  async getReviews() {
+    const db = await this.getDB();
+    return db.reviews || [];
+  },
+
+  async getReviewByPassengerAndTrip(passengerId, tripId) {
+    const reviews = await this.getReviews();
+    return reviews.find(r => r.passengerId === passengerId && r.tripId === tripId) || null;
+  },
+
+  async createReview(reviewData) {
+    const db = await this.getDB();
+    db.reviews = db.reviews || [];
+    // Only one review per passenger per trip
+    const existing = db.reviews.findIndex(
+      r => r.passengerId === reviewData.passengerId && r.tripId === reviewData.tripId
+    );
+    const review = {
+      id: 'REV_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+      createdAt: new Date().toISOString(),
+      ...reviewData
+    };
+    if (existing !== -1) {
+      db.reviews[existing] = { ...db.reviews[existing], ...reviewData, updatedAt: new Date().toISOString() };
+    } else {
+      db.reviews.push(review);
+    }
+    await this.saveDB(db);
+    return review;
   }
 };
 
