@@ -384,11 +384,18 @@ const App = {
     const initials = driver ? driver.fullName.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() : '??';
     const depTime = trip.departureTime || '';
     const depDate = new Date(trip.departureDate).toLocaleDateString('en-NG', { weekday:'short', month:'short', day:'numeric' });
+    const noSeats = trip.availableSeats === 0 || trip.availableSeats === '0';
+    const isInProgress = trip.status === 'in-progress';
+    const seatsBadgeLabel = noSeats ? '🚫 Full' : `🪑 ${trip.availableSeats ?? '—'} seats`;
+    const statusBadge = isInProgress
+      ? `<div style="position:absolute;top:6px;left:6px;background:#f59e0b;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:0.5px">🟡 IN PROGRESS</div>`
+      : '';
 
     return `<div class="trip-card" data-trip-id="${trip.id}">
-      <div class="trip-card-img">
+      <div class="trip-card-img" style="position:relative">
         ${carImg}
-        <div class="trip-badge">🪑 ${trip.availableSeats || '—'} seats</div>
+        <div class="trip-badge">${seatsBadgeLabel}</div>
+        ${statusBadge}
       </div>
       <div class="trip-card-body">
         <div class="trip-route">
@@ -410,7 +417,7 @@ const App = {
         </div>
       </div>
       <div class="trip-card-footer">
-        <button class="btn btn-secondary btn-sm">View & Chat →</button>
+        <button class="btn btn-secondary btn-sm">${isInProgress || noSeats ? 'View Details' : 'View & Chat →'}</button>
       </div>
     </div>`;
   },
@@ -544,12 +551,21 @@ async openTripDetail(tripId, trips, users) {
         <button class="btn btn-outline btn-sm"
                 style="font-size:0.78rem;padding:7px 14px;"
                 onclick="this.closest('.modal-overlay').remove()">Close</button>
-        <button class="btn btn-primary btn-sm"
+        ${(trip.availableSeats === 0 || trip.availableSeats === '0' || Number(trip.availableSeats) === 0)
+          ? `<button class="btn btn-primary btn-sm" style="font-size:0.78rem;padding:7px 14px;opacity:0.5;cursor:not-allowed" disabled title="No seats available">
+               🚫 No Seats Available
+             </button>`
+          : trip.status === 'in-progress'
+          ? `<button class="btn btn-primary btn-sm" style="font-size:0.78rem;padding:7px 14px;opacity:0.5;cursor:not-allowed" disabled title="Trip is in progress">
+               🟡 Trip In Progress
+             </button>`
+          : `<button class="btn btn-primary btn-sm"
                 style="font-size:0.78rem;padding:7px 14px;"
                 onclick="App.openChatModal('${trip.id}','${driver.id}');
                          this.closest('.modal-overlay').remove()">
-          💬 Chat with Driver
-        </button>
+               💬 Chat with Driver
+             </button>`
+        }
       </div>
 
     </div>`;
@@ -757,14 +773,13 @@ closeFullImageViewer() {
 
 
   renderChatModal(thread, tripId, driverId, passengerId) {
-    const overlay = document.createElement('div');
-    overlay.className = 'chat-modal-overlay';
-    overlay.id = 'chat-overlay';
+    const ACCEPT_TRIGGER = 'Do you accept ride?';
+    const ACCEPT_YES     = 'Yes, I Accept the ride';
 
-    const msgsHtml = thread.messages.map(m => {
-      const isSent = m.senderId === passengerId;
-      const isDriver = m.senderId === driverId;
-      const senderRole = isDriver ? 'driver' : 'passenger';
+    const renderMessage = (m) => {
+      const isSent    = m.senderId === passengerId;
+      const isDriver  = m.senderId === driverId;
+      const senderRole  = isDriver ? 'driver' : 'passenger';
       const senderLabel = m.senderName || (isSent ? 'You' : (isDriver ? 'Driver' : 'Passenger'));
       const time = new Date(m.timestamp).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
       return `<div class="message ${isSent ? 'sent' : 'received'} msg-${senderRole}">
@@ -772,7 +787,24 @@ closeFullImageViewer() {
         ${m.text}
         <div class="time">${time}</div>
       </div>`;
-    }).join('');
+    };
+
+    const msgsHtml = thread.messages.map(renderMessage).join('');
+
+    // Check if driver's last relevant message was the accept-ride trigger
+    // and passenger hasn't responded to it yet
+    const msgs = thread.messages;
+    const lastDriverTrigger = [...msgs].reverse().find(
+      m => m.senderId === driverId && m.text === ACCEPT_TRIGGER
+    );
+    const passengerRepliedAfter = lastDriverTrigger
+      ? msgs.some(m => m.senderId === passengerId && new Date(m.timestamp) > new Date(lastDriverTrigger.timestamp))
+      : false;
+    const showYesNo = lastDriverTrigger && !passengerRepliedAfter;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'chat-modal-overlay';
+    overlay.id = 'chat-overlay';
 
     overlay.innerHTML = `
       <div class="chat-modal">
@@ -784,6 +816,12 @@ closeFullImageViewer() {
           <button class="close-btn" onclick="document.getElementById('chat-overlay').remove()">✕</button>
         </div>
         <div class="chat-messages" id="chat-messages">${msgsHtml || '<div style="text-align:center;color:var(--gray);font-size:0.85rem;margin-top:20px">No messages yet. Say hello! 👋</div>'}</div>
+        ${showYesNo ? `
+        <div id="ride-accept-bar" style="display:flex;gap:10px;padding:10px 14px;background:#f0f4ff;border-top:1px solid var(--light-gray);">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--blue);align-self:center;flex:1">Driver asks: <em>Do you accept the ride?</em></span>
+          <button class="btn btn-secondary btn-sm" id="accept-yes-btn">✅ Yes</button>
+          <button class="btn btn-outline-red btn-sm" id="accept-no-btn">❌ No</button>
+        </div>` : ''}
         <div class="chat-input-area">
           <input type="text" id="chat-input" placeholder="Type your message..." maxlength="500">
           <button class="chat-send-btn" id="chat-send">Send</button>
@@ -791,37 +829,40 @@ closeFullImageViewer() {
       </div>`;
     document.body.appendChild(overlay);
 
-    const msgs = document.getElementById('chat-messages');
-    msgs.scrollTop = msgs.scrollHeight;
+    const chatMsgs = document.getElementById('chat-messages');
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
-    const sendMsg = async () => {
+    const sendMsg = async (forcedText) => {
       const input = document.getElementById('chat-input');
-      const text = input.value.trim();
+      const text  = forcedText || input?.value.trim();
       if (!text) return;
+      if (!forcedText && input) input.value = '';
 
-      input.value = '';
       try {
         await DB.addMessage(thread.id, {
-          senderId: passengerId,
+          senderId:   passengerId,
           senderName: Auth.currentUser.fullName,
           text
         });
         const time = new Date().toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-        msgs.innerHTML += `<div class="message sent msg-passenger">
+        chatMsgs.innerHTML += `<div class="message sent msg-passenger">
           <div class="msg-sender-tag passenger-tag">You</div>
           ${text}<div class="time">${time}</div>
         </div>`;
-        msgs.scrollTop = msgs.scrollHeight;
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
-        // Email alert to driver on every message sent
+        // Hide Yes/No bar after any response (forced or typed)
+        const bar = document.getElementById('ride-accept-bar');
+        if (bar) bar.remove();
+
+        // Email alert to driver
         try {
-          const driver = await DB.getUserById(driverId);
+          const driver  = await DB.getUserById(driverId);
           const allTrips = await DB.getActiveTrips();
-          const trip = allTrips.find(t => t.id === tripId);
+          const trip    = (allTrips || []).find(t => t.id === tripId);
           if (driver) {
             await EmailService.sendChatAlert(
-              driver.email,
-              driver.fullName,
+              driver.email, driver.fullName,
               Auth.currentUser.fullName,
               trip ? `${trip.originState} → ${trip.destination}` : 'your trip',
               text
@@ -834,7 +875,34 @@ closeFullImageViewer() {
       }
     };
 
-    document.getElementById('chat-send').addEventListener('click', sendMsg);
+    // Yes button — send acceptance and decrement seat
+    const yesBtn = document.getElementById('accept-yes-btn');
+    if (yesBtn) {
+      yesBtn.addEventListener('click', async () => {
+        yesBtn.disabled = true;
+        document.getElementById('accept-no-btn').disabled = true;
+        await sendMsg(ACCEPT_YES);
+        // Decrement available seats
+        try {
+          await DB.decrementTripSeat(tripId);
+          this.showToast('Ride accepted! Seat reserved for you.', 'success');
+        } catch(e) {
+          this.showToast('Could not reserve seat: ' + e.message, 'warning');
+        }
+      });
+    }
+
+    // No button — send decline and hide bar
+    const noBtn = document.getElementById('accept-no-btn');
+    if (noBtn) {
+      noBtn.addEventListener('click', async () => {
+        noBtn.disabled = true;
+        if (yesBtn) yesBtn.disabled = true;
+        await sendMsg('No, I do not accept the ride');
+      });
+    }
+
+    document.getElementById('chat-send').addEventListener('click', () => sendMsg());
     document.getElementById('chat-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') sendMsg();
     });
@@ -1570,25 +1638,39 @@ closeFullImageViewer() {
           break;
 
         case 'my-trips':
+          // Auto-promote active trips to 'in-progress' if scheduled time has passed
+          await this.autoUpdateTripStatuses(myTrips);
+          // Re-fetch trips after potential updates
+          const freshTrips = (await DB.getTrips()).filter(t => t.driverId === u.id);
+
           main.innerHTML = `
             <div class="dash-header"><h1>MY TRIPS</h1><p>Your posted trip intentions</p></div>
             <div class="dash-panel">
-              ${myTrips.length ? `
+              ${freshTrips.length ? `
               <div style="overflow-x:auto">
               <table class="data-table">
                 <thead><tr><th>Route</th><th>Date</th><th>Time</th><th>Seats</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
-                  ${myTrips.map(t => `<tr>
-                    <td><strong>${t.originState}</strong> → ${t.destination}</td>
-                    <td>${new Date(t.departureDate).toLocaleDateString('en-NG')}</td>
-                    <td>${t.departureTime || '—'}</td>
-                    <td>${t.availableSeats || '—'}</td>
-                    <td><span class="badge ${t.status === 'active' ? 'badge-green' : 'badge-red'}">${t.status}</span></td>
-                    <td>
-                      <button class="btn btn-outline-red btn-sm" onclick="App.driverDeleteTrip('${t.id}')">Cancel</button>
-                      <button class="btn btn-secondary btn-sm" onclick="App.driverViewChats('${t.id}')">Chats</button>
-                    </td>
-                  </tr>`).join('')}
+                  ${freshTrips.map(t => {
+                    const badgeClass = t.status === 'active' ? 'badge-green' : t.status === 'in-progress' ? 'badge-yellow' : t.status === 'completed' ? 'badge-completed' : 'badge-red';
+                    const statusLabel = t.status === 'in-progress' ? '🟡 In Progress' : t.status === 'completed' ? '✅ Completed' : t.status;
+                    const actionBtns = t.status === 'in-progress'
+                      ? `<button class="btn btn-primary btn-sm" onclick="App.driverEndTrip('${t.id}')">End Trip</button>`
+                      : t.status === 'active'
+                      ? `<button class="btn btn-outline-red btn-sm" onclick="App.driverDeleteTrip('${t.id}')">Cancel</button>`
+                      : '';
+                    return `<tr>
+                      <td><strong>${t.originState}</strong> → ${t.destination}</td>
+                      <td>${new Date(t.departureDate).toLocaleDateString('en-NG')}</td>
+                      <td>${t.departureTime || '—'}</td>
+                      <td>${t.availableSeats ?? '—'}</td>
+                      <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
+                      <td style="display:flex;gap:6px;flex-wrap:wrap">
+                        ${actionBtns}
+                        <button class="btn btn-secondary btn-sm" onclick="App.driverViewChats('${t.id}')">Chats</button>
+                      </td>
+                    </tr>`;
+                  }).join('')}
                 </tbody>
               </table>
               </div>` : `
@@ -1676,6 +1758,9 @@ closeFullImageViewer() {
 
 
   async driverOpenChat(chatId) {
+    const ACCEPT_TRIGGER = 'Do you accept ride?';
+    const driverId = Auth.currentUser.id;
+
     showLoader();
     try {
       const db = await DB.getDB();
@@ -1685,14 +1770,22 @@ closeFullImageViewer() {
       const passenger = db.users.find(u => u.id === chat.passengerId);
       hideLoader();
 
-      const overlay = document.createElement('div');
-      overlay.className = 'chat-modal-overlay';
-      overlay.id = 'driver-chat-overlay';
+      // Determine if "Accept ride?" button should be visible:
+      // It only appears after the passenger has replied to at least one driver message,
+      // and only while no pending "Do you accept ride?" is awaiting a response.
+      const msgs = chat.messages;
+      const driverHasSentFirst = msgs.some(m => m.senderId === driverId);
+      const passengerHasReplied = driverHasSentFirst && msgs.some(m => m.senderId === chat.passengerId);
+      // Check if there's already an unanswered trigger
+      const lastTrigger = [...msgs].reverse().find(m => m.senderId === driverId && m.text === ACCEPT_TRIGGER);
+      const passengerRepliedAfterTrigger = lastTrigger
+        ? msgs.some(m => m.senderId === chat.passengerId && new Date(m.timestamp) > new Date(lastTrigger.timestamp))
+        : true;
+      const showAcceptBtn = passengerHasReplied && passengerRepliedAfterTrigger;
 
-      const msgsHtml = chat.messages.map(m => {
-        const isSent = m.senderId === Auth.currentUser.id;
-        const isDriver = m.senderId === Auth.currentUser.id;
-        const senderRole = isSent ? 'driver' : 'passenger';
+      const msgsHtml = msgs.map(m => {
+        const isSent   = m.senderId === driverId;
+        const senderRole  = isSent ? 'driver' : 'passenger';
         const senderLabel = m.senderName || (isSent ? 'You' : (passenger?.fullName || 'Passenger'));
         const time = new Date(m.timestamp).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
         return `<div class="message ${isSent ? 'sent' : 'received'} msg-${senderRole}">
@@ -1701,45 +1794,64 @@ closeFullImageViewer() {
         </div>`;
       }).join('');
 
+      const overlay = document.createElement('div');
+      overlay.className = 'chat-modal-overlay';
+      overlay.id = 'driver-chat-overlay';
+
       overlay.innerHTML = `
         <div class="chat-modal">
           <div class="chat-header">
-            <div><div class="title">💬 Chat with ${passenger?.fullName || 'Passenger'}</div></div>
+            <div>
+              <div class="title">💬 Chat with ${passenger?.fullName || 'Passenger'}</div>
+              ${showAcceptBtn ? '<div style="font-size:0.72rem;opacity:0.8;margin-top:2px">Use "Accept ride?" to confirm the passenger\'s seat</div>' : ''}
+            </div>
             <button class="close-btn" onclick="document.getElementById('driver-chat-overlay').remove()">✕</button>
           </div>
           <div class="chat-messages" id="driver-chat-messages">${msgsHtml || '<div style="text-align:center;color:var(--gray);font-size:0.85rem;margin-top:20px">No messages yet</div>'}</div>
-          <div class="chat-input-area">
-            <input type="text" id="driver-chat-input" placeholder="Type your reply...">
+          <div class="chat-input-area" style="flex-wrap:wrap;gap:6px;">
+            <input type="text" id="driver-chat-input" placeholder="Type your reply..." style="flex:1;min-width:120px">
             <button class="chat-send-btn" id="driver-chat-send">Send</button>
+            ${showAcceptBtn
+              ? `<button class="btn btn-secondary btn-sm" id="driver-accept-ride-btn"
+                         style="border-radius:8px;font-size:0.78rem;white-space:nowrap">
+                   🤝 Accept ride?
+                 </button>`
+              : ''}
           </div>
         </div>`;
       document.body.appendChild(overlay);
 
-      const msgs = document.getElementById('driver-chat-messages');
-      msgs.scrollTop = msgs.scrollHeight;
+      const chatMsgs = document.getElementById('driver-chat-messages');
+      chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
-      const sendMsg = async () => {
+      const sendMsg = async (forcedText) => {
         const input = document.getElementById('driver-chat-input');
-        const text = input.value.trim();
+        const text  = forcedText || input?.value.trim();
         if (!text) return;
-        input.value = '';
+        if (!forcedText && input) input.value = '';
+
         try {
-          await DB.addMessage(chatId, { senderId: Auth.currentUser.id, senderName: Auth.currentUser.fullName, text });
+          await DB.addMessage(chatId, { senderId: driverId, senderName: Auth.currentUser.fullName, text });
           const time = new Date().toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' });
-          msgs.innerHTML += `<div class="message sent msg-driver">
+          chatMsgs.innerHTML += `<div class="message sent msg-driver">
             <div class="msg-sender-tag driver-tag">You</div>
             ${text}<div class="time">${time}</div>
           </div>`;
-          msgs.scrollTop = msgs.scrollHeight;
+          chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
-          // Email alert to passenger on every driver reply
+          // After sending "Do you accept ride?", hide the button
+          if (text === ACCEPT_TRIGGER) {
+            const btn = document.getElementById('driver-accept-ride-btn');
+            if (btn) btn.remove();
+          }
+
+          // Email alert to passenger
           try {
             if (passenger) {
               const db2 = await DB.getDB();
               const tripObj = (db2.trips || []).find(t => t.id === chat.tripId);
               await EmailService.sendChatAlert(
-                passenger.email,
-                passenger.fullName,
+                passenger.email, passenger.fullName,
                 Auth.currentUser.fullName,
                 tripObj ? `${tripObj.originState} → ${tripObj.destination}` : 'your trip',
                 text
@@ -1750,8 +1862,14 @@ closeFullImageViewer() {
         } catch(e) { this.showToast('Failed to send', 'error'); }
       };
 
-      document.getElementById('driver-chat-send').addEventListener('click', sendMsg);
+      document.getElementById('driver-chat-send').addEventListener('click', () => sendMsg());
       document.getElementById('driver-chat-input').addEventListener('keydown', e => { if(e.key === 'Enter') sendMsg(); });
+
+      const acceptBtn = document.getElementById('driver-accept-ride-btn');
+      if (acceptBtn) {
+        acceptBtn.addEventListener('click', () => sendMsg(ACCEPT_TRIGGER));
+      }
+
     } catch(e) {
       hideLoader();
       this.showToast(e.message, 'error');
@@ -1792,6 +1910,16 @@ closeFullImageViewer() {
 
     showLoader();
     try {
+      // Client-side guard: check for existing active/in-progress trip
+      const allTrips = await DB.getTrips();
+      const hasActive = allTrips.some(
+        t => t.driverId === Auth.currentUser.id && (t.status === 'active' || t.status === 'in-progress')
+      );
+      if (hasActive) {
+        hideLoader();
+        this.showToast('You already have an active or in-progress trip. Please end it before creating a new one.', 'error');
+        return;
+      }
       await DB.createTrip({
         driverId: Auth.currentUser.id,
         originState: origin,
@@ -1828,6 +1956,44 @@ closeFullImageViewer() {
 
   async driverViewChats(tripId) {
     this.driverPanel('chats');
+  },
+
+  /**
+   * For each active trip belonging to the driver, check if the scheduled
+   * departure datetime has passed. If so, promote status to 'in-progress'.
+   */
+  async autoUpdateTripStatuses(myTrips) {
+    const now = new Date();
+    const promises = [];
+    for (const t of myTrips) {
+      if (t.status !== 'active') continue;
+      // Build a Date from departureDate + departureTime (e.g. "14:30")
+      const depDt = new Date(t.departureDate);
+      if (t.departureTime) {
+        const [h, m] = t.departureTime.split(':').map(Number);
+        depDt.setHours(h || 0, m || 0, 0, 0);
+      } else {
+        depDt.setHours(0, 0, 0, 0);
+      }
+      if (now >= depDt) {
+        promises.push(DB.updateTrip(t.id, { status: 'in-progress' }).catch(() => {}));
+      }
+    }
+    if (promises.length) await Promise.all(promises);
+  },
+
+  async driverEndTrip(tripId) {
+    if (!confirm('End this trip? It will be marked as Completed.')) return;
+    showLoader();
+    try {
+      await DB.updateTrip(tripId, { status: 'completed' });
+      hideLoader();
+      this.showToast('Trip completed! You can now create a new trip.', 'success');
+      this.driverPanel('my-trips');
+    } catch(e) {
+      hideLoader();
+      this.showToast(e.message, 'error');
+    }
   },
 
   // ── Passenger Dashboard ──
