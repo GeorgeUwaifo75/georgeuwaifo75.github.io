@@ -239,7 +239,9 @@ const DB = (() => {
       return db.trips || [];
     },
 
-    /** Returns active future trips and the full user list in one round-trip. */
+    /** Returns active (and in-progress) trips and the full user list in one round-trip.
+     *  In-progress trips are shown in the listing so passengers can see them,
+     *  but the Chat button will be disabled (no seats / trip underway). */
     async getActiveTripsAndUsers() {
       const db = await this.getDB();
       const today = new Date();
@@ -247,7 +249,7 @@ const DB = (() => {
       const trips = (db.trips || []).filter(t => {
         const dep = new Date(t.departureDate);
         dep.setHours(0, 0, 0, 0);
-        return dep >= today && t.status === 'active';
+        return dep >= today && (t.status === 'active' || t.status === 'in-progress');
       });
       return { trips, users: db.users || [] };
     },
@@ -255,6 +257,14 @@ const DB = (() => {
     async createTrip(tripData) {
       return _enqueueWrite(db => {
         db.trips = db.trips || [];
+        // Enforce: driver can only have one active/in-progress trip at a time
+        const driverId = tripData.driverId;
+        const hasActiveTrip = db.trips.some(
+          t => t.driverId === driverId && (t.status === 'active' || t.status === 'in-progress')
+        );
+        if (hasActiveTrip) {
+          throw new Error('You already have an active or in-progress trip. Please end it before creating a new one.');
+        }
         const newTrip = {
           id: 'TRIP_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6).toUpperCase(),
           createdAt: new Date().toISOString(),
@@ -263,6 +273,23 @@ const DB = (() => {
         };
         db.trips.push(newTrip);
         return { db, payload: newTrip };
+      });
+    },
+
+    /** Decrement available seats by 1 for a trip (called when passenger accepts ride). */
+    async decrementTripSeat(tripId) {
+      return _enqueueWrite(db => {
+        db.trips = db.trips || [];
+        const idx = db.trips.findIndex(t => t.id === tripId);
+        if (idx === -1) throw new Error('Trip not found');
+        const seats = db.trips[idx].availableSeats || 0;
+        if (seats <= 0) throw new Error('No seats available');
+        db.trips[idx] = {
+          ...db.trips[idx],
+          availableSeats: seats - 1,
+          updatedAt: new Date().toISOString()
+        };
+        return { db, payload: db.trips[idx] };
       });
     },
 
