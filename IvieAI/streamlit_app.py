@@ -393,13 +393,20 @@ def get_complete_sentences_up_to_limit(text, max_tokens=150):
     return ' '.join(complete_sentences)
 
 def clean_and_format_response(full_response, user_message):
-    """Extract, clean, and format response with proper termination"""
-    
-    # First, remove the user message from the beginning if present
+    """Extract, clean, and format response with proper termination.
+
+    Guarantees the final text:
+      - contains no '###' markers
+      - contains no 'Response:' / '### Response:' labels (anywhere, any case)
+      - contains no question sentences (sentences ending with '?')
+      - is properly capitalised and period-terminated
+    """
+
+    # ── Step 1: strip the echoed user prompt from the beginning ──────────────
     ai_response = full_response[len(user_message):].strip()
-    
-    # Remove common prefixes that the model might add
-    prefixes_to_remove = [
+
+    # ── Step 2: remove any leading role-prefix (start-of-string only) ────────
+    leading_prefixes = [
         "### Response:",
         "### Response",
         "Response:",
@@ -409,72 +416,87 @@ def clean_and_format_response(full_response, user_message):
         "Answer:",
         "### Answer:",
         "\nResponse:",
-        "\n### Response:"
+        "\n### Response:",
     ]
-    
-    for prefix in prefixes_to_remove:
-        if ai_response.startswith(prefix):
-            ai_response = ai_response[len(prefix):].strip()
-        # Also check with different capitalization
+    for prefix in leading_prefixes:
         if ai_response.lower().startswith(prefix.lower()):
             ai_response = ai_response[len(prefix):].strip()
-    
-    # Also check if the prefix appears with a newline
-    if "### Response:" in ai_response:
-        parts = ai_response.split("### Response:", 1)
-        if len(parts) > 1:
-            ai_response = parts[1].strip()
-    
-    # If still empty or invalid, try to find the first sentence after any colon
+
+    # ── Step 3: if '### Response:' still appears anywhere, keep only what
+    #           comes after the LAST occurrence ────────────────────────────────
+    if re.search(r'###\s*Response\s*:', ai_response, re.IGNORECASE):
+        parts = re.split(r'###\s*Response\s*:', ai_response, flags=re.IGNORECASE)
+        ai_response = parts[-1].strip()
+
+    # ── Step 4: remove ALL remaining '###' section headers ───────────────────
+    #   e.g. "### Some heading\n" or inline "###word"
+    ai_response = re.sub(r'###\s*\S[^\n]*', '', ai_response)
+    ai_response = re.sub(r'###', '', ai_response)
+
+    # ── Step 5: remove any inline 'Response:' label (anywhere, any case) ─────
+    ai_response = re.sub(r'\bResponse\s*:', '', ai_response, flags=re.IGNORECASE)
+
+    # ── Step 6: fall back to pattern search if the string is still empty ─────
     if not ai_response or len(ai_response) < 3:
-        # Look for content after a colon on a new line or at start
         colon_patterns = [
             r'### Response:\s*(.+?)(?=\n\n|$)',
             r'Response:\s*(.+?)(?=\n\n|$)',
             r'AI:\s*(.+?)(?=\n\n|$)',
-            r'Assistant:\s*(.+?)(?=\n\n|$)'
+            r'Assistant:\s*(.+?)(?=\n\n|$)',
         ]
         for pattern in colon_patterns:
             match = re.search(pattern, full_response, re.DOTALL | re.IGNORECASE)
             if match:
                 ai_response = match.group(1).strip()
                 break
-    
+
     if not ai_response:
         return "I'm here to chat! Could you rephrase that?"
-    
-    # Complete sentences extraction
+
+    # ── Step 7: split into sentences and DROP any question sentences ──────────
+    raw_sentences = re.split(r'(?<=[.!?])\s+', ai_response.strip())
+    filtered_sentences = [
+        s.strip()
+        for s in raw_sentences
+        if s.strip() and not s.strip().endswith('?')
+    ]
+
+    # If filtering removed everything, fall back to the canned response rather
+    # than surfacing raw question sentences from the model
+    if not filtered_sentences:
+        return "I'm here to chat! Could you rephrase that?"
+
+    ai_response = ' '.join(filtered_sentences)
+
+    # ── Step 8: respect the token limit (complete sentences only) ────────────
     complete_text = get_complete_sentences_up_to_limit(ai_response, max_tokens=150)
-    
+
     if complete_text:
         ai_response = complete_text
     else:
         last_punct = max(
             ai_response.rfind('.'),
             ai_response.rfind('!'),
-            ai_response.rfind('?')
+            ai_response.rfind('?'),
         )
-        
         if last_punct > 0:
             ai_response = ai_response[:last_punct + 1].strip()
         else:
             ai_response = ai_response.rstrip() + '.'
-    
-    # Ensure proper termination
+
+    # ── Step 9: final punctuation, capitalisation, whitespace cleanup ─────────
     ai_response = ensure_period_termination(ai_response)
-    
-    # Capitalize first letter
+
     if ai_response and ai_response[0].isalpha():
         ai_response = ai_response[0].upper() + ai_response[1:]
-    
-    # Clean up extra spaces and duplicate punctuation
+
     ai_response = re.sub(r'\.\.+', '.', ai_response)
-    ai_response = re.sub(r'\s+', ' ', ai_response)
-    
-    # Final check for validity
+    ai_response = re.sub(r'\s+', ' ', ai_response).strip()
+
+    # ── Step 10: last-resort validity check ───────────────────────────────────
     if len(ai_response) < 5:
         return "I'm here to chat! Could you rephrase that?"
-    
+
     return ai_response
     
 def generate_response(user_message):
