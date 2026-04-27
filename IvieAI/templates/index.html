@@ -1,3 +1,5 @@
+<!--index.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,19 +33,32 @@
                         📊 Export JSON
                     </button>
                     <button id="viewHistoryBtn" class="btn-secondary" title="View chat history">
-                        📚 History
+                        📚 Sessions
                     </button>
                 </div>
             </div>
 
-            <!-- Response area -->
-            <div class="response-area" id="responseArea">
+            <!-- Conversation History Area -->
+            <div class="conversation-container" id="conversationContainer">
+                <div class="conversation-history" id="conversationHistory">
+                    <div class="empty-conversation">
+                        🌸 No messages yet. Start a conversation above! 🌸
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response area (kept for streaming but now integrated into conversation) -->
+            <div class="response-area" id="responseArea" style="display: none;">
                 <div class="response-label">
                     <i>🤖 Ivie says</i>
                 </div>
-                <div class="ai-message" id="aiMessage">
-                    <span class="placeholder-message">🌸 Hi there! Ask me anything — I'm here to chat! 🌸</span>
+                <div class="thinking-indicator" id="thinkingIndicator">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="thinking-text">Ivie is thinking…</span>
                 </div>
+                <div class="ai-message" id="aiMessage"></div>
             </div>
 
             <!-- Input section -->
@@ -76,7 +91,7 @@
     <div id="historyModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>📚 Chat History</h2>
+                <h2>📚 Chat Sessions</h2>
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
