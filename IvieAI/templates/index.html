@@ -6,7 +6,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>IvieAI · Friendly Chat Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='/IvieAI/static/style.css') }}">
+    
+    <!--
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    -->
+    <link rel="stylesheet" href="/IvieAI/static/style.css">
+
 </head>
 <body>
     <div class="app-container">
@@ -108,6 +113,8 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="{{ url_for('static', filename='/IvieAI/static/script.js') }}"></script>
+   <!-- <script src="{{ url_for('static', filename='/IvieAI/static/script.js') }}"></script> -->
+    
+    <script src="/IvieAI/static/script.js"></script>
 </body>
 </html>
