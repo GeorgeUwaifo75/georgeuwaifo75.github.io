@@ -6,12 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>IvieAI · Friendly Chat Assistant</title>
-    
-    <!--
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    -->
-    <link rel="stylesheet" href="/IvieAI/static/style.css">
-
 </head>
 <body>
     <div class="app-container">
@@ -47,23 +42,9 @@
             <div class="conversation-container" id="conversationContainer">
                 <div class="conversation-history" id="conversationHistory">
                     <div class="empty-conversation">
-                        🌸 No messages yet. Start a conversation above! 🌸
+                        🌸 Hi there! Ask me anything — I'm here to chat! 🌸
                     </div>
                 </div>
-            </div>
-
-            <!-- Response area (kept for streaming but now integrated into conversation) -->
-            <div class="response-area" id="responseArea" style="display: none;">
-                <div class="response-label">
-                    <i>🤖 Ivie says</i>
-                </div>
-                <div class="thinking-indicator" id="thinkingIndicator">
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="thinking-text">Ivie is thinking…</span>
-                </div>
-                <div class="ai-message" id="aiMessage"></div>
             </div>
 
             <!-- Input section -->
@@ -87,7 +68,7 @@
             <div class="info-footer">
                 🧠 Powered by Hugging Face · Model: <strong>GeorgeUwaifo/ivie_gpt2_new01c_results</strong>
                 <br>
-                <span class="server-status" id="serverStatus">● Server: Connected</span>
+                <span class="server-status" id="serverStatus">● Connecting…</span>
             </div>
         </div>
     </div>
@@ -113,8 +94,6 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-   <!-- <script src="{{ url_for('static', filename='/IvieAI/static/script.js') }}"></script> -->
-    
-    <script src="/IvieAI/static/script.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
