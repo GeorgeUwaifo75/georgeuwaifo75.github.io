@@ -18,11 +18,18 @@ load_dotenv()
 # Get the directory where this script is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Create Flask app with explicit template and static folder paths
+# IMPORTANT FIX: Application is mounted under /IvieAI/ on the server
+# Define the root path for your application
+APPLICATION_ROOT = '/IvieAI'
+
+# Create Flask app with explicit template and static folder paths AND root path
 app = Flask(__name__,
            template_folder=os.path.join(BASE_DIR, 'templates'),
            static_folder=os.path.join(BASE_DIR, 'static'),
-           static_url_path='/static')
+           static_url_path=f'{APPLICATION_ROOT}/static')  # Fix static URL path
+
+# Set the application root path for routing
+app.config['APPLICATION_ROOT'] = APPLICATION_ROOT
 
 CORS(app)
 
@@ -32,7 +39,7 @@ TOKEN = os.getenv('HF_TOKEN')
 # For Hugging Face token - if HF_TOKEN doesn't work, try HF_API_TOKEN
 if not TOKEN:
     TOKEN = os.getenv('HF_API_TOKEN')
-
+           
 # Global variables for model and chat history
 model = None
 tokenizer = None
@@ -302,12 +309,12 @@ def generate_ai_response(user_message):
 # Routes
 # ─────────────────────────────────────────────
 
-@app.route('/')
+@app.route(APPLICATION_ROOT +'/')
 def index():
     return render_template('index.html')
 
 
-@app.route('/chat/stream', methods=['GET'])
+@app.route(APPLICATION_ROOT +'/chat/stream', methods=['GET'])
 def chat_stream():
     """
     Server-Sent Events endpoint.
@@ -378,7 +385,7 @@ def chat_stream():
     )
 
 
-@app.route('/chat', methods=['POST'])
+@app.route(APPLICATION_ROOT +'/chat', methods=['POST'])
 def chat():
     """Legacy non-streaming endpoint (kept for backward compatibility)."""
     global model, tokenizer, current_session_id, chat_sessions
@@ -415,7 +422,7 @@ def chat():
         return jsonify({'error': str(e)[:150]}), 500
 
 
-@app.route('/sessions', methods=['GET'])
+@app.route(APPLICATION_ROOT +'/sessions', methods=['GET'])
 def list_sessions():
     sessions_list = []
     for session_id, session in chat_sessions.items():
@@ -429,7 +436,7 @@ def list_sessions():
     return jsonify({'sessions': sessions_list})
 
 
-@app.route('/session/<session_id>', methods=['GET'])
+@app.route(APPLICATION_ROOT +'/session/<session_id>', methods=['GET'])
 def get_session(session_id):
     if session_id not in chat_sessions:
         return jsonify({'error': 'Session not found'}), 404
@@ -437,7 +444,7 @@ def get_session(session_id):
     return jsonify(session.to_json())
 
 
-@app.route('/export/<session_id>/<format>', methods=['GET'])
+@app.route(APPLICATION_ROOT +'/export/<session_id>/<format>', methods=['GET'])
 def export_session(session_id, format):
     if session_id not in chat_sessions:
         return jsonify({'error': 'Session not found'}), 404
@@ -468,7 +475,7 @@ def export_session(session_id, format):
         return jsonify({'error': 'Invalid format. Use "json" or "text"'}), 400
 
 
-@app.route('/session/current', methods=['GET'])
+@app.route(APPLICATION_ROOT +'/session/current', methods=['GET'])
 def get_current_session():
     if not current_session_id or current_session_id not in chat_sessions:
         return jsonify({'error': 'No active session'}), 404
@@ -476,7 +483,7 @@ def get_current_session():
     return jsonify(session.to_json())
 
 
-@app.route('/session/new', methods=['POST'])
+@app.route(APPLICATION_ROOT +'/session/new', methods=['POST'])
 def new_session():
     global current_session_id
     session = ChatSession()
@@ -489,7 +496,7 @@ def new_session():
     })
 
 
-@app.route('/session/<session_id>/delete', methods=['DELETE'])
+@app.route(APPLICATION_ROOT +'/session/<session_id>/delete', methods=['DELETE'])
 def delete_session(session_id):
     global current_session_id
     if session_id not in chat_sessions:
@@ -500,7 +507,7 @@ def delete_session(session_id):
     return jsonify({'message': f'Session {session_id} deleted successfully'})
 
 
-@app.route('/debug/static-check')
+@app.route(APPLICATION_ROOT +'/debug/static-check')
 def debug_static():
     import os
     static_dir = os.path.join(BASE_DIR, 'static')
@@ -514,7 +521,7 @@ def debug_static():
     })
 
 # Add this as a fallback route before your other routes
-@app.route('/static/<path:filename>')
+@app.route(APPLICATION_ROOT +'/static/<path:filename>')
 def serve_static(filename):
     import os
     from flask import send_from_directory
