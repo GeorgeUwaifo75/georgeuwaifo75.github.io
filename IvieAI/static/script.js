@@ -1,331 +1,112 @@
-// script.js
-let currentSessionId = null;
-let isProcessing = false;
+/* script.js — IvieAI with conversation history and uniform colors */
 
-// DOM Elements
+// ── State ──────────────────────────────────────────
+let currentSessionId = null;
+let isStreaming = false;
+let currentStreamingMessageDiv = null;
+let conversationHistory = [];
+
+// ── DOM refs ───────────────────────────────────────
+const conversationContainer = document.getElementById('conversationContainer');
+const conversationHistoryDiv = document.getElementById('conversationHistory');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
-const aiMessageDiv = document.getElementById('aiMessage');
-const serverStatus = document.getElementById('serverStatus');
-const sessionIdSpan = document.getElementById('sessionId');
-const interactionCountSpan = document.getElementById('interactionCount');
-const newSessionBtn = document.getElementById('newSessionBtn');
-const exportTextBtn = document.getElementById('exportTextBtn');
-const exportJsonBtn = document.getElementById('exportJsonBtn');
-const viewHistoryBtn = document.getElementById('viewHistoryBtn');
-
-// Modal Elements
+const sessionIdEl = document.getElementById('sessionId');
+const interactionCountEl = document.getElementById('interactionCount');
+const serverStatusEl = document.getElementById('serverStatus');
 const historyModal = document.getElementById('historyModal');
 const sessionsList = document.getElementById('sessionsList');
-const closeModal = document.querySelector('.close-modal');
-const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+const toast = document.getElementById('toast');
 
-// Toast notification
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    setTimeout(() => {
-        toast.className = 'toast';
-    }, 3000);
+// ── Utility: auto-grow textarea ───────────────────
+userInput.addEventListener('input', () => {
+    userInput.style.height = 'auto';
+    userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+});
+
+// ── Utility: Enter to send ────────────────────────
+userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+// ── Toast helper ──────────────────────────────────
+function showToast(msg, type = '') {
+    toast.textContent = msg;
+    toast.className = 'toast' + (type ? ' ' + type : '');
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2800);
 }
 
-// Update session info in UI
-function updateSessionInfo(sessionId, interactionCount) {
-    if (sessionId) {
-        currentSessionId = sessionId;
-        sessionIdSpan.textContent = sessionId.substring(0, 12) + '...';
-        sessionIdSpan.title = sessionId;
-    }
-    if (interactionCount !== undefined) {
-        interactionCountSpan.textContent = interactionCount;
-    }
-}
-
-// Send message to server
-async function sendMessage() {
-    if (isProcessing) {
-        showToast('Please wait, processing your request...', 'info');
-        return;
-    }
-    
-    const message = userInput.value.trim();
-    if (!message) {
-        showToast('Please enter a message', 'error');
-        return;
-    }
-    
-    isProcessing = true;
-    aiMessageDiv.innerHTML = '<span class="loading-message">🤔 Thinking...</span>';
-    sendBtn.disabled = true;
-    userInput.disabled = true;
-    
-    try {
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                message: message,
-                session_id: currentSessionId 
-            })
-        });
+// ── Add message to conversation UI ─────────────────
+function addMessageToUI(role, content, isStreaming = false) {
+    if (role === 'ai' && isStreaming) {
+        // Create a new message bubble for streaming AI response
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message-bubble ai';
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                <span class="message-sender">🤖 IvieAI</span>
+                <div class="message-text" id="streamingMessage"></div>
+            </div>
+        `;
+        conversationHistoryDiv.appendChild(messageDiv);
+        currentStreamingMessageDiv = messageDiv.querySelector('.message-text');
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // Scroll to bottom
+        conversationContainer.scrollTop = conversationContainer.scrollHeight;
+        return currentStreamingMessageDiv;
+    } else if (role === 'user') {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message-bubble user';
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                <span class="message-sender">👤 You</span>
+                <div class="message-text">${escapeHtml(content)}</div>
+            </div>
+        `;
+        conversationHistoryDiv.appendChild(messageDiv);
         
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        aiMessageDiv.innerHTML = `<span class="ai-response">${escapeHtml(data.response)}</span>`;
-        
-        if (data.session_id) {
-            updateSessionInfo(data.session_id, data.interaction_count);
-        }
-        
-        userInput.value = '';
-        userInput.style.height = 'auto';
-        
-    } catch (error) {
-        console.error('Error:', error);
-        aiMessageDiv.innerHTML = `<span class="error-message">❌ Error: ${error.message}. Please try again.</span>`;
-        showToast('Failed to get response: ' + error.message, 'error');
-    } finally {
-        isProcessing = false;
-        sendBtn.disabled = false;
-        userInput.disabled = false;
-        userInput.focus();
-    }
-}
-
-// Create new session
-async function createNewSession() {
-    try {
-        const response = await fetch('/session/new', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to create new session');
-        }
-        
-        const data = await response.json();
-        updateSessionInfo(data.session_id, 0);
-        aiMessageDiv.innerHTML = '<span class="placeholder-message">🌸 New conversation started! Ask me anything 🌸</span>';
-        showToast('New session created successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error creating session:', error);
-        showToast('Failed to create new session', 'error');
-    }
-}
-
-// Export current session
-async function exportCurrentSession(format) {
-    if (!currentSessionId) {
-        showToast('No active session to export', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/export/${currentSessionId}/${format}`);
-        
-        if (!response.ok) {
-            throw new Error('Export failed');
-        }
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat_${currentSessionId}.${format === 'json' ? 'json' : 'txt'}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        showToast(`Session exported as ${format.toUpperCase()}!`, 'success');
-        
-    } catch (error) {
-        console.error('Export error:', error);
-        showToast('Failed to export session', 'error');
-    }
-}
-
-// Load sessions list
-async function loadSessionsList() {
-    sessionsList.innerHTML = '<div class="loading-message">📂 Loading sessions...</div>';
-    
-    try {
-        const response = await fetch('/sessions');
-        
-        if (!response.ok) {
-            throw new Error('Failed to load sessions');
-        }
-        
-        const data = await response.json();
-        
-        if (!data.sessions || data.sessions.length === 0) {
-            sessionsList.innerHTML = '<div class="empty-message">✨ No sessions found. Start a new chat to create one!</div>';
-            return;
-        }
-        
-        sessionsList.innerHTML = '';
-        
-        for (const session of data.sessions) {
-            const sessionDiv = document.createElement('div');
-            sessionDiv.className = 'session-item';
-            
-            const createdDate = new Date(session.created_at);
-            const updatedDate = new Date(session.last_updated);
-            
-            sessionDiv.innerHTML = `
-                <div class="session-header">
-                    <span class="session-id">${escapeHtml(session.session_id)}</span>
-                    <span class="session-date">Created: ${createdDate.toLocaleString()}</span>
-                </div>
-                <div class="session-stats">
-                    <span>💬 ${session.total_interactions} messages</span>
-                    <span>🕐 Updated: ${updatedDate.toLocaleString()}</span>
-                </div>
-                <div class="session-actions">
-                    <button class="session-btn load" data-session-id="${session.session_id}">📂 Load</button>
-                    <button class="session-btn export-text" data-session-id="${session.session_id}">📄 Export Text</button>
-                    <button class="session-btn export-json" data-session-id="${session.session_id}">📊 Export JSON</button>
-                    <button class="session-btn delete" data-session-id="${session.session_id}">🗑️ Delete</button>
+        // Scroll to bottom
+        conversationContainer.scrollTop = conversationContainer.scrollHeight;
+    } else if (role === 'ai' && !isStreaming) {
+        // Replace streaming message with final version or add new one
+        if (currentStreamingMessageDiv) {
+            currentStreamingMessageDiv.innerHTML = formatAIMessage(content);
+            currentStreamingMessageDiv = null;
+        } else {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-bubble ai';
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <span class="message-sender">🤖 IvieAI</span>
+                    <div class="message-text">${formatAIMessage(content)}</div>
                 </div>
             `;
-            
-            sessionsList.appendChild(sessionDiv);
+            conversationHistoryDiv.appendChild(messageDiv);
         }
         
-        // Add event listeners to buttons
-        document.querySelectorAll('.session-btn.load').forEach(btn => {
-            btn.addEventListener('click', () => loadSession(btn.dataset.sessionId));
-        });
-        
-        document.querySelectorAll('.session-btn.export-text').forEach(btn => {
-            btn.addEventListener('click', () => exportSpecificSession(btn.dataset.sessionId, 'text'));
-        });
-        
-        document.querySelectorAll('.session-btn.export-json').forEach(btn => {
-            btn.addEventListener('click', () => exportSpecificSession(btn.dataset.sessionId, 'json'));
-        });
-        
-        document.querySelectorAll('.session-btn.delete').forEach(btn => {
-            btn.addEventListener('click', () => deleteSession(btn.dataset.sessionId));
-        });
-        
-    } catch (error) {
-        console.error('Error loading sessions:', error);
-        sessionsList.innerHTML = '<div class="empty-message">❌ Failed to load sessions. Please try again.</div>';
-    }
-}
-
-// Load a specific session
-async function loadSession(sessionId) {
-    try {
-        const response = await fetch(`/session/${sessionId}`);
-        
-        if (!response.ok) {
-            throw new Error('Failed to load session');
-        }
-        
-        const session = await response.json();
-        
-        currentSessionId = session.session_id;
-        updateSessionInfo(session.session_id, session.total_interactions);
-        
-        if (session.history && session.history.length > 0) {
-            const lastInteraction = session.history[session.history.length - 1];
-            aiMessageDiv.innerHTML = `<span class="ai-response">${escapeHtml(lastInteraction.reply)}</span>`;
-            userInput.value = lastInteraction.trigger;
-        } else {
-            aiMessageDiv.innerHTML = '<span class="placeholder-message">🌸 Session loaded! Ask me anything 🌸</span>';
-        }
-        
-        showToast(`Session loaded successfully!`, 'success');
-        closeHistoryModal();
-        
-    } catch (error) {
-        console.error('Error loading session:', error);
-        showToast('Failed to load session', 'error');
-    }
-}
-
-// Export a specific session
-async function exportSpecificSession(sessionId, format) {
-    try {
-        const response = await fetch(`/export/${sessionId}/${format}`);
-        
-        if (!response.ok) {
-            throw new Error('Export failed');
-        }
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat_${sessionId}.${format === 'json' ? 'json' : 'txt'}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        showToast(`Session exported as ${format.toUpperCase()}!`, 'success');
-        
-    } catch (error) {
-        console.error('Export error:', error);
-        showToast('Failed to export session', 'error');
-    }
-}
-
-// Delete a session
-async function deleteSession(sessionId) {
-    if (!confirm(`Are you sure you want to delete this session? This action cannot be undone.`)) {
-        return;
+        // Scroll to bottom
+        conversationContainer.scrollTop = conversationContainer.scrollHeight;
     }
     
-    try {
-        const response = await fetch(`/session/${sessionId}/delete`, {
-            method: 'DELETE'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to delete session');
-        }
-        
-        showToast('Session deleted successfully!', 'success');
-        
-        await loadSessionsList();
-        
-        if (currentSessionId === sessionId) {
-            await createNewSession();
-        }
-        
-    } catch (error) {
-        console.error('Error deleting session:', error);
-        showToast('Failed to delete session', 'error');
+    // Remove empty state if needed
+    const emptyDiv = conversationHistoryDiv.querySelector('.empty-conversation');
+    if (emptyDiv) {
+        emptyDiv.remove();
     }
 }
 
-// Open history modal
-function openHistoryModal() {
-    historyModal.style.display = 'block';
-    loadSessionsList();
-}
-
-// Close history modal
-function closeHistoryModal() {
-    historyModal.style.display = 'none';
+// Format AI message (simple paragraph formatting)
+function formatAIMessage(text) {
+    // Split into sentences and join with spaces (no special coloring)
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    return sentences.map(sentence => sentence.trim()).join(' ');
 }
 
 // Escape HTML to prevent XSS
@@ -335,59 +116,309 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Auto-resize textarea
-function autoResizeTextarea() {
-    userInput.style.height = 'auto';
-    userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+// ── Show/hide typing indicator ────────────────────
+function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'message-bubble ai';
+    indicator.id = 'typingIndicator';
+    indicator.innerHTML = `
+        <div class="message-content">
+            <span class="message-sender">🤖 IvieAI</span>
+            <div class="typing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+    `;
+    conversationHistoryDiv.appendChild(indicator);
+    conversationContainer.scrollTop = conversationContainer.scrollHeight;
 }
 
-// Check server status
-async function checkServerStatus() {
+function hideTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+// ── Load full conversation history from server ────
+async function loadConversationHistory(sessionId) {
     try {
-        const response = await fetch('/sessions');
-        if (response.ok) {
-            serverStatus.innerHTML = '✅ Server: Connected';
-            serverStatus.style.color = '#28a745';
+        const response = await fetch(`/session/${sessionId}`);
+        const data = await response.json();
+        
+        if (data.history && data.history.length > 0) {
+            // Clear current conversation
+            conversationHistoryDiv.innerHTML = '';
+            currentStreamingMessageDiv = null;
+            
+            // Add all historical messages
+            data.history.forEach(interaction => {
+                // Add user message
+                addMessageToUI('user', interaction.trigger);
+                // Add AI response
+                addMessageToUI('ai', interaction.reply);
+            });
+            
+            // Update counts
+            interactionCountEl.textContent = data.total_interactions;
         } else {
-            throw new Error('Server error');
+            // Empty conversation
+            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 No messages yet. Start a conversation above! 🌸</div>';
+            interactionCountEl.textContent = '0';
         }
     } catch (error) {
-        serverStatus.innerHTML = '❌ Server: Disconnected';
-        serverStatus.style.color = '#dc3545';
+        console.error('Failed to load conversation:', error);
     }
 }
 
-// Event Listeners
-sendBtn.addEventListener('click', sendMessage);
-newSessionBtn.addEventListener('click', createNewSession);
-exportTextBtn.addEventListener('click', () => exportCurrentSession('text'));
-exportJsonBtn.addEventListener('click', () => exportCurrentSession('json'));
-viewHistoryBtn.addEventListener('click', openHistoryModal);
-closeModal.addEventListener('click', closeHistoryModal);
-closeHistoryBtn.addEventListener('click', closeHistoryModal);
+// ── Core: send via SSE /chat/stream ──────────────
+function sendMessage() {
+    const text = userInput.value.trim();
+    if (!text || isStreaming) return;
 
-// Close modal when clicking outside
-window.addEventListener('click', (event) => {
-    if (event.target === historyModal) {
-        closeHistoryModal();
+    // Add user message to UI immediately
+    addMessageToUI('user', text);
+    
+    // Clear input
+    userInput.value = '';
+    userInput.style.height = 'auto';
+    setStreaming(true);
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    // Prepare streaming
+    const params = new URLSearchParams({ message: text });
+    if (currentSessionId) params.append('session_id', currentSessionId);
+    
+    let sentenceIndex = 0;
+    let accumulatedResponse = '';
+    let streamingDiv = null;
+    
+    const evtSrc = new EventSource(`/chat/stream?${params.toString()}`);
+    
+    evtSrc.onmessage = (e) => {
+        let data;
+        try { data = JSON.parse(e.data); } catch { return; }
+        
+        switch (data.type) {
+            case 'thinking':
+                // Session confirmed — update UI badge
+                if (data.session_id !== currentSessionId) {
+                    currentSessionId = data.session_id;
+                    sessionIdEl.textContent = data.session_id.slice(-10);
+                    // Load existing conversation for this session
+                    loadConversationHistory(currentSessionId);
+                }
+                break;
+                
+            case 'sentence':
+                // Remove typing indicator on first sentence
+                if (sentenceIndex === 0) {
+                    hideTypingIndicator();
+                    // Create streaming message container
+                    streamingDiv = addMessageToUI('ai', '', true);
+                }
+                // Append sentence to accumulated response
+                if (streamingDiv) {
+                    accumulatedResponse += (accumulatedResponse ? ' ' : '') + data.text;
+                    // Update with accumulated text
+                    streamingDiv.innerHTML = formatAIMessage(accumulatedResponse);
+                }
+                sentenceIndex++;
+                conversationContainer.scrollTop = conversationContainer.scrollHeight;
+                break;
+                
+            case 'done':
+                // Finalize the AI message
+                if (streamingDiv && accumulatedResponse) {
+                    streamingDiv.innerHTML = formatAIMessage(accumulatedResponse);
+                }
+                streamingDiv = null;
+                accumulatedResponse = '';
+                interactionCountEl.textContent = data.interaction_count;
+                setStreaming(false);
+                evtSrc.close();
+                break;
+                
+            case 'error':
+                hideTypingIndicator();
+                addMessageToUI('ai', `⚠️ Error: ${escapeHtml(data.message || 'Something went wrong.')}`);
+                setStreaming(false);
+                evtSrc.close();
+                showToast('Error from server', 'error');
+                break;
+        }
+    };
+    
+    evtSrc.onerror = () => {
+        hideTypingIndicator();
+        if (sentenceIndex === 0) {
+            addMessageToUI('ai', '⚠️ Connection error. Please try again.');
+        }
+        setStreaming(false);
+        evtSrc.close();
+        serverStatusEl.textContent = '● Server: Disconnected';
+        serverStatusEl.className = 'server-status error';
+    };
+}
+
+function setStreaming(active) {
+    isStreaming = active;
+    sendBtn.disabled = active;
+    userInput.disabled = active;
+    if (!active) userInput.focus();
+}
+
+// ── New session ───────────────────────────────────
+document.getElementById('newSessionBtn').addEventListener('click', async () => {
+    if (isStreaming) return;
+    try {
+        const res = await fetch('/session/new', { method: 'POST' });
+        const data = await res.json();
+        currentSessionId = data.session_id;
+        sessionIdEl.textContent = data.session_id.slice(-10);
+        interactionCountEl.textContent = '0';
+        // Clear conversation UI
+        conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 New session started! Ask me anything. 🌸</div>';
+        currentStreamingMessageDiv = null;
+        showToast('New session started!', 'success');
+    } catch {
+        showToast('Could not create new session', 'error');
     }
 });
 
-// Handle Enter key
-userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+// ── Export helpers ────────────────────────────────
+document.getElementById('exportTextBtn').addEventListener('click', () => exportSession('text'));
+document.getElementById('exportJsonBtn').addEventListener('click', () => exportSession('json'));
+
+function exportSession(format) {
+    if (!currentSessionId) {
+        showToast('No active session to export', 'error');
+        return;
     }
+    const link = document.createElement('a');
+    link.href = `/export/${currentSessionId}/${format}`;
+    link.click();
+    showToast(`Exporting as ${format.toUpperCase()}…`, 'success');
+}
+
+// ── History modal ─────────────────────────────────
+document.getElementById('viewHistoryBtn').addEventListener('click', openHistory);
+document.getElementById('closeHistoryBtn').addEventListener('click', closeHistory);
+document.querySelector('.close-modal').addEventListener('click', closeHistory);
+
+historyModal.addEventListener('click', (e) => {
+    if (e.target === historyModal) closeHistory();
 });
 
-// Auto-resize textarea
-userInput.addEventListener('input', autoResizeTextarea);
+function openHistory() {
+    historyModal.classList.add('open');
+    loadSessions();
+}
 
-// Initial setup
-autoResizeTextarea();
-checkServerStatus();
-setInterval(checkServerStatus, 30000);
+function closeHistory() {
+    historyModal.classList.remove('open');
+}
 
-// Initialize a new session on page load
-createNewSession();
+async function loadSessions() {
+    sessionsList.innerHTML = '<div class="loading-message">Loading sessions…</div>';
+    try {
+        const res = await fetch('/sessions');
+        const data = await res.json();
+        
+        if (!data.sessions || data.sessions.length === 0) {
+            sessionsList.innerHTML = '<div class="loading-message">No sessions found.</div>';
+            return;
+        }
+        
+        sessionsList.innerHTML = '';
+        data.sessions.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'session-item';
+            item.innerHTML = `
+                <div class="session-item-info">
+                    <strong>${escapeHtml(s.session_id)}</strong>
+                    ${s.total_interactions} message${s.total_interactions !== 1 ? 's' : ''} ·
+                    ${new Date(s.last_updated).toLocaleString()}
+                </div>
+                <div class="session-item-actions">
+                    <button class="btn-sm btn-view" data-id="${escapeHtml(s.session_id)}">Load</button>
+                    <button class="btn-sm btn-delete" data-id="${escapeHtml(s.session_id)}">Delete</button>
+                </div>
+            `;
+            sessionsList.appendChild(item);
+        });
+        
+        // Bind buttons
+        sessionsList.querySelectorAll('.btn-view').forEach(btn => {
+            btn.addEventListener('click', () => loadSession(btn.dataset.id));
+        });
+        sessionsList.querySelectorAll('.btn-delete').forEach(btn => {
+            btn.addEventListener('click', () => deleteSession(btn.dataset.id));
+        });
+        
+    } catch {
+        sessionsList.innerHTML = '<div class="loading-message">Failed to load sessions.</div>';
+    }
+}
+
+async function loadSession(sessionId) {
+    try {
+        const res = await fetch(`/session/${sessionId}`);
+        const data = await res.json();
+        
+        currentSessionId = data.session_id;
+        sessionIdEl.textContent = data.session_id.slice(-10);
+        interactionCountEl.textContent = data.total_interactions;
+        
+        // Load the conversation history
+        await loadConversationHistory(sessionId);
+        
+        closeHistory();
+        showToast('Session loaded!', 'success');
+    } catch {
+        showToast('Could not load session', 'error');
+    }
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('Delete this session?')) return;
+    try {
+        await fetch(`/session/${sessionId}/delete`, { method: 'DELETE' });
+        showToast('Session deleted', 'success');
+        loadSessions();
+        if (currentSessionId === sessionId) {
+            currentSessionId = null;
+            sessionIdEl.textContent = 'None';
+            interactionCountEl.textContent = '0';
+            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 Session deleted. Start a new chat! 🌸</div>';
+        }
+    } catch {
+        showToast('Could not delete session', 'error');
+    }
+}
+
+// ── Init: fetch current session on load ──────────
+(async function init() {
+    try {
+        const res = await fetch('/session/current');
+        if (res.ok) {
+            const data = await res.json();
+            currentSessionId = data.session_id;
+            sessionIdEl.textContent = data.session_id.slice(-10);
+            interactionCountEl.textContent = data.total_interactions;
+            // Load the conversation history for current session
+            await loadConversationHistory(currentSessionId);
+        } else {
+            sessionIdEl.textContent = 'New';
+            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 Hi there! Ask me anything — I\'m here to chat! 🌸</div>';
+        }
+        serverStatusEl.textContent = '● Server: Connected';
+        serverStatusEl.className = 'server-status';
+    } catch {
+        serverStatusEl.textContent = '● Server: Disconnected';
+        serverStatusEl.className = 'server-status error';
+        sessionIdEl.textContent = 'N/A';
+    }
+})();
