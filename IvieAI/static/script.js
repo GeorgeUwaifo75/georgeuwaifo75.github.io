@@ -4,19 +4,18 @@
 let currentSessionId = null;
 let isStreaming = false;
 let currentStreamingMessageDiv = null;
-let conversationHistory = [];
 
 // ── DOM refs ───────────────────────────────────────
-const conversationContainer = document.getElementById('conversationContainer');
+const conversationContainer  = document.getElementById('conversationContainer');
 const conversationHistoryDiv = document.getElementById('conversationHistory');
-const userInput = document.getElementById('userInput');
-const sendBtn = document.getElementById('sendBtn');
-const sessionIdEl = document.getElementById('sessionId');
-const interactionCountEl = document.getElementById('interactionCount');
-const serverStatusEl = document.getElementById('serverStatus');
-const historyModal = document.getElementById('historyModal');
-const sessionsList = document.getElementById('sessionsList');
-const toast = document.getElementById('toast');
+const userInput              = document.getElementById('userInput');
+const sendBtn                = document.getElementById('sendBtn');
+const sessionIdEl            = document.getElementById('sessionId');
+const interactionCountEl     = document.getElementById('interactionCount');
+const serverStatusEl         = document.getElementById('serverStatus');
+const historyModal           = document.getElementById('historyModal');
+const sessionsList           = document.getElementById('sessionsList');
+const toast                  = document.getElementById('toast');
 
 // ── Utility: auto-grow textarea ───────────────────
 userInput.addEventListener('input', () => {
@@ -43,81 +42,50 @@ function showToast(msg, type = '') {
     setTimeout(() => toast.classList.remove('show'), 2800);
 }
 
-// ── Add message to conversation UI ─────────────────
-function addMessageToUI(role, content, isStreaming = false) {
-    if (role === 'ai' && isStreaming) {
-        // Create a new message bubble for streaming AI response
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message-bubble ai';
-        messageDiv.innerHTML = `
-            <div class="message-content">
-                <span class="message-sender">🤖 IvieAI</span>
-                <div class="message-text" id="streamingMessage"></div>
-            </div>
-        `;
-        conversationHistoryDiv.appendChild(messageDiv);
-        currentStreamingMessageDiv = messageDiv.querySelector('.message-text');
-        
-        // Scroll to bottom
-        conversationContainer.scrollTop = conversationContainer.scrollHeight;
-        return currentStreamingMessageDiv;
-    } else if (role === 'user') {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message-bubble user';
-        messageDiv.innerHTML = `
-            <div class="message-content">
-                <span class="message-sender">👤 You</span>
-                <div class="message-text">${escapeHtml(content)}</div>
-            </div>
-        `;
-        conversationHistoryDiv.appendChild(messageDiv);
-        
-        // Scroll to bottom
-        conversationContainer.scrollTop = conversationContainer.scrollHeight;
-    } else if (role === 'ai' && !isStreaming) {
-        // Replace streaming message with final version or add new one
-        if (currentStreamingMessageDiv) {
-            currentStreamingMessageDiv.innerHTML = formatAIMessage(content);
-            currentStreamingMessageDiv = null;
-        } else {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message-bubble ai';
-            messageDiv.innerHTML = `
-                <div class="message-content">
-                    <span class="message-sender">🤖 IvieAI</span>
-                    <div class="message-text">${formatAIMessage(content)}</div>
-                </div>
-            `;
-            conversationHistoryDiv.appendChild(messageDiv);
-        }
-        
-        // Scroll to bottom
-        conversationContainer.scrollTop = conversationContainer.scrollHeight;
-    }
-    
-    // Remove empty state if needed
+// ── Scroll to bottom ──────────────────────────────
+function scrollToBottom() {
+    conversationContainer.scrollTop = conversationContainer.scrollHeight;
+}
+
+// ── Remove the empty-state placeholder ───────────
+function clearEmptyState() {
     const emptyDiv = conversationHistoryDiv.querySelector('.empty-conversation');
-    if (emptyDiv) {
-        emptyDiv.remove();
-    }
+    if (emptyDiv) emptyDiv.remove();
 }
 
-// Format AI message (simple paragraph formatting)
-function formatAIMessage(text) {
-    // Split into sentences and join with spaces (no special coloring)
-    const sentences = text.split(/(?<=[.!?])\s+/);
-    return sentences.map(sentence => sentence.trim()).join(' ');
+// ── Add a user message bubble ─────────────────────
+function addUserMessage(text) {
+    clearEmptyState();
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-bubble user';
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            <span class="message-sender">👤 You</span>
+            <div class="message-text">${escapeHtml(text)}</div>
+        </div>
+    `;
+    conversationHistoryDiv.appendChild(messageDiv);
+    scrollToBottom();
 }
 
-// Escape HTML to prevent XSS
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ── Add an AI message bubble (static, for history replay) ──
+function addAiMessage(text) {
+    clearEmptyState();
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-bubble ai';
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            <span class="message-sender">🤖 IvieAI</span>
+            <div class="message-text">${escapeHtml(text)}</div>
+        </div>
+    `;
+    conversationHistoryDiv.appendChild(messageDiv);
+    scrollToBottom();
 }
 
-// ── Show/hide typing indicator ────────────────────
+// ── Show typing indicator ────────────────────────
 function showTypingIndicator() {
+    clearEmptyState();
     const indicator = document.createElement('div');
     indicator.className = 'message-bubble ai';
     indicator.id = 'typingIndicator';
@@ -130,14 +98,35 @@ function showTypingIndicator() {
         </div>
     `;
     conversationHistoryDiv.appendChild(indicator);
-    conversationContainer.scrollTop = conversationContainer.scrollHeight;
+    scrollToBottom();
 }
 
 function hideTypingIndicator() {
     const indicator = document.getElementById('typingIndicator');
-    if (indicator) {
-        indicator.remove();
-    }
+    if (indicator) indicator.remove();
+}
+
+// ── Create the streaming AI bubble (returns the text div) ──
+function createStreamingBubble() {
+    clearEmptyState();
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-bubble ai';
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            <span class="message-sender">🤖 IvieAI</span>
+            <div class="message-text" id="streamingMessage"></div>
+        </div>
+    `;
+    conversationHistoryDiv.appendChild(messageDiv);
+    scrollToBottom();
+    return messageDiv.querySelector('.message-text');
+}
+
+// ── Escape HTML ───────────────────────────────────
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ── Load full conversation history from server ────
@@ -145,25 +134,19 @@ async function loadConversationHistory(sessionId) {
     try {
         const response = await fetch(`/session/${sessionId}`);
         const data = await response.json();
-        
+
+        conversationHistoryDiv.innerHTML = '';
+        currentStreamingMessageDiv = null;
+
         if (data.history && data.history.length > 0) {
-            // Clear current conversation
-            conversationHistoryDiv.innerHTML = '';
-            currentStreamingMessageDiv = null;
-            
-            // Add all historical messages
             data.history.forEach(interaction => {
-                // Add user message
-                addMessageToUI('user', interaction.trigger);
-                // Add AI response
-                addMessageToUI('ai', interaction.reply);
+                addUserMessage(interaction.trigger);
+                addAiMessage(interaction.reply);
             });
-            
-            // Update counts
             interactionCountEl.textContent = data.total_interactions;
         } else {
-            // Empty conversation
-            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 No messages yet. Start a conversation above! 🌸</div>';
+            conversationHistoryDiv.innerHTML =
+                '<div class="empty-conversation">🌸 No messages yet. Start a conversation above! 🌸</div>';
             interactionCountEl.textContent = '0';
         }
     } catch (error) {
@@ -176,85 +159,76 @@ function sendMessage() {
     const text = userInput.value.trim();
     if (!text || isStreaming) return;
 
-    // Add user message to UI immediately
-    addMessageToUI('user', text);
-    
+    // Show user message immediately
+    addUserMessage(text);
+
     // Clear input
     userInput.value = '';
     userInput.style.height = 'auto';
     setStreaming(true);
-    
+
     // Show typing indicator
     showTypingIndicator();
-    
-    // Prepare streaming
+
     const params = new URLSearchParams({ message: text });
     if (currentSessionId) params.append('session_id', currentSessionId);
-    
+
     let sentenceIndex = 0;
     let accumulatedResponse = '';
     let streamingDiv = null;
-    
+
     const evtSrc = new EventSource(`/chat/stream?${params.toString()}`);
-    
+
     evtSrc.onmessage = (e) => {
         let data;
         try { data = JSON.parse(e.data); } catch { return; }
-        
+
         switch (data.type) {
+
             case 'thinking':
-                // Session confirmed — update UI badge
-                if (data.session_id !== currentSessionId) {
-                    currentSessionId = data.session_id;
-                    sessionIdEl.textContent = data.session_id.slice(-10);
-                    // Load existing conversation for this session
-                    loadConversationHistory(currentSessionId);
-                }
+                // Update session ID badge only — do NOT reload history here,
+                // that would wipe the live stream mid-response.
+                currentSessionId = data.session_id;
+                sessionIdEl.textContent = data.session_id.slice(-10);
                 break;
-                
+
             case 'sentence':
-                // Remove typing indicator on first sentence
                 if (sentenceIndex === 0) {
                     hideTypingIndicator();
-                    // Create streaming message container
-                    streamingDiv = addMessageToUI('ai', '', true);
+                    // Create the streaming bubble once
+                    streamingDiv = createStreamingBubble();
                 }
-                // Append sentence to accumulated response
                 if (streamingDiv) {
                     accumulatedResponse += (accumulatedResponse ? ' ' : '') + data.text;
-                    // Update with accumulated text
-                    streamingDiv.innerHTML = formatAIMessage(accumulatedResponse);
+                    streamingDiv.textContent = accumulatedResponse;
                 }
                 sentenceIndex++;
-                conversationContainer.scrollTop = conversationContainer.scrollHeight;
+                scrollToBottom();
                 break;
-                
+
             case 'done':
-                // Finalize the AI message
-                if (streamingDiv && accumulatedResponse) {
-                    streamingDiv.innerHTML = formatAIMessage(accumulatedResponse);
-                }
+                // Finalise — textContent already set; nothing extra needed
                 streamingDiv = null;
                 accumulatedResponse = '';
                 interactionCountEl.textContent = data.interaction_count;
                 setStreaming(false);
                 evtSrc.close();
                 break;
-                
+
             case 'error':
                 hideTypingIndicator();
-                addMessageToUI('ai', `⚠️ Error: ${escapeHtml(data.message || 'Something went wrong.')}`);
+                addAiMessage(`⚠️ Error: ${data.message || 'Something went wrong.'}`);
                 setStreaming(false);
                 evtSrc.close();
                 showToast('Error from server', 'error');
                 break;
         }
     };
-    
+
     evtSrc.onerror = () => {
         hideTypingIndicator();
         if (sentenceIndex === 0) {
-            addMessageToUI('ai', '⚠️ Connection error. Please try again.');
+            addAiMessage('⚠️ Connection error. Please try again.');
         }
         setStreaming(false);
         evtSrc.close();
@@ -279,8 +253,8 @@ document.getElementById('newSessionBtn').addEventListener('click', async () => {
         currentSessionId = data.session_id;
         sessionIdEl.textContent = data.session_id.slice(-10);
         interactionCountEl.textContent = '0';
-        // Clear conversation UI
-        conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 New session started! Ask me anything. 🌸</div>';
+        conversationHistoryDiv.innerHTML =
+            '<div class="empty-conversation">🌸 New session started! Ask me anything. 🌸</div>';
         currentStreamingMessageDiv = null;
         showToast('New session started!', 'success');
     } catch {
@@ -326,12 +300,12 @@ async function loadSessions() {
     try {
         const res = await fetch('/sessions');
         const data = await res.json();
-        
+
         if (!data.sessions || data.sessions.length === 0) {
             sessionsList.innerHTML = '<div class="loading-message">No sessions found.</div>';
             return;
         }
-        
+
         sessionsList.innerHTML = '';
         data.sessions.forEach(s => {
             const item = document.createElement('div');
@@ -349,15 +323,14 @@ async function loadSessions() {
             `;
             sessionsList.appendChild(item);
         });
-        
-        // Bind buttons
+
         sessionsList.querySelectorAll('.btn-view').forEach(btn => {
             btn.addEventListener('click', () => loadSession(btn.dataset.id));
         });
         sessionsList.querySelectorAll('.btn-delete').forEach(btn => {
             btn.addEventListener('click', () => deleteSession(btn.dataset.id));
         });
-        
+
     } catch {
         sessionsList.innerHTML = '<div class="loading-message">Failed to load sessions.</div>';
     }
@@ -365,16 +338,9 @@ async function loadSessions() {
 
 async function loadSession(sessionId) {
     try {
-        const res = await fetch(`/session/${sessionId}`);
-        const data = await res.json();
-        
-        currentSessionId = data.session_id;
-        sessionIdEl.textContent = data.session_id.slice(-10);
-        interactionCountEl.textContent = data.total_interactions;
-        
-        // Load the conversation history
+        currentSessionId = sessionId;
         await loadConversationHistory(sessionId);
-        
+        sessionIdEl.textContent = sessionId.slice(-10);
         closeHistory();
         showToast('Session loaded!', 'success');
     } catch {
@@ -392,7 +358,8 @@ async function deleteSession(sessionId) {
             currentSessionId = null;
             sessionIdEl.textContent = 'None';
             interactionCountEl.textContent = '0';
-            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 Session deleted. Start a new chat! 🌸</div>';
+            conversationHistoryDiv.innerHTML =
+                '<div class="empty-conversation">🌸 Session deleted. Start a new chat! 🌸</div>';
         }
     } catch {
         showToast('Could not delete session', 'error');
@@ -408,11 +375,11 @@ async function deleteSession(sessionId) {
             currentSessionId = data.session_id;
             sessionIdEl.textContent = data.session_id.slice(-10);
             interactionCountEl.textContent = data.total_interactions;
-            // Load the conversation history for current session
             await loadConversationHistory(currentSessionId);
         } else {
             sessionIdEl.textContent = 'New';
-            conversationHistoryDiv.innerHTML = '<div class="empty-conversation">🌸 Hi there! Ask me anything — I\'m here to chat! 🌸</div>';
+            conversationHistoryDiv.innerHTML =
+                '<div class="empty-conversation">🌸 Hi there! Ask me anything — I\'m here to chat! 🌸</div>';
         }
         serverStatusEl.textContent = '● Server: Connected';
         serverStatusEl.className = 'server-status';
