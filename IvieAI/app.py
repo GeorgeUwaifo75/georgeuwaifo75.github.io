@@ -1,3 +1,5 @@
+# ===/IvieAI/app.py ===
+
 from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -9,15 +11,27 @@ import io
 import time
 from datetime import datetime
 from dotenv import load_dotenv
+import os.path
 
 load_dotenv()
 
-app = Flask(__name__)
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Create Flask app with explicit template and static folder paths
+app = Flask(__name__,
+           template_folder=os.path.join(BASE_DIR, 'templates'),
+           static_folder=os.path.join(BASE_DIR, 'static'),
+           static_url_path='/static')
+
 CORS(app)
 
 MODEL_ID = "GeorgeUwaifo/ivie_gpt2_new01c_results"
 TOKEN = os.getenv('HF_TOKEN')
 
+# For Hugging Face token - if HF_TOKEN doesn't work, try HF_API_TOKEN
+if not TOKEN:
+    TOKEN = os.getenv('HF_API_TOKEN')
 
 # Global variables for model and chat history
 model = None
@@ -74,8 +88,13 @@ def load_model():
     """Load the model once at startup"""
     global model, tokenizer
     print(f"Loading model: {MODEL_ID}")
+    print(f"Base directory: {BASE_DIR}")
     
     try:
+        # Check if token is available
+        if not TOKEN:
+            print("⚠️ Warning: No Hugging Face token found. Set HF_TOKEN or HF_API_TOKEN in .env file")
+        
         tokenizer = AutoTokenizer.from_pretrained(
             MODEL_ID,
             token=TOKEN,
@@ -86,12 +105,28 @@ def load_model():
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         
+        # Set padding side to left for better generation
+        tokenizer.padding_side = "left"
+        
+        # Determine device
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Using device: {device}")
+        
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
             token=TOKEN,
             trust_remote_code=True,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            low_cpu_mem_usage=True
         )
+        
+        # Move to GPU if available
+        if torch.cuda.is_available():
+            model = model.cuda()
+            print("✅ Model moved to GPU")
+        
+        # Set model to evaluation mode
+        model.eval()
         
         print("✅ Model loaded successfully!")
         return True
@@ -106,7 +141,7 @@ def ensure_period_termination(text):
     
     text = text.rstrip()
     
-    if text and text[-1] in '.!?":':
+    if text and text[-1] in '.!?"\':':
         return text
     
     return text + '.'
@@ -132,7 +167,7 @@ def get_complete_sentences_up_to_limit(text, max_tokens=150):
     return ' '.join(complete_sentences)
 
 def clean_and_format_response(full_response, user_message):
-    """Extract, clean, and format response with proper termination"""
+    """Extract, clean, and format response with proper termination."""
     
     # First, remove the user message from the beginning if present
     ai_response = full_response[len(user_message):].strip()
@@ -181,6 +216,19 @@ def clean_and_format_response(full_response, user_message):
     if not ai_response:
         return "I'm here to chat! Could you rephrase that?"
     
+    # Remove any question sentences
+    raw_sentences = re.split(r'(?<=[.!?])\s+', ai_response.strip())
+    filtered_sentences = [
+        s.strip()
+        for s in raw_sentences
+        if s.strip() and not s.strip().endswith('?')
+    ]
+    
+    if not filtered_sentences:
+        return "I'm here to chat! Could you rephrase that?"
+    
+    ai_response = ' '.join(filtered_sentences)
+    
     # Complete sentences extraction
     complete_text = get_complete_sentences_up_to_limit(ai_response, max_tokens=150)
     
@@ -222,18 +270,29 @@ def split_into_sentences(text):
 
 def generate_ai_response(user_message):
     """Run model inference and return cleaned response string."""
-    inputs = tokenizer(user_message, return_tensors="pt", padding=True)
+    # Tokenize input with proper attention mask and device placement
+    inputs = tokenizer(user_message, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    
+    # Move inputs to same device as model
+    device = next(model.parameters()).device
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=150,
-            temperature=0.85,
-            top_p=0.9,
+            temperature=0.75,
+            top_p=0.92,
+            top_k=50,
             do_sample=True,
-            repetition_penalty=1.1,
+            repetition_penalty=1.15,
+            no_repeat_ngram_size=3,
+            length_penalty=1.0,
+            early_stopping=True,
+            num_beams=2,
+            use_cache=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            early_stopping=True
         )
     full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return clean_and_format_response(full_response, user_message)
@@ -252,12 +311,7 @@ def index():
 def chat_stream():
     """
     Server-Sent Events endpoint.
-    Streams the AI response sentence-by-sentence so the frontend
-    can display each sentence with a fun animation.
-
-    Query params:
-        message    – the user's text
-        session_id – (optional) existing session id
+    Streams the AI response sentence-by-sentence.
     """
     global model, tokenizer, current_session_id, chat_sessions
 
@@ -290,7 +344,7 @@ def chat_stream():
             # 1. Yield a "thinking" signal so the UI can show a loader
             yield f"data: {json.dumps({'type': 'thinking', 'session_id': session.session_id})}\n\n"
 
-            # 2. Run inference (blocking – fine for a local single-user server)
+            # 2. Run inference
             ai_response = generate_ai_response(user_message)
 
             # 3. Split into sentences and stream each one
@@ -304,7 +358,7 @@ def chat_stream():
                     'session_id': session.session_id
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
-                # Small delay between sentences for dramatic effect
+                # Small delay between sentences
                 time.sleep(0.35)
 
             # 4. Save to history & send a "done" event
@@ -319,7 +373,7 @@ def chat_stream():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no'   # disable nginx buffering if behind a proxy
+            'X-Accel-Buffering': 'no'
         }
     )
 
@@ -450,11 +504,16 @@ if __name__ == '__main__':
     print("=" * 60)
     print("🚀 Starting IvieAI server with local model...")
     print(f"Model: {MODEL_ID}")
-    print("✨ Responses stream sentence-by-sentence with funky animations")
+    print(f"Base Directory: {BASE_DIR}")
+    print(f"Templates Folder: {os.path.join(BASE_DIR, 'templates')}")
+    print(f"Static Folder: {os.path.join(BASE_DIR, 'static')}")
+    print("✨ Responses stream sentence-by-sentence")
     print("💾 Chat history is enabled with export capabilities")
     
     if load_model():
-        print("\n✅ Server ready! Visit: http://localhost:5000")
+        print("\n✅ Server ready!")
+        print("📍 Visit: http://localhost:5000")
+        print("📍 Or: http://127.0.0.1:5000")
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
     else:
         print("\n❌ Failed to load model. Please check your token and model access.")
