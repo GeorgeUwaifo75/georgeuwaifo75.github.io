@@ -307,6 +307,20 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/debug/static-check')
+def debug_static():
+    import os
+    static_dir = os.path.join(BASE_DIR, 'static')
+    files = os.listdir(static_dir) if os.path.exists(static_dir) else []
+    return jsonify({
+        'static_dir': static_dir,
+        'static_dir_exists': os.path.exists(static_dir),
+        'files_in_static': files,
+        'template_dir': os.path.join(BASE_DIR, 'templates'),
+        'template_exists': os.path.exists(os.path.join(BASE_DIR, 'templates'))
+    })
+
+
 @app.route('/chat/stream', methods=['GET'])
 def chat_stream():
     """
