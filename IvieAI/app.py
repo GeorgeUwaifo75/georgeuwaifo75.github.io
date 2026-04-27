@@ -307,7 +307,6 @@ def index():
     return render_template('index.html')
 
 
-
 @app.route('/chat/stream', methods=['GET'])
 def chat_stream():
     """
@@ -514,6 +513,13 @@ def debug_static():
         'template_exists': os.path.exists(os.path.join(BASE_DIR, 'templates'))
     })
 
+# Add this as a fallback route before your other routes
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    import os
+    from flask import send_from_directory
+    static_folder = os.path.join(BASE_DIR, 'static')
+    return send_from_directory(static_folder, filename)
 
 
 if __name__ == '__main__':
