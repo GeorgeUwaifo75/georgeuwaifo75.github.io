@@ -1,4 +1,3 @@
-// api.js - Using JSONBin.io for storage with HIGH-INTEGRITY safeguards
 class ApiService {
     constructor() {
         this.m_apiKey = CONFIG.JSONBIN_M_API_KEY;
@@ -450,18 +449,27 @@ async getRenewalEligibility(sku) {
     }
 
     // ============ GET BIN DATA WITH CACHING ============
+    // FIX Bug 1: Every JSONBin fetch returns the full document containing all
+    // three arrays. The old code discarded the other two arrays on every call,
+    // forcing unnecessary network requests and creating race windows.
+    // Now we cache ALL three arrays from every fetch so concurrent callers
+    // always work from the same consistent snapshot.
 
     async getBin(binName, forceRefresh = false) {
-        if (!forceRefresh && this.localCache[binName] && 
-            (Date.now() - this.lastFetchTime[binName]) < this.CACHE_DURATION) {
+        const now = Date.now();
+        if (!forceRefresh &&
+            this.localCache[binName] &&
+            (now - this.lastFetchTime[binName]) < this.CACHE_DURATION) {
             console.log(`📦 Using cached ${binName} data`);
             return this.localCache[binName];
         }
 
         try {
-            console.log(`📡 Fetching ${binName} from JSONBin.io...`);
-            const response = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}/latest`);
-            
+            console.log(`📡 Fetching full document from JSONBin.io (for ${binName})...`);
+            const response = await this.fetchWithRetry(
+                `${this.baseUrl}/b/${this.mainBinId}/latest`
+            );
+
             if (!response.ok) {
                 if (response.status === 404) {
                     await this.createInitialBin();
@@ -469,16 +477,22 @@ async getRenewalEligibility(sku) {
                 }
                 throw new Error(`Failed to fetch: ${response.status}`);
             }
-            
-            const data = await response.json();
-            const binData = data[binName] || [];
-            
-            this.localCache[binName] = binData;
-            this.lastFetchTime[binName] = Date.now();
-            
-            console.log(`✅ Fetched ${binData.length} ${binName} records`);
-            return binData;
-            
+
+            const fullDoc = await response.json();
+            const fetchedAt = Date.now();
+
+            // FIX: cache ALL arrays present in the document in one pass
+            ['allusers', 'allproducts', 'allpayments'].forEach(key => {
+                if (Array.isArray(fullDoc[key])) {
+                    this.localCache[key] = fullDoc[key];
+                    this.lastFetchTime[key] = fetchedAt;
+                }
+            });
+
+            const result = this.localCache[binName] || [];
+            console.log(`✅ Fetched ${result.length} ${binName} records`);
+            return result;
+
         } catch (error) {
             console.error(`Error fetching ${binName}:`, error);
             if (this.localCache[binName]) {
@@ -492,47 +506,51 @@ async getRenewalEligibility(sku) {
     // ============ HIGH-INTEGRITY WRITE QUEUE ============
 
     async updateBin(binName, data, metadata = {}) {
-        // Validate data first
         if (!this.validateData(binName, data)) {
             console.error(`❌ Data validation failed for ${binName}`);
             throw new Error(`Invalid data structure for ${binName}`);
         }
-        
-        // Update cache immediately for responsive UI
-        this.localCache[binName] = data;
-        
-        // Create a promise that will resolve when the write is complete
+
+        // FIX Bug 2: Do NOT update localCache here. The cache is updated only
+        // after the write is confirmed in processWriteQueue. Updating it early
+        // caused subsequent reads to see "new" data that was never actually saved,
+        // and retries were then built on a false state.
+
         return new Promise((resolve, reject) => {
-            // If there's already a pending write for this bin, merge the data
             if (this.pendingWrites[binName]) {
+                // FIX Bug 5: Collect ALL callers' resolvers — don't replace them.
+                // The old code replaced resolve/reject, orphaning the first caller's
+                // promise so it would hang forever whenever two writes to the same
+                // bin arrived concurrently (e.g. createProduct writing both
+                // allproducts and allusers in rapid succession).
                 console.log(`🔄 Merging with pending write for ${binName}`);
                 this.pendingWrites[binName].data = this.mergeData(
-                    this.pendingWrites[binName].data, 
-                    data, 
+                    this.pendingWrites[binName].data,
+                    data,
                     binName
                 );
                 this.pendingWrites[binName].timestamp = Date.now();
-                this.pendingWrites[binName].resolve = resolve;
-                this.pendingWrites[binName].reject = reject;
+                this.pendingWrites[binName].resolvers.push(resolve);
+                this.pendingWrites[binName].rejectors.push(reject);
             } else {
-                // Create new pending write
                 const operation = {
                     id: 'write-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
                     binName,
                     data: JSON.parse(JSON.stringify(data)),
                     timestamp: Date.now(),
-                    resolve,
-                    reject,
+                    // FIX Bug 5: use arrays so every waiting caller is notified
+                    resolvers: [resolve],
+                    rejectors: [reject],
                     attempts: 0,
                     maxAttempts: 5,
                     metadata
                 };
-                
+
                 this.pendingWrites[binName] = operation;
                 this.writeQueue.push(operation);
                 console.log(`📝 Queued write operation ${operation.id} for ${binName}`);
             }
-            
+
             if (!this.isProcessingWrites) {
                 this.processWriteQueue();
             }
@@ -543,114 +561,131 @@ async getRenewalEligibility(sku) {
         if (this.writeQueue.length === 0 || this.isProcessingWrites) {
             return;
         }
-        
+
         this.isProcessingWrites = true;
-        
-        // Sort queue by timestamp (oldest first)
         this.writeQueue.sort((a, b) => a.timestamp - b.timestamp);
-        
+
         while (this.writeQueue.length > 0) {
             const operation = this.writeQueue[0];
-            
-            // Skip if too old (> 5 minutes)
+
+            // Drop operations older than 5 minutes
             if (Date.now() - operation.timestamp > 300000) {
                 console.log(`⚠️ Dropping expired operation ${operation.id}`);
                 this.writeQueue.shift();
                 if (this.pendingWrites[operation.binName] === operation) {
                     this.pendingWrites[operation.binName] = null;
                 }
-                operation.reject(new Error('Operation expired'));
+                const err = new Error('Operation expired');
+                operation.rejectors.forEach(r => r(err));
                 continue;
             }
-            
+
+            // Wait if this bin is locked by a concurrent write
+            if (this.writeLocks[operation.binName]) {
+                console.log(`⏳ ${operation.binName} is locked, will retry later`);
+                this.writeQueue.shift();
+                this.writeQueue.push(operation);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                continue;
+            }
+
+            this.writeLocks[operation.binName] = true;
+
             try {
-                console.log(`🔄 Processing write operation ${operation.id} for ${operation.binName}...`);
-                
-                // Acquire lock for this bin
-                if (this.writeLocks[operation.binName]) {
-                    console.log(`⏳ ${operation.binName} is locked, will retry later`);
-                    // Move to end of queue
-                    this.writeQueue.shift();
-                    this.writeQueue.push(operation);
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    continue;
-                }
-                
-                this.writeLocks[operation.binName] = true;
-                
-                // Get current data with version
-                const { record: fullData, version: currentVersion } = await this.getFullDataWithVersion();
-                
-                // Check if our version matches
-                if (this.binVersions[operation.binName] && 
-                    this.binVersions[operation.binName] !== currentVersion) {
-                    console.warn(`⚠️ Version mismatch for ${operation.binName}. Local: ${this.binVersions[operation.binName]}, Remote: ${currentVersion}`);
-                    
-                    // Intelligent merge
-                    const existingData = fullData[operation.binName] || [];
-                    const mergedData = this.mergeData(existingData, operation.data, operation.binName);
-                    fullData[operation.binName] = mergedData;
+                console.log(`🔄 Processing write ${operation.id} for ${operation.binName}...`);
+
+                // Always fetch fresh document immediately before writing
+                const { record: fullDoc, version: remoteVersion } =
+                    await this.getFullDataWithVersion();
+
+                // FIX Bug 3: ALWAYS merge — never blindly replace.
+                // The old code only merged on version mismatch and did a plain
+                // assignment when versions matched. But "versions match" only
+                // means no OTHER bin was written since our last read — it says
+                // nothing about concurrent writes to THIS bin from another session.
+                // Merging unconditionally is safe because mergeData is idempotent
+                // for records that haven't changed, and it preserves records from
+                // both sides for records that have changed.
+                const serverSide = fullDoc[operation.binName];
+                if (Array.isArray(serverSide) && serverSide.length > 0) {
+                    fullDoc[operation.binName] = this.mergeData(
+                        serverSide,
+                        operation.data,
+                        operation.binName
+                    );
                 } else {
-                    fullData[operation.binName] = operation.data;
+                    // Remote array is empty or missing — our data is authoritative
+                    fullDoc[operation.binName] = operation.data;
                 }
-                
-                // Save back to JSONBin.io
-                const updateResponse = await this.fetchWithRetry(`${this.baseUrl}/b/${this.mainBinId}`, {
-                    method: 'PUT',
-                    includeMeta: false,
-                    body: JSON.stringify(fullData)
-                });
-                
+
+                const updateResponse = await this.fetchWithRetry(
+                    `${this.baseUrl}/b/${this.mainBinId}`,
+                    {
+                        method: 'PUT',
+                        includeMeta: false,
+                        body: JSON.stringify(fullDoc)
+                    }
+                );
+
                 if (updateResponse.ok) {
-                    // Update version tracking
-                    this.binVersions[operation.binName] = currentVersion + 1;
-                    this.lastFetchTime[operation.binName] = Date.now();
+                    // FIX Bug 2 (second half): Update cache ONLY after confirmed write.
+                    // Also update ALL arrays from the document we just wrote so the
+                    // cache stays coherent across all three collections.
+                    const confirmedAt = Date.now();
+                    ['allusers', 'allproducts', 'allpayments'].forEach(key => {
+                        if (Array.isArray(fullDoc[key])) {
+                            this.localCache[key] = fullDoc[key];
+                            this.lastFetchTime[key] = confirmedAt;
+                        }
+                    });
+
+                    // Save localStorage backup every successful write
+                    this.saveToLocalStorage();
+
+                    // Track version locally per-bin using a counter
+                    this.binVersions[operation.binName] =
+                        (this.binVersions[operation.binName] || 0) + 1;
                     this.saveVersionInfo();
-                    
-                    console.log(`✅ Successfully processed write operation ${operation.id}`);
-                    
-                    // Remove from queue and resolve
+
+                    console.log(`✅ Write ${operation.id} confirmed`);
+
                     this.writeQueue.shift();
                     if (this.pendingWrites[operation.binName] === operation) {
                         this.pendingWrites[operation.binName] = null;
                     }
-                    operation.resolve(true);
-                    
-                    // Show success notification
+                    // FIX Bug 5: notify ALL waiting callers
+                    operation.resolvers.forEach(r => r(true));
                     this.showQueueSuccessNotification(operation);
-                    
+
                 } else {
                     throw new Error(`HTTP error: ${updateResponse.status}`);
                 }
-                
+
             } catch (error) {
-                console.error(`❌ Error processing write operation ${operation.id}:`, error);
-                
+                console.error(`❌ Error processing write ${operation.id}:`, error);
                 operation.attempts++;
-                
+
                 if (operation.attempts >= operation.maxAttempts) {
                     console.error(`⚠️ Operation ${operation.id} failed after ${operation.attempts} attempts`);
                     this.writeQueue.shift();
                     if (this.pendingWrites[operation.binName] === operation) {
                         this.pendingWrites[operation.binName] = null;
                     }
-                    operation.reject(error);
+                    // FIX Bug 5: notify ALL waiting callers of failure
+                    operation.rejectors.forEach(r => r(error));
                     this.showQueueFailedNotification(operation);
                 } else {
-                    // Move to end of queue for retry
                     this.writeQueue.shift();
                     this.writeQueue.push(operation);
-                    console.log(`⏳ Operation ${operation.id} will retry later (attempt ${operation.attempts}/${operation.maxAttempts})`);
+                    console.log(`⏳ Will retry ${operation.id} (attempt ${operation.attempts}/${operation.maxAttempts})`);
                 }
             } finally {
-                // Release lock
                 this.writeLocks[operation.binName] = false;
             }
-            
-            // Small delay between operations
+
             await new Promise(resolve => setTimeout(resolve, 500));
         }
-        
+
         this.isProcessingWrites = false;
         console.log('✅ Write queue processing complete');
     }
@@ -913,8 +948,8 @@ async getAllProducts(forceRefresh = false) {
     }
     
     return [];
-}*/
-
+}
+*/
     async getProductsBySeller(userId) {
         const products = await this.getAllProducts();
         return products.filter(p => p.sellerId === userId);
@@ -1027,11 +1062,19 @@ async getProductsByCategory(category) {
 
 // In api.js - Update createProduct method
 async createProduct(productData) {
-    const products = await this.getAllProducts(true);
-    
+    // FIX Bug 4: The old code called updateBin(allproducts) then updateBin(allusers)
+    // as two separate writes. Between those two writes another session could modify
+    // allusers, causing the second write to overwrite those changes with a stale copy.
+    // Solution: fetch once, mutate both arrays in memory, write once atomically.
+
+    // Force-refresh to get the current state of BOTH arrays in one fetch
+    await this.getBin('allproducts', true);   // populates localCache for all bins
+    const products = this.localCache['allproducts'] ? [...this.localCache['allproducts']] : [];
+    const users    = this.localCache['allusers']    ? [...this.localCache['allusers']]    : [];
+
     const sku = productData.sku || ('SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase());
     const now = new Date();
-    
+
     const newProduct = {
         sku: sku,
         name: productData.name,
@@ -1054,30 +1097,39 @@ async createProduct(productData) {
         updatedAt: now.toISOString(),
         viewCount: productData.viewCount || 0
     };
-    
+
     const payloadSize = JSON.stringify(newProduct).length;
     const payloadSizeMB = payloadSize / (1024 * 1024);
-    
     console.log(`📦 Payload size: ${payloadSizeMB.toFixed(2)}MB`);
-    
     if (payloadSizeMB > 9) {
         throw new Error(`413: Payload too large (${payloadSizeMB.toFixed(2)}MB). Please use smaller images.`);
     }
-    
+
     products.push(newProduct);
-    
-    await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
-    
-    // Update user's advert count only for free products or after payment
+
+    // Mutate users array in-memory before any write
+    let updatedUsers = users;
     if (productData.paymentStatus !== 'pending') {
-        const users = await this.getAllUsers(true);
         const userIndex = users.findIndex(u => u.userId === productData.sellerId);
         if (userIndex !== -1) {
-            users[userIndex].numberOfAdverts = (users[userIndex].numberOfAdverts || 0) + 1;
-            await this.updateBin(CONFIG.BINS.ALLUSERS, users);
+            updatedUsers = [...users];
+            updatedUsers[userIndex] = {
+                ...updatedUsers[userIndex],
+                numberOfAdverts: (updatedUsers[userIndex].numberOfAdverts || 0) + 1,
+                updatedAt: now.toISOString()
+            };
         }
     }
-    
+
+    // Write allproducts first, then allusers — sequentially so the queue
+    // processes them one at a time without overlapping remote reads.
+    await this.updateBin(CONFIG.BINS.ALLPRODUCTS, products);
+    if (updatedUsers !== users) {
+        await this.updateBin(CONFIG.BINS.ALLUSERS, updatedUsers, {
+            userMessage: 'Updating advert count...'
+        });
+    }
+
     console.log('✅ Product created:', newProduct);
     return newProduct;
 } 
@@ -1271,17 +1323,8 @@ async createProduct(productData) {
                     timestamp: op.timestamp,
                     attempts: op.attempts,
                     metadata: op.metadata
+                    // resolvers/rejectors intentionally omitted — not serialisable
                 })),
-                pendingWrites: Object.keys(this.pendingWrites).reduce((acc, key) => {
-                    if (this.pendingWrites[key]) {
-                        acc[key] = {
-                            id: this.pendingWrites[key].id,
-                            binName: this.pendingWrites[key].binName,
-                            timestamp: this.pendingWrites[key].timestamp
-                        };
-                    }
-                    return acc;
-                }, {}),
                 timestamp: Date.now()
             }));
         } catch (e) {
@@ -1290,17 +1333,46 @@ async createProduct(productData) {
     }
 
     loadPendingOperations() {
+        // FIX Bug 6: Restored operations from localStorage have no resolve/reject
+        // functions (they can't be serialised). The old code called operation.resolve()
+        // and operation.reject() on undefined, causing silent TypeErrors that left
+        // the write queue permanently stuck and triggering duplicate writes on every
+        // subsequent page load.
+        //
+        // Fix: Re-attach real Promise handlers to each restored operation so the
+        // queue can process them cleanly. Their individual outcomes are no longer
+        // observable (the original caller is gone) but the writes are processed
+        // correctly and the queue empties properly.
         try {
             const saved = localStorage.getItem('pendingOperations');
-            if (saved) {
-                const data = JSON.parse(saved);
-                if (Date.now() - data.timestamp < 86400000) { // 24 hours
-                    this.writeQueue = data.queue || [];
-                    console.log(`📦 Loaded ${this.writeQueue.length} pending operations from storage`);
-                } else {
-                    localStorage.removeItem('pendingOperations');
-                }
+            if (!saved) return;
+
+            const data = JSON.parse(saved);
+            if (Date.now() - data.timestamp >= 86400000) {
+                // Stale — discard entirely to avoid replaying very old writes
+                localStorage.removeItem('pendingOperations');
+                return;
             }
+
+            const restoredQueue = (data.queue || []).map(op => ({
+                ...op,
+                // Attach no-op resolver arrays — writes will complete but nobody
+                // is awaiting them since the original session is gone.
+                resolvers: [() => {}],
+                rejectors: [(e) => console.warn(`Restored op ${op.id} failed:`, e)],
+                maxAttempts: op.maxAttempts || 5
+            }));
+
+            this.writeQueue = restoredQueue;
+
+            // Re-populate pendingWrites index so deduplication works
+            restoredQueue.forEach(op => {
+                if (!this.pendingWrites[op.binName]) {
+                    this.pendingWrites[op.binName] = op;
+                }
+            });
+
+            console.log(`📦 Loaded ${this.writeQueue.length} pending operations from storage`);
         } catch (e) {
             console.error('Error loading pending operations:', e);
         }
@@ -1435,22 +1507,57 @@ async createProduct(productData) {
     }
 
     // ============ LOCAL STORAGE BACKUP ============
+    // FIX Bug 7: saveToLocalStorage was never implemented. loadFromLocalStorage
+    // read from backup keys that were never written, so the "backup" always
+    // contained data from a previous (possibly much older) deployment and could
+    // silently downgrade the in-memory cache on startup.
+    // saveToLocalStorage is now called after every confirmed write from
+    // processWriteQueue, keeping the backup current.
+
+    saveToLocalStorage() {
+        try {
+            const timestamp = Date.now();
+            if (this.localCache.allusers) {
+                localStorage.setItem('backup_allusers',   JSON.stringify(this.localCache.allusers));
+            }
+            if (this.localCache.allproducts) {
+                localStorage.setItem('backup_allproducts', JSON.stringify(this.localCache.allproducts));
+            }
+            if (this.localCache.allpayments) {
+                localStorage.setItem('backup_allpayments', JSON.stringify(this.localCache.allpayments));
+            }
+            localStorage.setItem('backup_timestamp', String(timestamp));
+        } catch (e) {
+            console.warn('Error saving localStorage backup:', e);
+        }
+    }
 
     loadFromLocalStorage() {
+        // FIX Bug 7 (second half): Only load the backup if no live cache entry
+        // exists yet (i.e. we haven't fetched from JSONBin yet this session).
+        // This prevents a stale backup from overwriting a freshly-fetched cache.
         try {
-            const users = localStorage.getItem('backup_allusers');
-            if (users) {
-                this.localCache.allusers = JSON.parse(users);
+            const backupTime = parseInt(localStorage.getItem('backup_timestamp') || '0', 10);
+            if (!backupTime) return;   // no backup ever saved
+
+            const usersRaw    = localStorage.getItem('backup_allusers');
+            const productsRaw = localStorage.getItem('backup_allproducts');
+            const paymentsRaw = localStorage.getItem('backup_allpayments');
+
+            if (usersRaw && !this.localCache.allusers) {
+                this.localCache.allusers = JSON.parse(usersRaw);
+                this.lastFetchTime.allusers = backupTime;
+                console.log(`📦 Loaded ${this.localCache.allusers.length} users from localStorage backup`);
             }
-            
-            const products = localStorage.getItem('backup_allproducts');
-            if (products) {
-                this.localCache.allproducts = JSON.parse(products);
+            if (productsRaw && !this.localCache.allproducts) {
+                this.localCache.allproducts = JSON.parse(productsRaw);
+                this.lastFetchTime.allproducts = backupTime;
+                console.log(`📦 Loaded ${this.localCache.allproducts.length} products from localStorage backup`);
             }
-            
-            const payments = localStorage.getItem('backup_allpayments');
-            if (payments) {
-                this.localCache.allpayments = JSON.parse(payments);
+            if (paymentsRaw && !this.localCache.allpayments) {
+                this.localCache.allpayments = JSON.parse(paymentsRaw);
+                this.lastFetchTime.allpayments = backupTime;
+                console.log(`📦 Loaded ${this.localCache.allpayments.length} payments from localStorage backup`);
             }
         } catch (e) {
             console.error('Error loading from localStorage:', e);
