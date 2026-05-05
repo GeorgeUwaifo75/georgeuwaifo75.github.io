@@ -2,45 +2,36 @@
 // spotlight.js - Spotlight Products Rotator (Responsive)
 // OPTIMISED VERSION
 //
-// Changes from original:
-//
-// FIX 1 (createSpotlightCard — BIGGEST IMPACT):
-//   Old: loadProductDetail(product.sku)
-//        → threw away the fully-loaded product object already in
-//          this.currentProducts, forcing loadProductDetail to call
-//          api.getAllProducts() all over again just to re-find it.
-//   New: loadProductDetail(product)
-//        → passes the object directly; zero extra network call.
+// FIX 1 (createSpotlightCard):
+//   Passes full product object to loadProductDetail() — zero extra
+//   network call vs. the old product.sku approach.
 //
 // FIX 2 (DOMContentLoaded init delay):
-//   Old: setTimeout(() => new SpotlightProducts(), 2000)
-//        → waited 2 full seconds before even starting the first fetch.
-//          The api cache is already warm by the time the page renders,
-//          so a 300 ms yield is enough to let other init finish first.
-//   New: setTimeout(() => new SpotlightProducts(), 300)
+//   Reduced from 2000 ms → 300 ms; api cache is warm by then.
 //
-// FIX 3 (Dual-set rotation when active products > 20):
-//   When totalActive > 20, two independent sets of 4/5 products are
-//   selected (Set A and Set B), each following the existing paid →
-//   free priority rules. The sets alternate on every 60-second tick:
-//   tick 1 → Set A, tick 2 → Set B, tick 3 → Set A, …
-//   Below the 20-product threshold the behaviour is unchanged.
+// FIX 3 (Continuous fresh-batch rotation when active products > 20):
+//   Every 60-second tick generates a brand-new randomly selected
+//   batch of 4 (mobile) or 5 (desktop) products drawn from the full
+//   active-product pool, while guaranteeing it differs from the
+//   batch just displayed. The existing paid → free priority rules
+//   are applied on every tick. When ≤ 20 active products exist the
+//   original single-set behaviour is preserved unchanged.
 // ============================================================
 
 class SpotlightProducts {
     constructor() {
-        this.container = document.getElementById('spotlightGrid');
-        this.timerElement = document.getElementById('spotlightTimer');
+        this.container      = document.getElementById('spotlightGrid');
+        this.timerElement   = document.getElementById('spotlightTimer');
         this.updateInterval = 60000;   // 60 seconds
-        this.countdownInterval = 1000; // 1 second countdown
-        this.remainingSeconds = 60;
-        this.currentProducts = [];
-        this.categories = [];
+        this.countdownInterval = 1000; // 1 second tick
+        this.remainingSeconds  = 60;
+        this.currentProducts   = [];   // SKUs currently on screen
 
-        // Dual-set state
-        this.setA = [];
-        this.setB = [];
-        this.currentSet = 'A'; // which set is currently displayed
+        // Cached product pools — refreshed from API every other tick
+        // so the page doesn't hammer the network every 60 s.
+        this.cachedActiveProducts = [];
+        this.cacheTickCount       = 0;  // how many ticks since last API fetch
+        this.CACHE_REFRESH_TICKS  = 2;  // re-fetch pools every 2 ticks (2 min)
 
         this.updateMaxProducts();
 
@@ -55,34 +46,24 @@ class SpotlightProducts {
     }
 
     updateMaxProducts() {
-        if (window.innerWidth <= 768) {
-            this.maxProducts = 4; // Mobile
-        } else {
-            this.maxProducts = 5; // Desktop / Tablet
-        }
+        this.maxProducts = window.innerWidth <= 768 ? 4 : 5;
     }
 
     async init() {
-        await this.loadSpotlightProducts();
+        await this.loadSpotlightProducts(true); // true = force API fetch
         this.startTimer();
         this.startCountdown();
     }
 
     startTimer() {
         setInterval(async () => {
-            // If we already have two valid sets built, just alternate between
-            // them without hitting the network again — reload only when a full
-            // refresh of both sets is due (every other tick).
-            if (this.setA.length > 0 && this.setB.length > 0) {
-                this.currentSet = this.currentSet === 'A' ? 'B' : 'A';
-                this.currentProducts = this.currentSet === 'A' ? this.setA : this.setB;
-                this.renderSpotlight();
-                this.resetCountdown();
-            } else {
-                // Fewer than 20 products, or sets need rebuilding — do a full reload
-                await this.loadSpotlightProducts();
-                this.resetCountdown();
-            }
+            // Decide whether to re-fetch from API or use cached pools
+            this.cacheTickCount++;
+            const forceRefresh = (this.cacheTickCount >= this.CACHE_REFRESH_TICKS);
+            if (forceRefresh) this.cacheTickCount = 0;
+
+            await this.loadSpotlightProducts(forceRefresh);
+            this.resetCountdown();
         }, this.updateInterval);
     }
 
@@ -104,13 +85,20 @@ class SpotlightProducts {
         }
     }
 
-    // ── Core selection logic: pick up to `slots` products from the
-    //    paid/free pools, excluding any already chosen in `exclude`.
-    //    Follows the same three-priority rules as the original code.
-    selectSet(shuffledPaid, sortedFree, slots, exclude = []) {
-        const selected = [];
+    // ─────────────────────────────────────────────────────────────
+    // selectBatch
+    //   Picks up to `slots` products following the three-priority
+    //   rules (paid first → free category-diverse → free any),
+    //   hard-excluding every SKU in `exclude` (the previous batch).
+    //   Returns a shuffled array of the chosen products.
+    // ─────────────────────────────────────────────────────────────
+    selectBatch(sortedPaid, sortedFree, slots, exclude = []) {
+        const excludeSkus  = new Set(exclude.map(p => p.sku));
+        const selected     = [];
         const usedCategories = new Set();
-        const excludeSkus = new Set(exclude.map(p => p.sku));
+
+        // Re-shuffle paid pool on every call for variety
+        const shuffledPaid = this.shuffleArray([...sortedPaid]);
 
         // PRIORITY 1: Paid adverts
         for (const product of shuffledPaid) {
@@ -122,7 +110,7 @@ class SpotlightProducts {
             }
         }
 
-        // PRIORITY 2: Free adverts (category-diverse)
+        // PRIORITY 2: Free adverts — category-diverse
         if (selected.length < slots && sortedFree.length > 0) {
             const shuffledFree = this.shuffleArray([...sortedFree]);
             for (const product of shuffledFree) {
@@ -135,7 +123,7 @@ class SpotlightProducts {
             }
         }
 
-        // PRIORITY 3: Any remaining free adverts (no category restriction)
+        // PRIORITY 3: Free adverts — fill remaining slots regardless of category
         if (selected.length < slots && sortedFree.length > 0) {
             const shuffledFree = this.shuffleArray([...sortedFree]);
             for (const product of shuffledFree) {
@@ -147,44 +135,52 @@ class SpotlightProducts {
             }
         }
 
-        return selected;
+        // ── Fallback: if excluding the previous batch left us short,
+        //    relax the exclusion and fill from the full pool instead.
+        if (selected.length < slots && exclude.length > 0) {
+            console.log('Spotlight: relaxing exclusion to fill batch');
+            return this.selectBatch(sortedPaid, sortedFree, slots, []);
+        }
+
+        return this.shuffleArray(selected);
     }
 
-    async loadSpotlightProducts() {
+    async loadSpotlightProducts(forceApiRefresh = false) {
         try {
             this.updateMaxProducts();
 
-            const allProducts = await api.getAllProducts();
-            const now = new Date();
+            // ── Refresh cached pools from API when needed ──
+            if (forceApiRefresh || this.cachedActiveProducts.length === 0) {
+                const allProducts = await api.getAllProducts();
+                const now = new Date();
 
-            const activeProducts = allProducts.filter(p =>
-                p.activityStatus === 'Active' &&
-                p.images && p.images.length > 0 &&
-                (!p.endDate || new Date(p.endDate) > now)
-            );
+                this.cachedActiveProducts = allProducts.filter(p =>
+                    p.activityStatus === 'Active' &&
+                    p.images && p.images.length > 0 &&
+                    (!p.endDate || new Date(p.endDate) > now)
+                );
+
+                console.log(`Spotlight: API refresh — ${this.cachedActiveProducts.length} active products`);
+            }
+
+            const activeProducts = this.cachedActiveProducts;
 
             if (activeProducts.length < this.maxProducts) {
-                this.setA = [];
-                this.setB = [];
                 this.hideSpotlight();
                 return;
             }
 
-            // Paid adverts: must have paid status, payment type, and a valid end date
+            const now = new Date();
+
             const paidAdverts = activeProducts.filter(p =>
                 p.paymentStatus === 'paid' &&
-                p.paymentType &&
-                p.endDate &&
+                p.paymentType   &&
+                p.endDate       &&
                 new Date(p.endDate) > now
             );
-
-            // Free adverts: fallback pool
             const freeAdverts = activeProducts.filter(p =>
                 p.paymentStatus === 'free'
             );
-
-            console.log(`Found ${paidAdverts.length} paid and ${freeAdverts.length} free adverts for spotlight`);
-            console.log(`Total active products: ${activeProducts.length} — dual-set mode: ${activeProducts.length > 20}`);
 
             const sortedPaid = [...paidAdverts].sort((a, b) =>
                 new Date(b.dateAdvertised) - new Date(a.dateAdvertised)
@@ -193,55 +189,49 @@ class SpotlightProducts {
                 new Date(b.dateAdvertised) - new Date(a.dateAdvertised)
             );
 
+            console.log(
+                `Spotlight: ${paidAdverts.length} paid / ${freeAdverts.length} free — ` +
+                `${activeProducts.length > 20 ? 'continuous-batch' : 'single-set'} mode`
+            );
+
             if (activeProducts.length > 20) {
-                // ── DUAL-SET MODE ───────────────────────────────────────────
-                // Build Set A first, then build Set B from the remaining pool.
-                const shuffledPaidA = this.shuffleArray([...sortedPaid]);
-                this.setA = this.shuffleArray(
-                    this.selectSet(shuffledPaidA, sortedFree, this.maxProducts, [])
+                // ── CONTINUOUS-BATCH MODE ────────────────────────────────
+                // Every tick: pick a fresh batch that excludes everything
+                // currently on screen, guaranteeing new products each time.
+                const nextBatch = this.selectBatch(
+                    sortedPaid,
+                    sortedFree,
+                    this.maxProducts,
+                    this.currentProducts   // exclude what's showing now
                 );
 
-                // For Set B, prefer products not already in Set A
-                const shuffledPaidB = this.shuffleArray([...sortedPaid]);
-                this.setB = this.shuffleArray(
-                    this.selectSet(shuffledPaidB, sortedFree, this.maxProducts, this.setA)
-                );
-
-                // If we couldn't fill Set B with distinct products, relax the
-                // exclusion and allow overlaps rather than showing nothing.
-                if (this.setB.length < this.maxProducts) {
-                    const shuffledPaidFallback = this.shuffleArray([...sortedPaid]);
-                    this.setB = this.shuffleArray(
-                        this.selectSet(shuffledPaidFallback, sortedFree, this.maxProducts, [])
-                    );
-                }
-
-                // Display the current set (alternates each tick via startTimer)
-                this.currentProducts = this.currentSet === 'A' ? this.setA : this.setB;
-
-                console.log('Dual-set A:', this.setA.map(p => ({ name: p.name, status: p.paymentStatus })));
-                console.log('Dual-set B:', this.setB.map(p => ({ name: p.name, status: p.paymentStatus })));
-
-            } else {
-                // ── SINGLE-SET MODE (original behaviour) ───────────────────
-                this.setA = [];
-                this.setB = [];
-
-                const shuffledPaid = this.shuffleArray([...sortedPaid]);
-                const selectedProducts = this.selectSet(shuffledPaid, sortedFree, this.maxProducts, []);
-
-                if (selectedProducts.length < this.maxProducts) {
-                    console.log(`Only found ${selectedProducts.length} products, hiding spotlight`);
+                if (nextBatch.length < this.maxProducts) {
+                    // Shouldn't happen after the fallback in selectBatch,
+                    // but hide rather than show a partial grid.
                     this.hideSpotlight();
                     return;
                 }
 
-                this.currentProducts = this.shuffleArray(selectedProducts);
+                this.currentProducts = nextBatch;
 
-                console.log('Final spotlight selection:', this.currentProducts.map(p => ({
-                    name: p.name,
-                    status: p.paymentStatus,
-                    category: p.category
+                console.log('Spotlight batch:', this.currentProducts.map(p => ({
+                    name: p.name, status: p.paymentStatus, category: p.category
+                })));
+
+            } else {
+                // ── SINGLE-SET MODE (original behaviour, ≤ 20 products) ──
+                const selected = this.selectBatch(sortedPaid, sortedFree, this.maxProducts, []);
+
+                if (selected.length < this.maxProducts) {
+                    console.log(`Spotlight: only ${selected.length} products — hiding`);
+                    this.hideSpotlight();
+                    return;
+                }
+
+                this.currentProducts = selected;
+
+                console.log('Spotlight (single-set):', this.currentProducts.map(p => ({
+                    name: p.name, status: p.paymentStatus, category: p.category
                 })));
             }
 
@@ -256,13 +246,9 @@ class SpotlightProducts {
 
     renderSpotlight() {
         if (!this.container) return;
-
         this.container.innerHTML = '';
-
-        const productsToShow = this.currentProducts.slice(0, this.maxProducts);
-        productsToShow.forEach(product => {
-            const card = this.createSpotlightCard(product);
-            this.container.appendChild(card);
+        this.currentProducts.slice(0, this.maxProducts).forEach(product => {
+            this.container.appendChild(this.createSpotlightCard(product));
         });
     }
 
@@ -277,8 +263,7 @@ class SpotlightProducts {
         const isPaid     = product.paymentStatus === 'paid';
         const badgeText  = isPaid ? '🔥 AD' : '✨';
         const badgeClass = isPaid ? 'paid' : 'free';
-
-        const price = typeof product.price === 'number'
+        const price      = typeof product.price === 'number'
             ? product.price.toLocaleString()
             : parseFloat(product.price).toLocaleString();
 
@@ -297,14 +282,12 @@ class SpotlightProducts {
             </div>
         `;
 
-        // ── FIX 1: Pass the full product object — eliminates the
-        //    getAllProducts() re-fetch that the old product.sku call triggered ──
+        // FIX 1: Pass full product object — no extra network call
         card.addEventListener('click', () => {
             if (typeof loadProductDetail === 'function') {
-                // Record that we came from the home/landing view so the
-                // Back button on productDetailSection returns here correctly.
+                // Back button on productDetailSection returns to landing view
                 window.previousSection = 'categoriesSection';
-                loadProductDetail(product);   // was: loadProductDetail(product.sku)
+                loadProductDetail(product);
             }
         });
 
@@ -330,11 +313,7 @@ class SpotlightProducts {
     }
 }
 
-// ── FIX 2: Reduced init delay from 2000 ms → 300 ms.
-//    The api cache is already warm from the page-load fetch,
-//    so the spotlight no longer needs to wait 2 full seconds. ──
+// FIX 2: 300 ms init delay — api cache is already warm by then
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        new SpotlightProducts();
-    }, 300); // was: 2000
+    setTimeout(() => new SpotlightProducts(), 300);
 });
