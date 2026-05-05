@@ -1403,7 +1403,8 @@ function initializeNavigation() {
     });
 
     document.getElementById('backToProducts').addEventListener('click', () => {
-        showSection('productsSection');
+        // Return to wherever the user came from (productsSection, categoriesSection, etc.)
+        showSection(window.previousSection || 'categoriesSection');
     });
 }
 
@@ -2897,6 +2898,12 @@ async function sendChatMessage(sku) {
 }
 
 function showSection(sectionId) {
+    // Track the currently active section before switching (used by back buttons)
+    const currentActive = document.querySelector('.section.active');
+    if (currentActive && currentActive.id !== sectionId) {
+        window.previousSection = currentActive.id;
+    }
+
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
     });
