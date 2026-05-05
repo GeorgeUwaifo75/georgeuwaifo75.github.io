@@ -3011,6 +3011,19 @@ function showAuthForm(type) {
         
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            // Show loading indicator
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Account...';
+
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading-spinner';
+            loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); z-index: 10000; text-align: center;';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:1.5rem; color:#6a4c9c; display:block; margin-bottom:8px;"></i> Creating your account...';
+            document.body.appendChild(loadingDiv);
+
             try {
                 const userData = {
                     email: document.getElementById('email').value,
@@ -3022,9 +3035,13 @@ function showAuthForm(type) {
                 };
                 
                 await auth.signup(userData);
+                loadingDiv.remove();
                 alert('Registration successful! Please sign in.');
                 showAuthForm('signin');
             } catch (error) {
+                loadingDiv.remove();
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
                 alert(error.message);
             }
         });
