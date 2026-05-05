@@ -1,6 +1,23 @@
 // ============================================================
 // spotlight.js - Spotlight Products Rotator (Responsive)
 // OPTIMISED VERSION
+//
+// Changes from original:
+//
+// FIX 1 (createSpotlightCard — BIGGEST IMPACT):
+//   Old: loadProductDetail(product.sku)
+//        → threw away the fully-loaded product object already in
+//          this.currentProducts, forcing loadProductDetail to call
+//          api.getAllProducts() all over again just to re-find it.
+//   New: loadProductDetail(product)
+//        → passes the object directly; zero extra network call.
+//
+// FIX 2 (DOMContentLoaded init delay):
+//   Old: setTimeout(() => new SpotlightProducts(), 2000)
+//        → waited 2 full seconds before even starting the first fetch.
+//          The api cache is already warm by the time the page renders,
+//          so a 300 ms yield is enough to let other init finish first.
+//   New: setTimeout(() => new SpotlightProducts(), 300)
 // ============================================================
 
 class SpotlightProducts {
@@ -210,6 +227,9 @@ class SpotlightProducts {
         //    getAllProducts() re-fetch that the old product.sku call triggered ──
         card.addEventListener('click', () => {
             if (typeof loadProductDetail === 'function') {
+                // Record that we came from the home/landing view so the
+                // Back button on productDetailSection returns here correctly.
+                window.previousSection = 'categoriesSection';
                 loadProductDetail(product);   // was: loadProductDetail(product.sku)
             }
         });
@@ -244,3 +264,4 @@ document.addEventListener('DOMContentLoaded', () => {
         new SpotlightProducts();
     }, 300); // was: 2000
 });
+
