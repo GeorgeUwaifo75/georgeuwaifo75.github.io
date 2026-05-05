@@ -18,6 +18,13 @@
 //          The api cache is already warm by the time the page renders,
 //          so a 300 ms yield is enough to let other init finish first.
 //   New: setTimeout(() => new SpotlightProducts(), 300)
+//
+// FIX 3 (Dual-set rotation when active products > 20):
+//   When totalActive > 20, two independent sets of 4/5 products are
+//   selected (Set A and Set B), each following the existing paid →
+//   free priority rules. The sets alternate on every 60-second tick:
+//   tick 1 → Set A, tick 2 → Set B, tick 3 → Set A, …
+//   Below the 20-product threshold the behaviour is unchanged.
 // ============================================================
 
 class SpotlightProducts {
@@ -29,6 +36,11 @@ class SpotlightProducts {
         this.remainingSeconds = 60;
         this.currentProducts = [];
         this.categories = [];
+
+        // Dual-set state
+        this.setA = [];
+        this.setB = [];
+        this.currentSet = 'A'; // which set is currently displayed
 
         this.updateMaxProducts();
 
@@ -58,8 +70,19 @@ class SpotlightProducts {
 
     startTimer() {
         setInterval(async () => {
-            await this.loadSpotlightProducts();
-            this.resetCountdown();
+            // If we already have two valid sets built, just alternate between
+            // them without hitting the network again — reload only when a full
+            // refresh of both sets is due (every other tick).
+            if (this.setA.length > 0 && this.setB.length > 0) {
+                this.currentSet = this.currentSet === 'A' ? 'B' : 'A';
+                this.currentProducts = this.currentSet === 'A' ? this.setA : this.setB;
+                this.renderSpotlight();
+                this.resetCountdown();
+            } else {
+                // Fewer than 20 products, or sets need rebuilding — do a full reload
+                await this.loadSpotlightProducts();
+                this.resetCountdown();
+            }
         }, this.updateInterval);
     }
 
@@ -81,6 +104,52 @@ class SpotlightProducts {
         }
     }
 
+    // ── Core selection logic: pick up to `slots` products from the
+    //    paid/free pools, excluding any already chosen in `exclude`.
+    //    Follows the same three-priority rules as the original code.
+    selectSet(shuffledPaid, sortedFree, slots, exclude = []) {
+        const selected = [];
+        const usedCategories = new Set();
+        const excludeSkus = new Set(exclude.map(p => p.sku));
+
+        // PRIORITY 1: Paid adverts
+        for (const product of shuffledPaid) {
+            if (selected.length >= slots) break;
+            if (excludeSkus.has(product.sku)) continue;
+            if (!usedCategories.has(product.category) || selected.length < 3) {
+                selected.push(product);
+                usedCategories.add(product.category);
+            }
+        }
+
+        // PRIORITY 2: Free adverts (category-diverse)
+        if (selected.length < slots && sortedFree.length > 0) {
+            const shuffledFree = this.shuffleArray([...sortedFree]);
+            for (const product of shuffledFree) {
+                if (selected.length >= slots) break;
+                if (excludeSkus.has(product.sku)) continue;
+                if (!usedCategories.has(product.category) || selected.length < 4) {
+                    selected.push(product);
+                    usedCategories.add(product.category);
+                }
+            }
+        }
+
+        // PRIORITY 3: Any remaining free adverts (no category restriction)
+        if (selected.length < slots && sortedFree.length > 0) {
+            const shuffledFree = this.shuffleArray([...sortedFree]);
+            for (const product of shuffledFree) {
+                if (selected.length >= slots) break;
+                if (excludeSkus.has(product.sku)) continue;
+                if (!selected.find(p => p.sku === product.sku)) {
+                    selected.push(product);
+                }
+            }
+        }
+
+        return selected;
+    }
+
     async loadSpotlightProducts() {
         try {
             this.updateMaxProducts();
@@ -95,6 +164,8 @@ class SpotlightProducts {
             );
 
             if (activeProducts.length < this.maxProducts) {
+                this.setA = [];
+                this.setB = [];
                 this.hideSpotlight();
                 return;
             }
@@ -113,6 +184,7 @@ class SpotlightProducts {
             );
 
             console.log(`Found ${paidAdverts.length} paid and ${freeAdverts.length} free adverts for spotlight`);
+            console.log(`Total active products: ${activeProducts.length} — dual-set mode: ${activeProducts.length > 20}`);
 
             const sortedPaid = [...paidAdverts].sort((a, b) =>
                 new Date(b.dateAdvertised) - new Date(a.dateAdvertised)
@@ -121,55 +193,57 @@ class SpotlightProducts {
                 new Date(b.dateAdvertised) - new Date(a.dateAdvertised)
             );
 
-            const selectedProducts = [];
-            const usedCategories = new Set();
+            if (activeProducts.length > 20) {
+                // ── DUAL-SET MODE ───────────────────────────────────────────
+                // Build Set A first, then build Set B from the remaining pool.
+                const shuffledPaidA = this.shuffleArray([...sortedPaid]);
+                this.setA = this.shuffleArray(
+                    this.selectSet(shuffledPaidA, sortedFree, this.maxProducts, [])
+                );
 
-            // PRIORITY 1: Paid adverts (shuffled for variety)
-            const shuffledPaid = this.shuffleArray([...sortedPaid]);
-            for (const product of shuffledPaid) {
-                if (selectedProducts.length >= this.maxProducts) break;
-                if (!usedCategories.has(product.category) || selectedProducts.length < 3) {
-                    selectedProducts.push(product);
-                    usedCategories.add(product.category);
+                // For Set B, prefer products not already in Set A
+                const shuffledPaidB = this.shuffleArray([...sortedPaid]);
+                this.setB = this.shuffleArray(
+                    this.selectSet(shuffledPaidB, sortedFree, this.maxProducts, this.setA)
+                );
+
+                // If we couldn't fill Set B with distinct products, relax the
+                // exclusion and allow overlaps rather than showing nothing.
+                if (this.setB.length < this.maxProducts) {
+                    const shuffledPaidFallback = this.shuffleArray([...sortedPaid]);
+                    this.setB = this.shuffleArray(
+                        this.selectSet(shuffledPaidFallback, sortedFree, this.maxProducts, [])
+                    );
                 }
-            }
 
-            // PRIORITY 2: Fill remaining slots with free adverts
-            if (selectedProducts.length < this.maxProducts && sortedFree.length > 0) {
-                const shuffledFree = this.shuffleArray([...sortedFree]);
-                for (const product of shuffledFree) {
-                    if (selectedProducts.length >= this.maxProducts) break;
-                    if (!usedCategories.has(product.category) || selectedProducts.length < 4) {
-                        selectedProducts.push(product);
-                        usedCategories.add(product.category);
-                    }
+                // Display the current set (alternates each tick via startTimer)
+                this.currentProducts = this.currentSet === 'A' ? this.setA : this.setB;
+
+                console.log('Dual-set A:', this.setA.map(p => ({ name: p.name, status: p.paymentStatus })));
+                console.log('Dual-set B:', this.setB.map(p => ({ name: p.name, status: p.paymentStatus })));
+
+            } else {
+                // ── SINGLE-SET MODE (original behaviour) ───────────────────
+                this.setA = [];
+                this.setB = [];
+
+                const shuffledPaid = this.shuffleArray([...sortedPaid]);
+                const selectedProducts = this.selectSet(shuffledPaid, sortedFree, this.maxProducts, []);
+
+                if (selectedProducts.length < this.maxProducts) {
+                    console.log(`Only found ${selectedProducts.length} products, hiding spotlight`);
+                    this.hideSpotlight();
+                    return;
                 }
+
+                this.currentProducts = this.shuffleArray(selectedProducts);
+
+                console.log('Final spotlight selection:', this.currentProducts.map(p => ({
+                    name: p.name,
+                    status: p.paymentStatus,
+                    category: p.category
+                })));
             }
-
-            // PRIORITY 3: Take any remaining free adverts ignoring category diversity
-            if (selectedProducts.length < this.maxProducts && sortedFree.length > 0) {
-                const shuffledFree = this.shuffleArray([...sortedFree]);
-                for (const product of shuffledFree) {
-                    if (selectedProducts.length >= this.maxProducts) break;
-                    if (!selectedProducts.includes(product)) {
-                        selectedProducts.push(product);
-                    }
-                }
-            }
-
-            if (selectedProducts.length < this.maxProducts) {
-                console.log(`Only found ${selectedProducts.length} products, hiding spotlight`);
-                this.hideSpotlight();
-                return;
-            }
-
-            this.currentProducts = this.shuffleArray(selectedProducts);
-
-            console.log('Final spotlight selection:', this.currentProducts.map(p => ({
-                name: p.name,
-                status: p.paymentStatus,
-                category: p.category
-            })));
 
             this.renderSpotlight();
             this.showSpotlight();
@@ -264,4 +338,3 @@ document.addEventListener('DOMContentLoaded', () => {
         new SpotlightProducts();
     }, 300); // was: 2000
 });
-
