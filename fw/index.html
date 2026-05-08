@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#1a4fa8"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <title>FaithWorks — Finding works in faith</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+   <script src="config2.js"></script>
+
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     AUTH SCREEN
+     Desktop : two-column (brand panel LEFT + form RIGHT)
+     Tablet  : single centred card, no brand panel
+     Mobile  : full-screen scroll, logo on top of form
+     ═══════════════════════════════════════════════════════ -->
+<div id="authModal" class="auth-screen visible">
+
+  <!-- LEFT — brand panel (desktop only) -->
+  <div class="auth-brand-panel">
+    <div class="auth-brand-inner">
+      <div class="auth-brand-logo">
+        <div class="logo-icon">
+          <i class="fas fa-cross"></i>
+          <i class="fas fa-briefcase logo-brief"></i>
+        </div>
+      </div>
+      <h1 class="auth-brand-name">FaithWorks</h1>
+      <p class="auth-brand-tag">"Finding works in faith,<br>works greatly for your business."</p>
+      <ul class="auth-brand-perks">
+        <li><i class="fas fa-shield-alt"></i> Safe &amp; trusted community</li>
+        <li><i class="fas fa-church"></i> Church-verified members</li>
+        <li><i class="fas fa-handshake"></i> Connect, serve &amp; grow</li>
+      </ul>
+      <!-- decorative circles -->
+      <div class="brand-orb brand-orb1"></div>
+      <div class="brand-orb brand-orb2"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT — form panel -->
+  <div class="auth-form-panel">
+    <div class="auth-card">
+
+      <!-- Logo row shown on tablet/mobile only -->
+      <div class="auth-logo">
+        <div class="logo-icon">
+          <i class="fas fa-cross"></i>
+          <i class="fas fa-briefcase logo-brief"></i>
+        </div>
+        <h1 class="brand-name">FaithWorks</h1>
+        <p class="brand-sub">Finding works in faith, works greatly for your business.</p>
+      </div>
+
+      <!-- Sign-in / Sign-up tabs -->
+      <div class="auth-tabs">
+        <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+        <button class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- ── LOGIN FORM ── -->
+      <div id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label>User ID</label>
+          <input type="text" id="loginId" placeholder="Enter your User ID" autocomplete="username"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <button class="btn-primary full-width" onclick="doLogin()">
+          <i class="fas fa-sign-in-alt"></i> Sign In
+        </button>
+        <div id="loginError" class="error-msg"></div>
+      </div>
+
+      <!-- ── SIGNUP FORM ── -->
+      <div id="signupForm" class="auth-form hidden">
+        <div class="form-group">
+          <label>Account Type</label>
+          <select id="signupType" onchange="toggleSignupFields()">
+            <option value="3">General User</option>
+            <option value="2">Seller / Service Provider</option>
+            <option value="1">Church / Merchant</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>User ID</label>
+          <input type="text" id="regId" placeholder="Choose a unique User ID" autocomplete="username"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="regPass" placeholder="Create a strong password"/>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="regPhone" placeholder="Phone number"/>
+        </div>
+        <div class="form-group">
+          <label>State</label>
+          <input type="text" id="regState" placeholder="State"/>
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" id="regAddress" placeholder="Address"/>
+        </div>
+
+        <!-- General / Seller: church selection -->
+        <div id="churchSelectGroup" class="form-group">
+          <label>Church / Merchant <span id="churchRequired" class="required-star">*</span></label>
+          <select id="regChurch">
+            <option value="">-- Select a Church --</option>
+          </select>
+        </div>
+        <div id="branchGroup" class="form-group">
+          <label>Branch</label>
+          <input type="text" id="regBranch" placeholder="Branch (optional)"/>
+        </div>
+
+        <!-- Seller-only extras -->
+        <div id="sellerFields" class="hidden">
+          <div class="form-group">
+            <label>Profile Picture URL</label>
+            <input type="text" id="regPicture" placeholder="https://..."/>
+          </div>
+          <div class="form-group">
+            <label>ID Card Photo URL</label>
+            <input type="text" id="regIdCard" placeholder="https://..."/>
+          </div>
+        </div>
+
+        <!-- Merchant-only extras -->
+        <div id="merchantFields" class="hidden">
+          <div class="form-group">
+            <label>Name of Church</label>
+            <input type="text" id="regChurchName" placeholder="Full church name"/>
+          </div>
+          <div class="form-group">
+            <label>Leader of Church</label>
+            <input type="text" id="regLeader" placeholder="Pastor / Bishop name"/>
+          </div>
+          <div class="form-group">
+            <label>Denomination</label>
+            <input type="text" id="regDenom" placeholder="Denomination"/>
+          </div>
+          <div class="form-group">
+            <label>Membership Size</label>
+            <input type="number" id="regMemberSize" placeholder="Approx. member count"/>
+          </div>
+          <div class="form-group">
+            <label>Membership Access</label>
+            <select id="regAccess">
+              <option value="open">Open (Public)</option>
+              <option value="closed">Closed (Members Only)</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn-primary full-width" onclick="doSignup()">
+          <i class="fas fa-user-plus"></i> Create Account
+        </button>
+        <div id="signupError" class="error-msg"></div>
+      </div>
+
+      <!-- footer note -->
+      <p class="auth-secure-note"><i class="fas fa-lock"></i> Your data is safe and secure</p>
+    </div>
+  </div>
+</div>
+<!-- /AUTH SCREEN -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN APP SHELL
+     ═══════════════════════════════════════════════════════ -->
+<div id="appShell" class="hidden">
+
+  <!-- ── TOP NAV ── -->
+  <nav class="top-nav">
+    <div class="nav-left">
+      <!-- hamburger: visible on mobile, hidden on desktop -->
+      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleSideDrawer()" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="logo-sm">
+        <i class="fas fa-cross"></i>
+        <i class="fas fa-briefcase"></i>
+      </div>
+      <span class="brand-nav">FaithWorks</span>
+    </div>
+
+    <div class="nav-center" id="navSearch">
+      <div class="search-wrap">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Search jobs, skills..." oninput="filterJobs()"/>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <button class="nav-icon-btn" onclick="showSection('notifications')" title="Notifications">
+        <i class="fas fa-bell"></i>
+        <span class="badge" id="notifBadge">0</span>
+      </button>
+      <button class="nav-icon-btn" onclick="showSection('chat')" title="Messages">
+        <i class="fas fa-comment-dots"></i>
+        <span class="badge" id="chatBadge">0</span>
+      </button>
+      <div class="avatar-wrap" onclick="toggleProfileMenu()">
+        <div class="avatar" id="navAvatar">U</div>
+        <span id="navUserName">User</span>
+        <i class="fas fa-chevron-down"></i>
+      </div>
+      <div id="profileMenu" class="dropdown-menu hidden">
+        <div class="dropdown-item" onclick="showSection('profile')"><i class="fas fa-user"></i> My Profile</div>
+        <div class="dropdown-item seller-only hidden" onclick="showSection('myJobs')"><i class="fas fa-list-check"></i> My Listings</div>
+        <div class="dropdown-item" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i> Sign Out</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Mobile side-nav backdrop -->
+  <div class="side-backdrop hidden" id="sideBackdrop" onclick="closeSideDrawer()"></div>
+
+  <!-- ── LAYOUT WRAP ── -->
+  <div class="layout-wrap">
+
+    <!-- SIDE NAV (desktop sidebar / mobile drawer) -->
+    <aside class="side-nav" id="sideNav">
+      <!-- close button for mobile drawer -->
+      <button class="side-nav-close" onclick="closeSideDrawer()"><i class="fas fa-times"></i></button>
+
+      <div class="side-nav-items">
+        <div class="nav-item active" onclick="showSection('home')" data-section="home">
+          <i class="fas fa-home"></i><span>Home</span>
+        </div>
+        <div class="nav-item" onclick="showSection('browse')" data-section="browse">
+          <i class="fas fa-th-large"></i><span>Browse Jobs</span>
+        </div>
+        <div class="nav-item seller-only hidden" onclick="showSection('myJobs')" data-section="myJobs">
+          <i class="fas fa-list-check"></i><span>My Listings</span>
+        </div>
+        <div class="nav-item seller-only hidden" onclick="showSection('newJob')" data-section="newJob">
+          <i class="fas fa-plus-circle"></i><span>Add Listing</span>
+        </div>
+        <div class="nav-item" onclick="showSection('chat')" data-section="chat">
+          <i class="fas fa-comment-dots"></i><span>Messages</span>
+        </div>
+        <div class="nav-item admin-only hidden" onclick="showSection('adminPanel')" data-section="adminPanel">
+          <i class="fas fa-shield-alt"></i><span>Admin Panel</span>
+        </div>
+        <div class="nav-item merchant-only hidden" onclick="showSection('merchantPanel')" data-section="merchantPanel">
+          <i class="fas fa-church"></i><span>Church Panel</span>
+        </div>
+        <div class="nav-item superadmin-only hidden" onclick="showSection('superPanel')" data-section="superPanel">
+          <i class="fas fa-crown"></i><span>Super Admin</span>
+        </div>
+        <div class="nav-item" onclick="showSection('testimonials')" data-section="testimonials">
+          <i class="fas fa-star"></i><span>Testimonials</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- HOME -->
+      <section id="sec-home" class="content-section hidden">
+        <div class="hero-banner">
+          <div class="hero-text">
+            <h2>Welcome to <span class="accent">FaithWorks</span></h2>
+            <p>A safe community marketplace connecting church members with skilled service providers.</p>
+            <button class="btn-primary" onclick="showSection('browse')">Browse Services</button>
+          </div>
+          <div class="hero-art">
+            <div class="hero-circle">
+              <i class="fas fa-hands-helping"></i>
+            </div>
+          </div>
+        </div>
+        <div class="categories-grid" id="homeCategories"></div>
+        <div class="section-title"><h3>Latest Listings</h3></div>
+        <div class="jobs-list" id="homeLatestJobs"></div>
+      </section>
+
+      <!-- BROWSE -->
+      <section id="sec-browse" class="content-section hidden">
+        <div class="browse-header">
+          <h2>Browse All Services</h2>
+          <div class="filter-row">
+            <select id="filterCategory" onchange="filterJobs()"><option value="">All Categories</option></select>
+            <select id="filterChurch" onchange="filterJobs()"><option value="">All Churches</option></select>
+          </div>
+        </div>
+        <div class="jobs-list" id="browseJobs"></div>
+      </section>
+
+      <!-- MY LISTINGS -->
+      <section id="sec-myJobs" class="content-section hidden">
+        <div class="section-header-row">
+          <h2>My Listings</h2>
+          <button class="btn-primary" onclick="showSection('newJob')"><i class="fas fa-plus"></i> New Listing</button>
+        </div>
+        <div class="jobs-list" id="myJobsList"></div>
+      </section>
+
+      <!-- NEW JOB -->
+      <section id="sec-newJob" class="content-section hidden">
+        <h2>Create a New Listing</h2>
+        <div class="form-card">
+          <div class="form-group">
+            <label>Job / Service Title</label>
+            <input type="text" id="jobTitle" placeholder="e.g., Professional Plumber"/>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="jobCategory"></select>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="jobDesc" rows="4" placeholder="Describe your service..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Price / Rate (₦)</label>
+            <input type="number" id="jobPrice" placeholder="0.00"/>
+          </div>
+          <div class="form-group">
+            <label>Availability</label>
+            <input type="text" id="jobAvail" placeholder="e.g., Mon-Fri 8am-5pm"/>
+          </div>
+          <div class="form-group">
+            <label>Listing Scope</label>
+            <select id="jobScope">
+              <option value="local">Local (My Church only)</option>
+              <option value="global">Public (All Churches — +20% fee)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Photo URLs (up to 4, comma-separated)</label>
+            <input type="text" id="jobPhotos" placeholder="https://photo1.jpg, https://photo2.jpg"/>
+          </div>
+          <div class="btn-row">
+            <button class="btn-secondary" onclick="showSection('myJobs')">Cancel</button>
+            <button class="btn-primary" onclick="submitJob()">Submit for Approval</button>
+          </div>
+          <div id="jobError" class="error-msg"></div>
+        </div>
+      </section>
+
+      <!-- CHAT -->
+      <section id="sec-chat" class="content-section hidden">
+        <div class="chat-layout">
+          <div class="chat-list" id="chatList">
+            <h3>Conversations</h3>
+            <div id="chatThreads"></div>
+          </div>
+          <div class="chat-window" id="chatWindow">
+            <div class="chat-placeholder">
+              <i class="fas fa-comment-dots"></i>
+              <p>Select a conversation</p>
+            </div>
+            <div id="activeChatArea" class="hidden">
+              <div class="chat-header" id="chatHeader"></div>
+              <div class="chat-messages" id="chatMessages"></div>
+              <div class="chat-actions" id="chatActions"></div>
+              <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="Type a message..."/>
+                <button class="btn-primary" onclick="sendChatMsg()"><i class="fas fa-paper-plane"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE -->
+      <section id="sec-profile" class="content-section hidden">
+        <h2>My Profile</h2>
+        <div class="form-card" id="profileCard"></div>
+      </section>
+
+      <!-- ADMIN PANEL -->
+      <section id="sec-adminPanel" class="content-section hidden">
+        <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+        <div class="admin-tabs">
+          <button class="tab-btn active" onclick="adminTab('pendingJobs')">Pending Jobs</button>
+          <button class="tab-btn" onclick="adminTab('sellers')">Sellers</button>
+          <button class="tab-btn" onclick="adminTab('payments')">Payments</button>
+        </div>
+        <div id="adminContent"></div>
+      </section>
+
+      <!-- MERCHANT PANEL -->
+      <section id="sec-merchantPanel" class="content-section hidden">
+        <h2><i class="fas fa-church"></i> Church Panel</h2>
+        <div class="admin-tabs">
+          <button class="tab-btn active" onclick="merchantTab('pendingJobs')">Pending Approvals</button>
+          <button class="tab-btn" onclick="merchantTab('members')">Members</button>
+          <button class="tab-btn" onclick="merchantTab('settings')">Settings</button>
+        </div>
+        <div id="merchantContent"></div>
+      </section>
+
+      <!-- SUPER ADMIN -->
+      <section id="sec-superPanel" class="content-section hidden">
+        <h2><i class="fas fa-crown"></i> Super Admin</h2>
+        <div class="admin-tabs">
+          <button class="tab-btn active" onclick="superTab('users')">All Users</button>
+          <button class="tab-btn" onclick="superTab('merchants')">Churches</button>
+          <button class="tab-btn" onclick="superTab('payments')">Payments &amp; Revenue</button>
+          <button class="tab-btn" onclick="superTab('newAdmin')">Create Admin</button>
+        </div>
+        <div id="superContent"></div>
+      </section>
+
+      <!-- TESTIMONIALS -->
+      <section id="sec-testimonials" class="content-section hidden">
+        <h2>Testimonials &amp; Ratings</h2>
+        <div id="testimonialsGrid" class="testimonials-grid"></div>
+      </section>
+
+      <!-- NOTIFICATIONS -->
+      <section id="sec-notifications" class="content-section hidden">
+        <h2>Notifications</h2>
+        <div id="notifList"></div>
+      </section>
+
+    </main>
+  </div><!-- /layout-wrap -->
+
+  <!-- ── BOTTOM NAV (mobile only) ── -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bnav-btn active" data-section="home" onclick="showSection('home');setBnavActive(this)">
+      <i class="fas fa-home"></i><span>Home</span>
+    </button>
+    <button class="bnav-btn" data-section="browse" onclick="showSection('browse');setBnavActive(this)">
+      <i class="fas fa-th-large"></i><span>Browse</span>
+    </button>
+    <button class="bnav-btn" data-section="chat" onclick="showSection('chat');setBnavActive(this)">
+      <i class="fas fa-comment-dots"></i><span>Chat</span>
+      <span class="bnav-badge hidden" id="bnavChatBadge"></span>
+    </button>
+    <button class="bnav-btn" data-section="notifications" onclick="showSection('notifications');setBnavActive(this)">
+      <i class="fas fa-bell"></i><span>Alerts</span>
+      <span class="bnav-badge hidden" id="bnavNotifBadge"></span>
+    </button>
+    <button class="bnav-btn" onclick="toggleProfileMenu()">
+      <div class="bnav-avatar" id="bnavAvatar">U</div><span>Me</span>
+    </button>
+  </nav>
+
+  <!-- JOB DETAIL MODAL -->
+  <div id="jobModal" class="modal-overlay hidden">
+    <div class="job-detail-card">
+      <button class="close-btn" onclick="closeJobModal()"><i class="fas fa-times"></i></button>
+      <div id="jobDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- RATING MODAL -->
+  <div id="ratingModal" class="modal-overlay hidden">
+    <div class="rating-card">
+      <h3>Rate this <span id="ratingTarget">user</span></h3>
+      <div class="star-row" id="starRow">
+        <span class="star" onclick="setRating(1)">⭐</span>
+        <span class="star" onclick="setRating(2)">⭐</span>
+        <span class="star" onclick="setRating(3)">⭐</span>
+        <span class="star" onclick="setRating(4)">⭐</span>
+        <span class="star" onclick="setRating(5)">⭐</span>
+      </div>
+      <textarea id="ratingComment" placeholder="Leave a comment..." rows="3"></textarea>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="closeRatingModal()">Cancel</button>
+        <button class="btn-primary" onclick="submitRating()">Submit Rating</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT MODAL -->
+  <div id="payModal" class="modal-overlay hidden">
+    <div class="pay-card">
+      <h3>Subscription Payment</h3>
+      <p id="payDesc"></p>
+      <div class="pay-amount" id="payAmount"></div>
+      <button class="btn-primary full-width" onclick="initPaystack()">Pay with Paystack</button>
+      <button class="btn-secondary full-width mt-8" onclick="closePayModal()">Later</button>
+    </div>
+  </div>
+
+</div><!-- /appShell -->
+
+<!-- FOOTER -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <div class="logo-icon sm">
+        <i class="fas fa-cross"></i>
+      </div>
+      <span>FaithWorks</span>
+    </div>
+    <div class="footer-links">
+      <span><i class="fas fa-envelope"></i> geocorpsys@gmail.com</span>
+      <span><i class="fas fa-phone"></i> 090 38 1975 86</span>
+      <span><i class="fas fa-copyright"></i> 2026 FaithWorks. All rights reserved.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Firebase compat SDK (required for uploadImageToFirebase) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+
