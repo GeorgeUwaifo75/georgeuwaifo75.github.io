@@ -1,12 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════
    SmartVotes Network — Main Application Script
-   Concurrency-safe revision:
-     • All writes go through a serialised queue (one at a time)
-     • Every mutation does a fresh GET → merge → PUT (read-before-write)
-     • submitVotes re-fetches and checks for duplicate votes before saving
-     • doRegister re-fetches to catch concurrent duplicate registrations
-     • Exponential-backoff retry on JSONBin 429 / 5xx errors
-     • Live-polling refreshes the UI while users are logged in
+   Data-integrity revision:
+     • atomicSave ABORTS the JSONBin PUT when jbinGet() returns null
+       (prevents local-only appData from silently overwriting remote)
+     • loadData() now persists the freshly-fetched remote to localStorage
+       so the local cache is always a valid fallback
+     • doValidateCode() re-fetches the user's code from appData before
+       comparing, so resent codes are always accepted
+     • resendValidationCode() refreshes pendingValidationUser.validation_code
+       from the saved appData after the write completes
+     • submitVotes() explicitly re-fetches appData before the unvoted
+       guard so it uses the freshest election/category/candidate list
+     • doSignIn() no longer calls loadData() twice (was redundant after
+       the atomicSave fetch-before-write guarantee)
+     • Background poll only replaces appData when a REAL remote snapshot
+       was received; stale/failed polls no longer corrupt local state
+     • All write functions use the serialised enqueueWrite queue
    ═══════════════════════════════════════════════════════════════ */
 
 "use strict";
@@ -69,19 +78,12 @@ function hashStr(s) {
 
 // ══════════════════════════════════════════════════════════════════
 //  CONCURRENCY LAYER
-//  All JSONBin writes are serialised through a single async queue so
-//  that parallel calls from different actions (or different browser
-//  tabs that share the same bin) cannot interleave and corrupt data.
 // ══════════════════════════════════════════════════════════════════
 
 // ── Write queue ───────────────────────────────────────────────────
-// Only one write runs at a time. Any additional write requested while
-// one is in-flight is chained onto the end of the queue.
 let _writeQueue = Promise.resolve();
 
 function enqueueWrite(fn) {
-  // Chain the new write onto whatever is already queued.
-  // Errors are caught inside fn itself; we never let the queue break.
   _writeQueue = _writeQueue.then(() => fn().catch(e =>
     console.error("SmartVotes: enqueued write failed", e)
   ));
@@ -124,12 +126,11 @@ async function jbinGet() {
 }
 
 // PUT with exponential-backoff retry.
-// Retries up to MAX_RETRIES times on 429 (rate-limit) or 5xx errors.
 async function jbinPut(data) {
   if (!JBIN_READY) return false;
 
   const MAX_RETRIES = 4;
-  let delay = 600; // ms — doubles each attempt
+  let delay = 600;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -148,7 +149,6 @@ async function jbinPut(data) {
         delay *= 2;
         continue;
       }
-      // 4xx other than 429 — not retryable
       const body = await r.text();
       console.warn(`SmartVotes: JSONBin PUT ${status} (non-retryable). ${body}`);
       return false;
@@ -187,8 +187,6 @@ function mergeData(remote, local) {
     const remoteArr = Array.isArray(remote[key]) ? remote[key] : [];
     const localArr  = Array.isArray(local[key])  ? local[key]  : [];
     const remoteIds = new Set(remoteArr.map(x => x.id));
-    // Start from the remote authoritative list …
-    // … then append any local-only records (pending saves).
     const localOnly = localArr.filter(x => !remoteIds.has(x.id));
     merged[key] = [...remoteArr, ...localOnly];
   }
@@ -201,7 +199,15 @@ async function loadData() {
   let data = null;
 
   if (JBIN_READY) data = await jbinGet();
-  if (!data) data = lsGet();
+
+  if (data) {
+    // FIX: keep localStorage in sync with a successful remote fetch so
+    // the local cache is always a valid, up-to-date fallback.
+    lsPut(data);
+  } else {
+    // Remote fetch failed — fall back to the local cache.
+    data = lsGet();
+  }
 
   if (!data) {
     data = buildDefaultData();
@@ -220,34 +226,51 @@ async function loadData() {
 //
 // Steps:
 //   1. Re-fetch the latest remote snapshot.
-//   2. Merge it with the caller's intended data using mergeData().
-//   3. Apply a caller-supplied patch function (fn) on top of the merge
-//      so the caller's specific change is guaranteed to be present.
-//   4. Persist to localStorage first (fast, never fails).
-//   5. PUT the merged result back to JSONBin with retry.
-//   6. Update the global appData so the UI stays consistent.
+//   2. If the fetch FAILS, abort the JSONBin PUT (to avoid silently
+//      overwriting the remote with an incomplete local-only snapshot).
+//      Still apply the mutation locally and persist to localStorage.
+//   3. Merge the remote snapshot with the caller's in-memory state.
+//   4. Apply the caller-supplied patch function on top of the merge.
+//   5. Persist to localStorage first (fast, never fails).
+//   6. PUT the merged result back to JSONBin with retry.
+//   7. Update the global appData so the UI stays consistent.
 //
 // fn: (currentData) => currentData
-//   A pure function that applies the caller's mutation to whatever
-//   the merge produced. Returning the same object is fine.
 async function atomicSave(fn) {
   // 1. Fetch latest remote state
   let remote = JBIN_READY ? await jbinGet() : null;
 
-  // 2. Merge remote with local in-memory state
+  // ── FIX: guard against a null GET obliterating remote data ────────
+  // If JSONBin is configured but the GET failed (network blip, rate
+  // limit, transient error), we must NOT merge against an empty local
+  // snapshot and then write it back — that would wipe all remote data.
+  // Instead: apply the mutation against local appData, save to
+  // localStorage only, and skip the JSONBin PUT for this cycle.
+  // The next successful write (or background poll) will re-sync.
+  const remoteFetchFailed = JBIN_READY && (remote === null);
+
+  // 2 & 3. Merge remote with local in-memory state
   const base   = remote ? mergeData(remote, appData) : appData;
   const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
 
-  // 3. Apply the caller's mutation on top of the merged snapshot
+  // 4. Apply the caller's mutation on top of the merged snapshot
   const patched = fn ? fn(merged) : merged;
 
-  // 4. Persist locally first
+  // 5. Persist locally first (always safe)
   lsPut(patched);
 
-  // 5. Push to JSONBin
-  if (JBIN_READY) await jbinPut(patched);
+  // 6. Push to JSONBin — but ONLY when we have a confirmed remote baseline
+  if (remoteFetchFailed) {
+    console.warn(
+      "SmartVotes: JSONBin GET failed — mutation saved to localStorage only. " +
+      "JSONBin PUT skipped to protect existing remote data. " +
+      "Will retry on the next write."
+    );
+  } else if (JBIN_READY) {
+    await jbinPut(patched);
+  }
 
-  // 6. Sync global state so all UI reads see the latest
+  // 7. Sync global state so all UI reads see the latest
   appData = patched;
   ensureAdmin();
 
@@ -255,7 +278,6 @@ async function atomicSave(fn) {
 }
 
 // Convenience wrapper: enqueue an atomicSave.
-// All callers use this instead of the old saveData().
 function saveData(fn) {
   return enqueueWrite(() => atomicSave(fn));
 }
@@ -264,7 +286,7 @@ function saveData(fn) {
 // While a user is signed in, poll JSONBin every POLL_INTERVAL ms so
 // that additions/changes made by other concurrent users are reflected
 // in the UI without a page reload.
-const POLL_INTERVAL = 20000; // 20 seconds — polite for a shared bin
+const POLL_INTERVAL = 20000; // 20 seconds
 let   _pollTimer    = null;
 
 function startPolling() {
@@ -273,7 +295,12 @@ function startPolling() {
     if (!currentUser) { stopPolling(); return; }
     try {
       const remote = JBIN_READY ? await jbinGet() : null;
+
+      // FIX: only update appData when we actually received a valid
+      // remote snapshot. A null (network error / rate-limit) must not
+      // silently reset the in-memory state to an empty default.
       if (!remote) return;
+
       const refreshed = mergeData(remote, appData);
       appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...refreshed };
       ensureAdmin();
@@ -290,7 +317,6 @@ function stopPolling() {
 }
 
 function _refreshVisiblePanels() {
-  // Only touch panels that are actually rendered — avoids blank flashes
   if (document.getElementById('panel-admin-overview')?.classList.contains('active')) { refreshAdminStats(); renderOverviewElections(); }
   if (document.getElementById('panel-admin-elections')?.classList.contains('active'))  renderElectionsTable();
   if (document.getElementById('panel-admin-categories')?.classList.contains('active')) renderCategoriesTable();
@@ -338,9 +364,6 @@ function ensureAdmin() {
       gender: "Male", age: 30, phone: "09038197586", address: "",
       role: "admin", validated: "Yes", validation_code: "", created: now()
     });
-    // Do not call saveData() here — it would cause a recursive enqueue.
-    // ensureAdmin() only runs immediately after a load/merge, so the
-    // next real saveData() call will persist the admin row naturally.
   }
 }
 
@@ -476,16 +499,24 @@ async function doValidateCode() {
   const entered = [0,1,2,3,4].map(i => document.getElementById(`vc${i}`)?.value || '').join('');
   if (entered.length < 5) { showAlert('validate-alert', 'Please enter all 5 digits.', 'error'); return; }
 
-  if (entered === pendingValidationUser.validation_code) {
+  // FIX: re-read the validation code from the latest appData rather than
+  // from the stale pendingValidationUser object. This ensures that a
+  // resent code (which updates JSONBin and appData) is always accepted —
+  // even if the user is validating from the same browser session where
+  // pendingValidationUser was originally set with an older code.
+  const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
+  const expectedCode = freshUser
+    ? freshUser.validation_code
+    : pendingValidationUser.validation_code;
+
+  if (entered === expectedCode) {
     // Atomic: re-fetch → mark validated → save
     await saveData(data => {
       const u = data.users.find(x => x.id === pendingValidationUser.id);
       if (u) { u.validated = 'Yes'; u.validation_code = ''; }
       return data;
     });
-    // Sync local reference
     const updated = appData.users.find(x => x.id === pendingValidationUser.id);
-    if (updated) { updated.validated = 'Yes'; updated.validation_code = ''; }
     showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
     await sleep(1200);
     loginSuccess(updated || pendingValidationUser);
@@ -504,7 +535,14 @@ async function resendValidationCode() {
     if (u) u.validation_code = code;
     return data;
   });
-  pendingValidationUser.validation_code = code;
+  // FIX: refresh pendingValidationUser from the updated appData so that
+  // the next doValidateCode() call sees the new code via the freshUser
+  // lookup above (double safety — the lookup already handles this, but
+  // keeping this object in sync avoids any remaining stale-reference risk).
+  const refreshed = appData.users.find(x => x.id === pendingValidationUser.id);
+  if (refreshed) pendingValidationUser = { ...refreshed };
+  else pendingValidationUser.validation_code = code;
+
   await sendValidationEmail(pendingValidationUser.email, pendingValidationUser.name, code);
   showToast('New validation code sent!', 'success');
 }
@@ -513,7 +551,7 @@ function loginSuccess(user) {
   currentUser = user;
   lsSession(user);
   updateHeaderForUser(user);
-  startPolling();   // begin background sync while this user is active
+  startPolling();
   navigate('dashboard');
   showToast(`Welcome back, ${user.name}! 👋`, 'success');
 }
@@ -550,7 +588,6 @@ function updateHeaderForUser(user) {
 
 function toggleUserMenu() { document.getElementById('user-dropdown')?.classList.toggle('hidden'); }
 
-// Close user dropdown when clicking/tapping outside it.
 document.addEventListener('click', e => {
   const dd     = document.getElementById('user-dropdown');
   const btn    = document.getElementById('user-menu-btn');
@@ -605,15 +642,13 @@ async function doRegister() {
     validated: 'No', validation_code: code, created: now()
   };
 
-  // Atomic save: re-fetch → second duplicate check inside the write lock
-  // → append user → save. This is the definitive race-condition guard.
   let saved = false;
   let conflictMsg = '';
 
   await saveData(data => {
-    // Second check inside the serialised write — final guard
+    // Second check inside the serialised write — final race-condition guard
     if (data.users.find(u => u.email.toLowerCase() === email)) {
-      conflictMsg = 'email'; return data; // abort mutation, return unchanged
+      conflictMsg = 'email'; return data;
     }
     if (data.users.find(u => u.username?.toLowerCase() === username.toLowerCase())) {
       conflictMsg = 'username'; return data;
@@ -634,7 +669,10 @@ async function doRegister() {
 
   await sendValidationEmail(email, name, code);
   showToast('Account created! Check your email for the verification code.', 'success');
-  pendingValidationUser = newUser;
+
+  // FIX: use the user object from appData (post-save) as pendingValidationUser
+  // so it reflects the persisted state rather than the pre-save local copy.
+  pendingValidationUser = appData.users.find(u => u.id === newUser.id) || newUser;
   showValidationCard(email);
 }
 
@@ -783,7 +821,7 @@ async function saveElection() {
   const imgInput = document.getElementById('el-img-input');
   if (imgInput?.files?.length) imageUrl = await firebaseUpload(imgInput.files[0], `elections/${uid()}`);
 
-  const capId = editingId; // capture before async gap
+  const capId = editingId;
 
   await saveData(data => {
     if (capId) {
@@ -1230,9 +1268,7 @@ function renderVoterElections() {
   grid.innerHTML = visible.map(e => {
     const myVotes   = appData.votes.filter(v => v.voterId === currentUser.id && v.electionId === e.id);
     const cats      = appData.categories.filter(c => c.electionId === e.id);
-    const hasVoted  = myVotes.length > 0;
-    const allCats   = cats.every(cat => myVotes.some(mv => mv.categoryId === cat.id));
-    const status    = computeStatus(e);
+    const allCats   = cats.length > 0 && cats.every(cat => myVotes.some(mv => mv.categoryId === cat.id));
     return `<div class="election-card">
       ${e.image ? `<div class="election-card-img"><img src="${e.image}" alt="${esc(e.title)}"/></div>` : ''}
       <div class="election-card-body">
@@ -1318,6 +1354,12 @@ function selectCandidate(catId, candId) {
 async function submitVotes() {
   if (!currentUser || !votingElection) return;
 
+  // FIX: re-fetch the latest data before reading categories/candidates
+  // so the unvoted guard uses the most current election structure.
+  // This matters when the voter's in-memory state might not reflect
+  // categories added by the admin after the voter's last data load.
+  await loadData();
+
   const cats    = appData.categories.filter(c => c.electionId === votingElection.id);
   const unvoted = cats.filter(cat =>
     !voteSelections[cat.id] &&
@@ -1332,28 +1374,27 @@ async function submitVotes() {
   const voterId    = currentUser.id;
   const elId       = votingElection.id;
   const timestamp  = now();
-  const selections = { ...voteSelections }; // snapshot before async gap
+  const selections = { ...voteSelections };
 
   let duplicateError = false;
 
   await saveData(data => {
-    // Re-check: has this voter already voted in any of these categories?
-    // This guard runs inside the write-serialised atomicSave, so it is
-    // evaluated against the very latest remote snapshot — not stale state.
+    // Re-check inside the write lock: has this voter already voted in
+    // any of these categories? This runs against the very latest remote
+    // snapshot fetched by atomicSave — the definitive race-condition guard.
     const existing = data.votes.filter(v => v.voterId === voterId && v.electionId === elId);
     const alreadyVotedCats = new Set(existing.map(v => v.categoryId));
 
     const newVotes = Object.entries(selections)
-      .filter(([catId]) => !alreadyVotedCats.has(catId)) // skip already-voted cats
+      .filter(([catId]) => !alreadyVotedCats.has(catId))
       .map(([catId, candId]) => ({
         id: uid(), electionId: elId, categoryId: catId,
         candidateId: candId, voterId, timestamp
       }));
 
     if (!newVotes.length) {
-      // Every category was already voted — concurrent double-submit
       duplicateError = true;
-      return data; // abort, do not modify
+      return data;
     }
 
     data.votes.push(...newVotes);
@@ -1422,7 +1463,7 @@ async function adminClearTest() {
   });
 }
 
-// ── Export helpers (unchanged) ────────────────────────────────────
+// ── Export helpers ────────────────────────────────────────────────
 function exportResultsExcel(elId) {
   const wb  = XLSX.utils.book_new();
   const el  = appData.elections.find(e => e.id === elId);
@@ -1601,7 +1642,7 @@ async function init() {
     if (user) {
       currentUser = user;
       updateHeaderForUser(user);
-      startPolling(); // resume background sync for returning session
+      startPolling();
     }
   }
 
