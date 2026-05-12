@@ -63,7 +63,19 @@ let voteSelections        = {};
 let charts                = {};
 
 // ── Helpers ───────────────────────────────────────────────────────
-const uid        = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+//const uid        = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// ============================================================
+// 1. IMPROVED UID GENERATION - Guaranteed uniqueness
+// ============================================================
+const uid = () => {
+  const timestamp = Date.now().toString(36);
+  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID 
+    ? crypto.randomUUID().slice(0, 8) 
+    : Math.random().toString(36).slice(2, 10);
+  const counter = (performance.now() % 10000).toString(36).slice(-4);
+  return `${timestamp}-${randomPart}-${counter}`;
+};
+
 const now        = () => new Date().toISOString();
 const fmtDT      = (iso) => { if (!iso) return '—'; return new Date(iso).toLocaleString(); };
 const fmtD       = (iso) => { if (!iso) return '—'; return new Date(iso).toLocaleDateString(); };
@@ -75,6 +87,67 @@ function hashStr(s) {
   for (let i = 0; i < s.length; i++) { h = Math.imul(31, h) + s.charCodeAt(i) | 0; }
   return h.toString(16);
 }
+
+
+// ============================================================
+// 2. COMPREHENSIVE VALIDATION FUNCTIONS
+// ============================================================
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+function isValidPhone(phone) {
+  const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,14}$/;
+  return phoneRegex.test(phone);
+}
+
+function isValidUsername(username) {
+  const usernameRegex = /^[a-zA-Z0-9._]{3,30}$/;
+  return usernameRegex.test(username);
+}
+
+function isValidName(name) {
+  const nameRegex = /^[a-zA-Z\s\-']{2,50}$/;
+  return nameRegex.test(name.trim());
+}
+
+
+// ============================================================
+// 3. DATA INTEGRITY VALIDATION
+// ============================================================
+function validateDataIntegrity(data) {
+  if (!data || typeof data !== 'object') return false;
+  
+  const requiredArrays = ['users', 'elections', 'categories', 'candidates', 'votes'];
+  for (const arr of requiredArrays) {
+    if (!Array.isArray(data[arr])) return false;
+  }
+  
+  // Check for duplicate IDs
+  const userIds = new Set();
+  const userEmails = new Set();
+  const userUsernames = new Set();
+  
+  for (const user of data.users) {
+    if (!user.id || userIds.has(user.id)) return false;
+    userIds.add(user.id);
+    
+    const email = user.email?.toLowerCase();
+    if (!email || userEmails.has(email)) return false;
+    userEmails.add(email);
+    
+    const username = user.username?.toLowerCase();
+    if (username) {
+      if (userUsernames.has(username)) return false;
+      userUsernames.add(username);
+    }
+  }
+  
+  return true;
+}
+
+
 
 // ══════════════════════════════════════════════════════════════════
 //  CONCURRENCY LAYER
@@ -195,6 +268,8 @@ function mergeData(remote, local) {
 
 // ── Data Load ─────────────────────────────────────────────────────
 // Called once at startup and whenever a background poll fires.
+
+/*
 async function loadData() {
   let data = null;
 
@@ -219,6 +294,78 @@ async function loadData() {
   ensureAdmin();
   return appData;
 }
+*/
+
+// ============================================================
+// 8. IMPROVED loadData WITH FORCE REFRESH OPTION
+// ============================================================
+async function loadData(forceRefresh = false) {
+  let data = null;
+  
+  if (forceRefresh || JBIN_READY) {
+    data = await jbinGet();
+  }
+  
+  if (data) {
+    lsPut(data);
+  } else if (!forceRefresh) {
+    data = lsGet();
+  }
+  
+  if (!data) {
+    data = buildDefaultData();
+    lsPut(data);
+    if (JBIN_READY) {
+      await jbinPut(data);
+    }
+  }
+  
+  // Validate loaded data integrity
+  if (!validateDataIntegrity(data)) {
+    console.error("Loaded data failed integrity check, resetting to defaults");
+    data = buildDefaultData();
+    lsPut(data);
+    if (JBIN_READY) {
+      await jbinPut(data);
+    }
+  }
+  
+  appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...data };
+  ensureAdmin();
+  return appData;
+}
+
+// ============================================================
+// 9. BOOTSTRAP INTEGRITY CHECK ON STARTUP
+// ============================================================
+async function performStartupIntegrityCheck() {
+  if (!JBIN_READY) return true;
+  
+  try {
+    const remote = await jbinGet();
+    if (remote && !validateDataIntegrity(remote)) {
+      console.error("Remote data integrity check FAILED!");
+      showToast("Data integrity issue detected. Contact support.", "error");
+      return false;
+    }
+    
+    const local = lsGet();
+    if (local && !validateDataIntegrity(local)) {
+      console.warn("Local cache integrity check failed - resetting");
+      if (remote && validateDataIntegrity(remote)) {
+        lsPut(remote);
+        appData = { ...remote };
+      }
+    }
+    
+    return true;
+  } catch (e) {
+    console.error("Startup integrity check failed:", e);
+    return false;
+  }
+}
+
+
 
 // ── Atomic Save (read-before-write) ──────────────────────────────
 // This is the ONLY function that writes to JSONBin. It is always
@@ -236,6 +383,8 @@ async function loadData() {
 //   7. Update the global appData so the UI stays consistent.
 //
 // fn: (currentData) => currentData
+
+/*
 async function atomicSave(fn) {
   // 1. Fetch latest remote state
   let remote = JBIN_READY ? await jbinGet() : null;
@@ -275,6 +424,81 @@ async function atomicSave(fn) {
   ensureAdmin();
 
   return appData;
+}
+*/
+
+// ============================================================
+// 4. IMPROVED atomicSave WITH TRANSACTION ISOLATION
+// ============================================================
+async function atomicSave(fn, options = {}) {
+  const { retryOnConflict = true, maxRetries = 3, validate = true } = options;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Fetch latest remote state
+      let remote = JBIN_READY ? await jbinGet() : null;
+      
+      if (JBIN_READY && remote === null && attempt < maxRetries) {
+        console.warn(`atomicSave: remote fetch failed, retry ${attempt}/${maxRetries}`);
+        await sleep(500 * attempt);
+        continue;
+      }
+      
+      // Merge remote with local
+      const base = remote ? mergeData(remote, appData) : appData;
+      const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
+      
+      // Apply mutation
+      const patched = fn ? fn(merged) : merged;
+      
+      // Validate data integrity before saving
+      if (validate && !validateDataIntegrity(patched)) {
+        throw new Error("DATA_INTEGRITY_VIOLATION");
+      }
+      
+      // Save to localStorage (backup)
+      lsPut(patched);
+      
+      // Save to JSONBin if configured
+      let remoteWriteSuccess = false;
+      if (JBIN_READY) {
+        remoteWriteSuccess = await jbinPut(patched);
+        
+        // Verify write by reading back
+        if (remoteWriteSuccess) {
+          const verifyRemote = await jbinGet();
+          if (verifyRemote) {
+            const verifyIntegrity = validateDataIntegrity(verifyRemote);
+            if (!verifyIntegrity) {
+              console.warn("atomicSave: Remote verification failed integrity check");
+              if (retryOnConflict && attempt < maxRetries) {
+                await sleep(500 * attempt);
+                continue;
+              }
+            }
+          }
+        } else if (retryOnConflict && attempt < maxRetries) {
+          await sleep(500 * attempt);
+          continue;
+        }
+      }
+      
+      // Update global state
+      appData = patched;
+      ensureAdmin();
+      
+      return { success: true, data: appData, attempt };
+      
+    } catch (e) {
+      console.error(`atomicSave attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) {
+        return { success: false, error: e.message, data: appData };
+      }
+      await sleep(500 * attempt);
+    }
+  }
+  
+  return { success: false, error: "Max retries exceeded", data: appData };
 }
 
 // Convenience wrapper: enqueue an atomicSave.
@@ -494,6 +718,7 @@ function backToSignIn() {
   pendingValidationUser = null;
 }
 
+/*
 async function doValidateCode() {
   if (!pendingValidationUser) return;
   const entered = [0,1,2,3,4].map(i => document.getElementById(`vc${i}`)?.value || '').join('');
@@ -525,7 +750,80 @@ async function doValidateCode() {
     showAlert('validate-alert', 'Incorrect code. Please try again.', 'error');
   }
 }
+*/
 
+// ============================================================
+// 7. IMPROVED doValidateCode WITH ATOMIC UPDATE
+// ============================================================
+async function doValidateCode() {
+  if (!pendingValidationUser) {
+    showAlert('validate-alert', 'Session expired. Please sign in again.', 'error');
+    backToSignIn();
+    return;
+  }
+  
+  const entered = [0, 1, 2, 3, 4].map(i => document.getElementById(`vc${i}`)?.value || '').join('');
+  
+  if (entered.length < 5) {
+    showAlert('validate-alert', 'Please enter all 5 digits.', 'error');
+    return;
+  }
+  
+  setLoading('btn-validate', true, 'Verifying...');
+  
+  try {
+    // Fetch latest user data
+    await loadData(true);
+    
+    const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
+    if (!freshUser) {
+      showAlert('validate-alert', 'Account not found. Please register again.', 'error');
+      backToSignIn();
+      return;
+    }
+    
+    const expectedCode = freshUser.validation_code;
+    
+    if (entered !== expectedCode) {
+      showAlert('validate-alert', 'Incorrect code. Please try again.', 'error');
+      setLoading('btn-validate', false, 'Verify Email');
+      return;
+    }
+    
+    // Atomic validation update
+    const saveResult = await atomicSave(data => {
+      const user = data.users.find(x => x.id === pendingValidationUser.id);
+      if (user) {
+        user.validated = 'Yes';
+        user.validation_code = '';
+        user.validated_at = now();
+      }
+      return data;
+    });
+    
+    if (!saveResult.success) {
+      throw new Error("Failed to update validation status");
+    }
+    
+    const updatedUser = appData.users.find(x => x.id === pendingValidationUser.id);
+    
+    showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
+    
+    setTimeout(() => {
+      loginSuccess(updatedUser || pendingValidationUser);
+      pendingValidationUser = null;
+    }, 1200);
+    
+  } catch (error) {
+    console.error("Validation error:", error);
+    showAlert('validate-alert', 'Verification failed. Please try again.', 'error');
+    setLoading('btn-validate', false, 'Verify Email');
+  }
+}
+
+
+
+/*
 async function resendValidationCode() {
   if (!pendingValidationUser) return;
   const code = randomCode();
@@ -546,6 +844,82 @@ async function resendValidationCode() {
   await sendValidationEmail(pendingValidationUser.email, pendingValidationUser.name, code);
   showToast('New validation code sent!', 'success');
 }
+*/
+// ============================================================
+// 6. IMPROVED resendValidationCode WITH PROPER STATE MANAGEMENT
+// ============================================================
+async function resendValidationCode() {
+  if (!pendingValidationUser) {
+    showToast("No pending validation user found. Please sign in again.", "error");
+    return;
+  }
+  
+  const resendBtn = document.getElementById('resend-link');
+  const originalText = resendBtn?.textContent || 'Resend';
+  setLoading('resend-link', true, 'Sending...');
+  
+  try {
+    // Fetch latest user data
+    await loadData(true);
+    
+    const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
+    if (!freshUser) {
+      showToast("User account not found. Please register again.", "error");
+      backToSignIn();
+      return;
+    }
+    
+    const newCode = randomCode();
+    
+    // Update validation code atomically
+    const saveResult = await atomicSave(data => {
+      const user = data.users.find(x => x.id === pendingValidationUser.id);
+      if (user) {
+        user.validation_code = newCode;
+        user.updated = now();
+      }
+      return data;
+    });
+    
+    if (!saveResult.success) {
+      throw new Error("Failed to update validation code");
+    }
+    
+    // Send email with retry
+    let emailSent = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      emailSent = await sendValidationEmail(
+        pendingValidationUser.email, 
+        pendingValidationUser.name, 
+        newCode
+      );
+      if (emailSent) break;
+      await sleep(1000);
+    }
+    
+    // Update pendingValidationUser reference
+    const updatedUser = appData.users.find(x => x.id === pendingValidationUser.id);
+    if (updatedUser) {
+      pendingValidationUser = { ...updatedUser };
+    } else {
+      pendingValidationUser.validation_code = newCode;
+    }
+    
+    if (emailSent) {
+      showToast('New validation code sent! Check your email.', 'success');
+    } else {
+      showToast(`Could not send email. Your validation code is: ${newCode}`, 'warning');
+    }
+    
+  } catch (error) {
+    console.error("Resend validation error:", error);
+    showToast("Failed to resend code. Please try again.", "error");
+  } finally {
+    setLoading('resend-link', false, originalText);
+  }
+}
+
+
 
 function loginSuccess(user) {
   currentUser = user;
@@ -600,6 +974,7 @@ document.addEventListener('click', e => {
 });
 
 // ── Register ──────────────────────────────────────────────────────
+/*
 async function doRegister() {
   const name      = v('reg-name').trim();
   const username  = v('reg-username').trim();
@@ -675,6 +1050,173 @@ async function doRegister() {
   pendingValidationUser = appData.users.find(u => u.id === newUser.id) || newUser;
   showValidationCard(email);
 }
+*/
+
+// ============================================================
+// 5. COMPLETE REWRITE OF doRegister WITH PROPER TRANSACTIONS
+// ============================================================
+async function doRegister() {
+  // --- INPUT COLLECTION ---
+  const name = v('reg-name').trim();
+  const username = v('reg-username').trim();
+  const email = v('reg-email').trim().toLowerCase();
+  const password = v('reg-password');
+  const password2 = v('reg-password2');
+  const gender = v('reg-gender');
+  const age = parseInt(v('reg-age'));
+  const phone = v('reg-phone').trim();
+  const address = v('reg-address').trim();
+  
+  // --- VALIDATION ---
+  if (!name || !username || !email || !password || !password2 || !gender || !age || !phone) {
+    showAlert('register-alert', 'Please fill all required fields.', 'error');
+    return;
+  }
+  
+  if (!isValidName(name)) {
+    showAlert('register-alert', 'Please enter a valid name (2-50 characters, letters, spaces, hyphens, apostrophes).', 'error');
+    return;
+  }
+  
+  if (!isValidUsername(username)) {
+    showAlert('register-alert', 'Username must be 3-30 characters (letters, numbers, . and _ only).', 'error');
+    return;
+  }
+  
+  if (!isValidEmail(email)) {
+    showAlert('register-alert', 'Please enter a valid email address.', 'error');
+    return;
+  }
+  
+  if (password !== password2) {
+    showAlert('register-alert', 'Passwords do not match.', 'error');
+    return;
+  }
+  
+  if (password.length < 6) {
+    showAlert('register-alert', 'Password must be at least 6 characters.', 'error');
+    return;
+  }
+  
+  if (isNaN(age) || age < 18 || age > 120) {
+    showAlert('register-alert', 'You must be at least 18 years old.', 'error');
+    return;
+  }
+  
+  if (!isValidPhone(phone)) {
+    showAlert('register-alert', 'Please enter a valid phone number.', 'error');
+    return;
+  }
+  
+  // Disable button to prevent double submission
+  setLoading('btn-register', true, 'Creating Account…');
+  
+  const validationCode = randomCode();
+  const userId = uid();
+  const creationTime = now();
+  
+  // Prepare new user object
+  const newUser = {
+    id: userId,
+    name: name,
+    username: username,
+    email: email,
+    password: hashStr(password),
+    gender: gender,
+    age: age,
+    phone: phone,
+    address: address || "",
+    role: 'voter',
+    validated: 'No',
+    validation_code: validationCode,
+    created: creationTime,
+    updated: creationTime,
+    registration_attempts: 1
+  };
+  
+  try {
+    // --- ATOMIC SAVE WITH CONFLICT DETECTION ---
+    const saveResult = await atomicSave(data => {
+      // CRITICAL: Check duplicates INSIDE the transaction
+      const emailExists = data.users.some(u => u.email.toLowerCase() === email);
+      if (emailExists) {
+        throw new Error("DUPLICATE_EMAIL");
+      }
+      
+      const usernameExists = data.users.some(u => u.username?.toLowerCase() === username.toLowerCase());
+      if (usernameExists) {
+        throw new Error("DUPLICATE_USERNAME");
+      }
+      
+      data.users.push(newUser);
+      return data;
+    }, { retryOnConflict: true, maxRetries: 3 });
+    
+    if (!saveResult.success) {
+      if (saveResult.error === "DUPLICATE_EMAIL") {
+        setLoading('btn-register', false, 'Create Account →');
+        showAlert('register-alert', 'This email is already registered.', 'error');
+        return;
+      }
+      if (saveResult.error === "DUPLICATE_USERNAME") {
+        setLoading('btn-register', false, 'Create Account →');
+        showAlert('register-alert', 'This username is already taken.', 'error');
+        return;
+      }
+      throw new Error(saveResult.error);
+    }
+    
+    // --- EMAIL SENDING WITH RETRY (NON-CRITICAL FOR REGISTRATION) ---
+    let emailSent = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        emailSent = await sendValidationEmail(email, name, validationCode);
+        if (emailSent) break;
+        await sleep(1000);
+      } catch (emailError) {
+        console.warn(`Email attempt ${attempt} failed:`, emailError);
+      }
+    }
+    
+    // Reset button state
+    setLoading('btn-register', false, 'Create Account →');
+    
+    // Success messaging
+    if (emailSent) {
+      showToast('Account created! Check your email for the verification code.', 'success');
+    } else {
+      showToast(`Account created! Your verification code is: ${validationCode}`, 'warning');
+    }
+    
+    // Get the persisted user and proceed to validation
+    const persistedUser = appData.users.find(u => u.id === userId);
+    if (!persistedUser) {
+      throw new Error("User not found after save");
+    }
+    
+    pendingValidationUser = persistedUser;
+    showValidationCard(email);
+    
+  } catch (error) {
+    console.error("Registration error:", error);
+    setLoading('btn-register', false, 'Create Account →');
+    
+    // Attempt to rollback if user was created but something else failed
+    if (error.message !== "DUPLICATE_EMAIL" && error.message !== "DUPLICATE_USERNAME") {
+      // Try to remove the partially created user
+      await atomicSave(data => {
+        data.users = data.users.filter(u => u.id !== userId);
+        return data;
+      }, { validate: false }).catch(rollbackError => {
+        console.error("Rollback failed:", rollbackError);
+      });
+    }
+    
+    showAlert('register-alert', 'Registration failed. Please try again.', 'error');
+  }
+}
+
+
 
 // ── Logout ────────────────────────────────────────────────────────
 function logout() {
@@ -1632,6 +2174,7 @@ function setText(id, txt) { const el=document.getElementById(id); if(el) el.text
 function esc(str)         { if(!str) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Init ──────────────────────────────────────────────────────────
+/*
 async function init() {
   await loadData();
   _initHamburger();
@@ -1651,6 +2194,40 @@ async function init() {
 
   const dateEl = document.getElementById('admin-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+*/
+// ============================================================
+// 10. UPDATE INIT FUNCTION TO INCLUDE INTEGRITY CHECK
+// ============================================================
+// Replace your existing init function with this:
+async function init() {
+  await loadData();
+  await performStartupIntegrityCheck();
+  _initHamburger();
+  
+  const session = lsSessionGet();
+  if (session) {
+    const user = appData.users.find(u => u.id === session.id);
+    if (user && user.validated === 'Yes') {
+      currentUser = user;
+      updateHeaderForUser(user);
+      startPolling();
+    } else if (user && user.validated === 'No') {
+      // User exists but not validated - clear invalid session
+      lsSessionClear();
+    }
+  }
+  
+  refreshAdminStats();
+  renderHomePage();
+  
+  const dateEl = document.getElementById('admin-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
