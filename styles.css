@@ -3332,3 +3332,123 @@ footer {
     }
 }
 
+/* ============ CATEGORY PRODUCTS PAGINATION ============ */
+
+/* Pagination controls styling */
+.category-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 2rem 0 1rem;
+    flex-wrap: wrap;
+}
+
+.category-pagination button {
+    min-width: 40px;
+    height: 40px;
+    padding: 0 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: var(--dark-gray);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.category-pagination button:hover:not(:disabled) {
+    background: var(--primary-purple);
+    color: white;
+    border-color: var(--primary-purple);
+    transform: translateY(-2px);
+}
+
+.category-pagination button.active {
+    background: var(--primary-purple);
+    color: white;
+    border-color: var(--primary-purple);
+}
+
+.category-pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.category-pagination .pagination-nav {
+    background: var(--primary-purple);
+    color: white;
+    border: none;
+}
+
+.category-pagination .pagination-nav:hover:not(:disabled) {
+    background: var(--primary-red);
+}
+
+.category-pagination .pagination-ellipsis {
+    padding: 0 0.5rem;
+    color: #666;
+}
+
+.category-pagination-info {
+    margin: 0 1rem;
+    color: #666;
+    font-size: 0.85rem;
+}
+
+/* Products per page selector */
+.category-per-page {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0 1rem auto;
+    justify-content: flex-end;
+}
+
+.category-per-page label {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.category-per-page select {
+    padding: 0.4rem 1.5rem 0.4rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: white;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a4c9c' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .category-pagination button {
+        min-width: 36px;
+        height: 36px;
+        font-size: 0.85rem;
+    }
+    
+    .category-per-page {
+        margin-left: 0;
+        justify-content: flex-start;
+        margin-bottom: 0.75rem;
+    }
+    
+    .category-pagination-info {
+        width: 100%;
+        text-align: center;
+        margin: 0.5rem 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .category-pagination button {
+        min-width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+        padding: 0 0.5rem;
+    }
+}
