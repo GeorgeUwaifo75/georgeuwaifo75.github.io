@@ -1,243 +1,4 @@
 // app.js
-
-// ============ CATEGORY PRODUCT PAGINATION ============
-
-// Global variables for category product pagination
-let currentCategoryProducts = [];
-let currentCategoryPage = 1;
-let currentCategoryPerPage = 6;
-let currentCategoryName = '';
-
-// Function to render paginated category products
-function renderCategoryProducts() {
-    const productsGrid = document.getElementById('productsGrid');
-    if (!productsGrid) return;
-    
-    const start = (currentCategoryPage - 1) * currentCategoryPerPage;
-    const end = start + currentCategoryPerPage;
-    const pageProducts = currentCategoryProducts.slice(start, end);
-    const totalPages = Math.ceil(currentCategoryProducts.length / currentCategoryPerPage);
-    
-    // Clear grid
-    productsGrid.innerHTML = '';
-    
-    if (pageProducts.length === 0) {
-        productsGrid.innerHTML = '<p class="text-center">No products in this category yet.</p>';
-        return;
-    }
-    
-    // Render products for current page
-    pageProducts.forEach(product => {
-        const card = createProductCard(product);
-        productsGrid.appendChild(card);
-    });
-    
-    // Add pagination controls if needed
-    if (totalPages > 1) {
-        addCategoryPaginationControls(totalPages);
-    } else {
-        // Remove existing pagination if any
-        const existingPagination = document.querySelector('.category-pagination-wrapper');
-        if (existingPagination) existingPagination.remove();
-    }
-}
-
-// Function to add pagination controls for category products
-function addCategoryPaginationControls(totalPages) {
-    // Remove existing pagination wrapper if any
-    const existingWrapper = document.querySelector('.category-pagination-wrapper');
-    if (existingWrapper) existingWrapper.remove();
-    
-    // Create wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'category-pagination-wrapper';
-    
-    // Per page selector (only if total products > 6)
-    if (currentCategoryProducts.length > 6) {
-        const perPageDiv = document.createElement('div');
-        perPageDiv.className = 'category-per-page';
-        perPageDiv.innerHTML = `
-            <label>Show:</label>
-            <select id="categoryPerPageSelect">
-                <option value="6" ${currentCategoryPerPage === 6 ? 'selected' : ''}>6 per page</option>
-                <option value="12" ${currentCategoryPerPage === 12 ? 'selected' : ''}>12 per page</option>
-                <option value="24" ${currentCategoryPerPage === 24 ? 'selected' : ''}>24 per page</option>
-                <option value="48" ${currentCategoryPerPage === 48 ? 'selected' : ''}>48 per page</option>
-            </select>
-        `;
-        wrapper.appendChild(perPageDiv);
-        
-        // Add event listener for per page change
-        const perPageSelect = document.getElementById('categoryPerPageSelect');
-        if (perPageSelect) {
-            perPageSelect.addEventListener('change', (e) => {
-                currentCategoryPerPage = parseInt(e.target.value);
-                currentCategoryPage = 1;
-                renderCategoryProducts();
-            });
-        }
-    }
-    
-    // Pagination controls
-    const paginationDiv = document.createElement('div');
-    paginationDiv.className = 'category-pagination';
-    
-    // Previous button
-    const prevBtn = document.createElement('button');
-    prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
-    prevBtn.disabled = currentCategoryPage === 1;
-    prevBtn.addEventListener('click', () => {
-        if (currentCategoryPage > 1) {
-            currentCategoryPage--;
-            renderCategoryProducts();
-            // Scroll to top of products section smoothly
-            document.getElementById('productsSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    });
-    paginationDiv.appendChild(prevBtn);
-    
-    // Page numbers
-    const maxVisiblePages = window.innerWidth <= 480 ? 3 : 5;
-    let startPage = Math.max(1, currentCategoryPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-    
-    if (startPage > 1) {
-        const firstBtn = document.createElement('button');
-        firstBtn.textContent = '1';
-        firstBtn.addEventListener('click', () => {
-            currentCategoryPage = 1;
-            renderCategoryProducts();
-            document.getElementById('productsSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-        paginationDiv.appendChild(firstBtn);
-        
-        if (startPage > 2) {
-            const ellipsis = document.createElement('span');
-            ellipsis.className = 'pagination-ellipsis';
-            ellipsis.textContent = '...';
-            paginationDiv.appendChild(ellipsis);
-        }
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.textContent = i;
-        if (i === currentCategoryPage) {
-            pageBtn.classList.add('active');
-        }
-        pageBtn.addEventListener('click', () => {
-            currentCategoryPage = i;
-            renderCategoryProducts();
-            document.getElementById('productsSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-        paginationDiv.appendChild(pageBtn);
-    }
-    
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            const ellipsis = document.createElement('span');
-            ellipsis.className = 'pagination-ellipsis';
-            ellipsis.textContent = '...';
-            paginationDiv.appendChild(ellipsis);
-        }
-        const lastBtn = document.createElement('button');
-        lastBtn.textContent = totalPages;
-        lastBtn.addEventListener('click', () => {
-            currentCategoryPage = totalPages;
-            renderCategoryProducts();
-            document.getElementById('productsSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-        paginationDiv.appendChild(lastBtn);
-    }
-    
-    // Next button
-    const nextBtn = document.createElement('button');
-    nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
-    nextBtn.disabled = currentCategoryPage === totalPages;
-    nextBtn.addEventListener('click', () => {
-        if (currentCategoryPage < totalPages) {
-            currentCategoryPage++;
-            renderCategoryProducts();
-            document.getElementById('productsSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    });
-    paginationDiv.appendChild(nextBtn);
-    
-    // Info text
-    const infoSpan = document.createElement('span');
-    infoSpan.className = 'category-pagination-info';
-    const startRecord = (currentCategoryPage - 1) * currentCategoryPerPage + 1;
-    const endRecord = Math.min(startRecord + currentCategoryPerPage - 1, currentCategoryProducts.length);
-    infoSpan.textContent = `Showing ${startRecord}-${endRecord} of ${currentCategoryProducts.length} products`;
-    paginationDiv.appendChild(infoSpan);
-    
-    wrapper.appendChild(paginationDiv);
-    
-    // Insert after products grid
-    const productsGrid = document.getElementById('productsGrid');
-    if (productsGrid && productsGrid.parentNode) {
-        productsGrid.parentNode.insertBefore(wrapper, productsGrid.nextSibling);
-    }
-}
-
-// Modified loadProductsByCategory function with pagination
-async function loadProductsByCategory(category) {
-    console.log(`Loading products for category: ${category}`);
-    
-    try {
-        const productsGrid = document.getElementById('productsGrid');
-        const categoryTitle = document.getElementById('currentCategoryTitle');
-        
-        if (!productsGrid || !categoryTitle) {
-            console.error('Required elements not found');
-            return;
-        }
-        
-        categoryTitle.textContent = category;
-        productsGrid.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
-        
-        // Remove existing pagination wrapper if any
-        const existingWrapper = document.querySelector('.category-pagination-wrapper');
-        if (existingWrapper) existingWrapper.remove();
-        
-        // Get products for this category
-        const products = await api.getProductsByCategory(category);
-        console.log(`Found ${products.length} products in ${category}`);
-        
-        // Sort by date (newest first)
-        products.sort((a, b) => new Date(b.dateAdvertised) - new Date(a.dateAdvertised));
-        
-        // Store in global variable
-        currentCategoryProducts = products;
-        currentCategoryName = category;
-        currentCategoryPage = 1;
-        
-        if (products.length === 0) {
-            productsGrid.innerHTML = '<p class="text-center">No products in this category yet.</p>';
-            return;
-        }
-        
-        // Render paginated products
-        renderCategoryProducts();
-        
-        // Show the products section
-        showSection('productsSection');
-        
-    } catch (error) {
-        console.error('Error loading products by category:', error);
-        const productsGrid = document.getElementById('productsGrid');
-        if (productsGrid) {
-            productsGrid.innerHTML = '<p class="text-center">Error loading products. Please try again.</p>';
-        }
-    }
-}
-
-
-
 let pendingProductData = null; // Store product data while processing payment
 
 
@@ -482,15 +243,6 @@ function displaySearchResults(results, searchTerm) {
     const productsGrid = document.getElementById('productsGrid');
     const categoryTitle = document.getElementById('currentCategoryTitle');
     
-    // Remove existing pagination wrapper
-    const existingWrapper = document.querySelector('.category-pagination-wrapper');
-    if (existingWrapper) existingWrapper.remove();
-    
-    // Store results for pagination
-    currentCategoryProducts = results;
-    currentCategoryName = 'search';
-    currentCategoryPage = 1;
-    
     // Update header with search results info
     categoryTitle.innerHTML = `
         <div class="search-results-header">
@@ -505,6 +257,9 @@ function displaySearchResults(results, searchTerm) {
         </div>
     `;
     
+    // Clear and populate grid
+    productsGrid.innerHTML = '';
+    
     if (results.length === 0) {
         productsGrid.innerHTML = `
             <div class="no-results">
@@ -516,14 +271,22 @@ function displaySearchResults(results, searchTerm) {
             </div>
         `;
     } else {
-        renderCategoryProducts();
+        results.forEach(product => {
+            // Create highlighted version of name and description
+            const highlightedProduct = {
+                ...product,
+                displayName: highlightText(product.name, searchTerm),
+                displayDescription: highlightText(product.description, searchTerm)
+            };
+            
+            const card = createSearchResultCard(highlightedProduct, searchTerm);
+            productsGrid.appendChild(card);
+        });
     }
     
     // Show the products section
     showSection('productsSection');
 }
-
-
 /*New add*/
 // Function to create product card for category display
 function createProductCard(product) {
@@ -615,29 +378,9 @@ async function cleanupFailedProduct(imageUrls) {
 
 
 // Clear search and return to categories
-/*
 function clearSearch() {
     const searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.value = '';
-    
-    // Go back to categories
-    showSection('categoriesSection');
-    
-    // Reset category title
-    document.getElementById('currentCategoryTitle').textContent = '';
-}
-*/
-function clearSearch() {
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) searchInput.value = '';
-    
-    // Remove pagination wrapper when returning to categories
-    const existingWrapper = document.querySelector('.category-pagination-wrapper');
-    if (existingWrapper) existingWrapper.remove();
-    
-    // Reset pagination variables
-    currentCategoryProducts = [];
-    currentCategoryPage = 1;
     
     // Go back to categories
     showSection('categoriesSection');
@@ -1399,13 +1142,6 @@ dropdowns.forEach(dropdown => {
                 icon.classList.add('fa-bars');
             }
             
-            
-             // Only re-render if we're in products section with products
-              if (document.getElementById('productsSection').classList.contains('active') && 
-                  currentCategoryProducts.length > 0) {
-                  renderCategoryProducts();
-              }
-            
             // Close all dropdowns
             const dropdowns = document.querySelectorAll('.dropdown');
             dropdowns.forEach(dropdown => {
@@ -1663,6 +1399,10 @@ function initializeNavigation() {
 
     // Back buttons
     document.getElementById('backToCategories').addEventListener('click', () => {
+        // Clean up category pagination when going back
+        const pag = document.getElementById('categoryPaginationControls');
+        if (pag) pag.remove();
+        categoryPaginationState = { allProducts: [], currentPage: 1, totalPages: 1, currentCategory: '' };
         showSection('categoriesSection');
     });
 
@@ -2026,6 +1766,88 @@ async function createProduct(paymentStatus, productData = null, paymentType = nu
 }
 
 
+// ============ CATEGORY PAGINATION STATE ============
+const CATEGORY_PRODUCTS_PER_PAGE = 6;
+let categoryPaginationState = {
+    allProducts: [],
+    currentPage: 1,
+    totalPages: 1,
+    currentCategory: ''
+};
+
+function renderCategoryPage(page) {
+    const { allProducts } = categoryPaginationState;
+    const totalPages = Math.ceil(allProducts.length / CATEGORY_PRODUCTS_PER_PAGE);
+    categoryPaginationState.currentPage = Math.max(1, Math.min(page, totalPages));
+    categoryPaginationState.totalPages = totalPages;
+
+    const productsGrid = document.getElementById('productsGrid');
+    const start = (categoryPaginationState.currentPage - 1) * CATEGORY_PRODUCTS_PER_PAGE;
+    const pageItems = allProducts.slice(start, start + CATEGORY_PRODUCTS_PER_PAGE);
+
+    productsGrid.innerHTML = '';
+    pageItems.forEach(product => {
+        const card = createProductCard(product);
+        productsGrid.appendChild(card);
+    });
+
+    renderCategoryPaginationControls();
+
+    // Scroll to top of products section smoothly
+    const productsSection = document.getElementById('productsSection');
+    if (productsSection) {
+        productsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function renderCategoryPaginationControls() {
+    // Remove any existing pagination
+    const existing = document.getElementById('categoryPaginationControls');
+    if (existing) existing.remove();
+
+    const { currentPage, totalPages, allProducts } = categoryPaginationState;
+    if (totalPages <= 1) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'categoryPaginationControls';
+    wrapper.className = 'category-pagination-wrapper';
+
+    // Build page numbers with ellipsis
+    let pageButtons = '';
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            pageButtons += `<button class="cat-page-btn ${i === currentPage ? 'active' : ''}" 
+                onclick="renderCategoryPage(${i})" aria-label="Page ${i}">${i}</button>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            pageButtons += `<span class="cat-page-ellipsis">…</span>`;
+        }
+    }
+
+    const start = (currentPage - 1) * CATEGORY_PRODUCTS_PER_PAGE + 1;
+    const end = Math.min(currentPage * CATEGORY_PRODUCTS_PER_PAGE, allProducts.length);
+
+    wrapper.innerHTML = `
+        <div class="cat-pagination-info">
+            Showing <strong>${start}–${end}</strong> of <strong>${allProducts.length}</strong> products
+        </div>
+        <div class="cat-pagination-controls">
+            <button class="cat-nav-btn" onclick="renderCategoryPage(${currentPage - 1})" 
+                ${currentPage === 1 ? 'disabled' : ''} aria-label="Previous page">
+                <i class="fas fa-chevron-left"></i> Prev
+            </button>
+            <div class="cat-page-numbers">${pageButtons}</div>
+            <button class="cat-nav-btn" onclick="renderCategoryPage(${currentPage + 1})" 
+                ${currentPage === totalPages ? 'disabled' : ''} aria-label="Next page">
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    `;
+
+    // Insert after the productsGrid
+    const productsGrid = document.getElementById('productsGrid');
+    productsGrid.parentNode.insertBefore(wrapper, productsGrid.nextSibling);
+}
+
 async function loadProductsByCategory(category) {
     console.log(`Loading products for category: ${category}`);
     
@@ -2038,6 +1860,10 @@ async function loadProductsByCategory(category) {
             console.error('Required elements not found');
             return;
         }
+
+        // Clear any existing pagination controls
+        const existingPag = document.getElementById('categoryPaginationControls');
+        if (existingPag) existingPag.remove();
         
         categoryTitle.textContent = category;
         productsGrid.innerHTML = '<div class="loading-spinner" style="margin: 2rem auto;"></div>';
@@ -2054,11 +1880,24 @@ async function loadProductsByCategory(category) {
         } else {
             // Sort by date (newest first)
             products.sort((a, b) => new Date(b.dateAdvertised) - new Date(a.dateAdvertised));
-            
-            products.forEach(product => {
-                const card = createProductCard(product);
-                productsGrid.appendChild(card);
-            });
+
+            if (products.length > CATEGORY_PRODUCTS_PER_PAGE) {
+                // Use pagination
+                categoryPaginationState = {
+                    allProducts: products,
+                    currentPage: 1,
+                    totalPages: Math.ceil(products.length / CATEGORY_PRODUCTS_PER_PAGE),
+                    currentCategory: category
+                };
+                renderCategoryPage(1);
+            } else {
+                // No pagination needed — render all
+                categoryPaginationState = { allProducts: [], currentPage: 1, totalPages: 1, currentCategory: '' };
+                products.forEach(product => {
+                    const card = createProductCard(product);
+                    productsGrid.appendChild(card);
+                });
+            }
         }
         
         // Show the products section
@@ -2066,7 +1905,8 @@ async function loadProductsByCategory(category) {
         
     } catch (error) {
         console.error('Error loading products by category:', error);
-        productsGrid.innerHTML = '<p class="text-center">Error loading products. Please try again.</p>';
+        const productsGrid = document.getElementById('productsGrid');
+        if (productsGrid) productsGrid.innerHTML = '<p class="text-center">Error loading products. Please try again.</p>';
     }
 }
 
