@@ -370,8 +370,24 @@ async function doSignup() {
     newUser.branch   = el('regBranch').value.trim();
   }
   if (type === 2) {
-    newUser.picture = el('regPicture').value.trim();
-    newUser.idCard  = el('regIdCard').value.trim();
+    // Upload profile picture if selected
+    const picFile  = el('regPicture')?.files?.[0];
+    const cardFile = el('regIdCard')?.files?.[0];
+    if (picFile) {
+      try {
+        el('signupError').textContent = 'Uploading profile picture…';
+        newUser.picture = await uploadImageToFirebase(
+          picFile, `faithworks/users/${uid}_picture_${Date.now()}_${picFile.name}`);
+      } catch (e) { console.error('Profile picture upload failed:', e); }
+    }
+    if (cardFile) {
+      try {
+        el('signupError').textContent = 'Uploading ID card photo…';
+        newUser.idCard = await uploadImageToFirebase(
+          cardFile, `faithworks/users/${uid}_idcard_${Date.now()}_${cardFile.name}`);
+      } catch (e) { console.error('ID card upload failed:', e); }
+    }
+    el('signupError').textContent = '';
   }
   if (type === 1) {
     newUser.churchName    = el('regChurchName').value.trim();
@@ -386,9 +402,21 @@ async function doSignup() {
   await dbTransaction(db => db.users.push(newUser));
 
   if (type === 2) {
-    setErr('signupError', 'Account created! Awaiting admin approval.', false);
+    setErr('signupError', 'Account created! Awaiting admin approval. Redirecting to sign in…', false);
+    setTimeout(() => {
+      setErr('signupError', '', false);
+      switchTab('login');
+      const card = document.querySelector('.auth-card');
+      if (card) card.scrollTop = 0;
+    }, 2500);
   } else if (type === 1) {
-    setErr('signupError', 'Church account created! Awaiting super admin approval.', false);
+    setErr('signupError', 'Church account created! Awaiting super admin approval. Redirecting to sign in…', false);
+    setTimeout(() => {
+      setErr('signupError', '', false);
+      switchTab('login');
+      const card = document.querySelector('.auth-card');
+      if (card) card.scrollTop = 0;
+    }, 2500);
   } else {
     currentUser = newUser;
     sessionStorage.setItem('fw_user', JSON.stringify(newUser));
@@ -421,9 +449,13 @@ function doLogout() {
   if (backdrop) backdrop.classList.add('hidden');
 
   ['loginId','loginPass','regId','regPass','regEmail','regPhone',
-   'regState','regAddress','regBranch','regPicture','regIdCard',
+   'regState','regAddress','regBranch',
    'regChurchName','regLeader','regDenom','regMemberSize'].forEach(id => {
     const inp = el(id); if (inp) inp.value = '';
+  });
+  // Reset file inputs separately
+  ['regPicture','regIdCard'].forEach(id => {
+    const inp = el(id); if (inp) { try { inp.value = ''; } catch(_) {} }
   });
 
   const signupType = el('signupType'); if (signupType) signupType.value = '3';
@@ -874,12 +906,34 @@ async function submitJob() {
   const price = el('jobPrice').value;
   const avail = el('jobAvail').value.trim();
   const scope = el('jobScope').value;
-  const photosRaw = el('jobPhotos').value;
 
   if (!title || !cat || !desc) return setErr('jobError', 'Please fill required fields.');
   if (!currentUser.churchId)   return setErr('jobError', 'No church linked to your account.');
 
-  const photos = photosRaw.split(',').map(p => p.trim()).filter(Boolean).slice(0, 4);
+  // Upload photos from file input
+  const photosInput = el('jobPhotos');
+  let photos = [];
+  if (photosInput && photosInput.files && photosInput.files.length) {
+    const statusEl = el('jobPhotosStatus');
+    if (statusEl) statusEl.textContent = 'Uploading photos…';
+    const submitBtn = document.querySelector('#sec-newJob .btn-primary');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…'; }
+    try {
+      for (const file of Array.from(photosInput.files).slice(0, 4)) {
+        const url = await uploadImageToFirebase(
+          file, `faithworks/jobs/${currentUser.userId}_${Date.now()}_${file.name}`);
+        photos.push(url);
+      }
+    } catch (e) {
+      console.error('Photo upload error:', e);
+      setErr('jobError', 'Photo upload failed. Please try again.');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'Submit for Approval'; }
+      if (statusEl) statusEl.textContent = '';
+      return;
+    }
+    if (statusEl) statusEl.textContent = `${photos.length} photo(s) uploaded.`;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'Submit for Approval'; }
+  }
   const job = {
     jobId        : genId('job'),
     title, category: cat, description: desc,
@@ -1359,7 +1413,7 @@ function adminTab(tab) {
             <td>${s.subscribed ? '✅' : '❌'}</td>
             <td class="action-btns">
               <button class="btn-${s.active?'danger':'success'}"
-                onclick="toggleUserActive('${s.userId}')">${s.active?'Deactivate':'Activate'}</button>
+                onclick="toggleUserActive('${s.userId}', () => adminTab('sellers'))">${s.active?'Deactivate':'Activate'}</button>
             </td>
           </tr>`).join('')}
         </tbody></table></div>`
@@ -1390,12 +1444,16 @@ async function rejectJob(jobId) {
   adminTab('pendingJobs');
 }
 
-async function toggleUserActive(userId) {
+async function toggleUserActive(userId, refreshCallback) {
   await dbTransaction(db => {
     const u = db.users.find(u => u.userId === userId);
     if (u) u.active = !u.active;
   });
-  adminTab('sellers');
+  if (typeof refreshCallback === 'function') {
+    refreshCallback();
+  } else {
+    adminTab('sellers');   // safe default
+  }
 }
 
 
@@ -1443,7 +1501,7 @@ function merchantTab(tab) {
             <td>${escHtml(u.email||'')}</td>
             <td><span class="status-badge status-${u.active?'active':'inactive'}">${u.active?'Active':'Inactive'}</span></td>
             <td><button class="btn-${u.active?'danger':'success'}"
-              onclick="toggleUserActive('${u.userId}');merchantTab('members')">${u.active?'Deactivate':'Activate'}</button></td>
+              onclick="toggleUserActive('${u.userId}', () => merchantTab('members'))">${u.active?'Deactivate':'Activate'}</button></td>
           </tr>`).join('')}
         </tbody></table></div>`
     : '<div class="empty-state"><i class="fas fa-users"></i><p>No members yet.</p></div>';
@@ -1507,7 +1565,7 @@ function superTab(tab) {
             <td><span class="status-badge status-${u.active?'active':'inactive'}">${u.active?'Active':'Inactive'}</span></td>
             <td class="action-btns">
               <button class="btn-${u.active?'danger':'success'}"
-                onclick="toggleUserActive('${u.userId}');superTab('users')">${u.active?'Deactivate':'Activate'}</button>
+                onclick="toggleUserActive('${u.userId}', () => superTab('users'))">${u.active?'Deactivate':'Activate'}</button>
               <button class="btn-danger" onclick="deleteUser('${u.userId}')">Delete</button>
             </td>
           </tr>`).join('')}
@@ -1528,7 +1586,7 @@ function superTab(tab) {
             <td><span class="status-badge status-${m.active?'active':'inactive'}">${m.active?'Active':'Inactive'}</span></td>
             <td class="action-btns">
               <button class="btn-${m.active?'danger':'success'}"
-                onclick="toggleUserActive('${m.userId}');superTab('merchants')">${m.active?'Deactivate':'Activate'}</button>
+                onclick="toggleUserActive('${m.userId}', () => superTab('merchants'))">${m.active?'Deactivate':'Activate'}</button>
             </td>
           </tr>`).join('')}
         </tbody></table></div>`
