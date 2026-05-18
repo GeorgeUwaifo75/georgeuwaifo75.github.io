@@ -1542,7 +1542,7 @@ async function updateMerchantSetting(key, value) {
    SUPER ADMIN
    ═══════════════════════════════════════════════════════════ */
 function superTab(tab) {
-  if (!DB || !DB.users) return;   // DB guaranteed by bootApp
+  if (!DB) { setTimeout(() => superTab(tab), 150); return; }
 
   document.querySelectorAll('#sec-superPanel .tab-btn').forEach((b, i) => {
     b.classList.toggle('active', ['users','merchants','payments','newAdmin'][i] === tab);
@@ -1552,9 +1552,9 @@ function superTab(tab) {
   if (!c) return;
 
   if (tab === 'users') {
-    const users  = DB.users.filter(u => u.user_group !== 0);
+    const users  = (DB.users || []).filter(u => u.user_group !== 0);
     const labels = { 0:'SuperAdmin', 1:'Church', 2:'Seller', 3:'User' };
-    c.innerHTML = `
+    c.innerHTML = users.length ? `
       <div class="admin-table-wrap"><table class="admin-table">
         <thead><tr><th>User ID</th><th>Role</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>${users.map(u => `
@@ -1569,7 +1569,8 @@ function superTab(tab) {
               <button class="btn-danger" onclick="deleteUser('${u.userId}')">Delete</button>
             </td>
           </tr>`).join('')}
-        </tbody></table></div>`;
+        </tbody></table></div>`
+    : '<div class="empty-state"><i class="fas fa-users"></i><p>No users found.</p></div>';
 
   } else if (tab === 'merchants') {
     const merchants = DB.users.filter(u => u.user_group === 1);
@@ -1641,6 +1642,7 @@ async function setCommission(merchantId, pct) {
 async function deleteUser(userId) {
   if (!confirm(`Delete user ${userId}? This cannot be undone.`)) return;
   await dbTransaction(db => { db.users = db.users.filter(u => u.userId !== userId); });
+  await dbRead(true);   // ensure local DB reflects the committed state before re-render
   superTab('users');
 }
 
