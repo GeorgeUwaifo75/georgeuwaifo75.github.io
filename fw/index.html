@@ -131,12 +131,14 @@
         <!-- Seller-only extras -->
         <div id="sellerFields" class="hidden">
           <div class="form-group">
-            <label>Profile Picture URL</label>
-            <input type="text" id="regPicture" placeholder="https://..."/>
+            <label>Profile Picture</label>
+            <input type="file" id="regPicture" accept="image/*"/>
+            <span id="regPictureStatus" style="font-size:.78rem;color:var(--gray);"></span>
           </div>
           <div class="form-group">
-            <label>ID Card Photo URL</label>
-            <input type="text" id="regIdCard" placeholder="https://..."/>
+            <label>ID Card Photo</label>
+            <input type="file" id="regIdCard" accept="image/*"/>
+            <span id="regIdCardStatus" style="font-size:.78rem;color:var(--gray);"></span>
           </div>
         </div>
 
@@ -346,8 +348,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Photo URLs (up to 4, comma-separated)</label>
-            <input type="text" id="jobPhotos" placeholder="https://photo1.jpg, https://photo2.jpg"/>
+            <label>Photos (up to 4 images)</label>
+            <input type="file" id="jobPhotos" accept="image/*" multiple/>
+            <span id="jobPhotosStatus" style="font-size:.78rem;color:var(--gray);margin-top:4px;display:block;"></span>
           </div>
           <div class="btn-row">
             <button class="btn-secondary" onclick="showSection('myJobs')">Cancel</button>
@@ -523,4 +526,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
