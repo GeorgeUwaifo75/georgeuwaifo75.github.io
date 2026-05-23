@@ -1488,7 +1488,17 @@ function updateBadges() {
     if (!c.participants.includes(uid)) return acc;
     return acc + c.messages.filter(m => m.to === uid && !m.read).length;
   }, 0);
-  setBadge('notifBadge', unreadNotifs);
+
+  // For Merchant accounts (user_group === 1), add the count of pending listing
+  // approvals to the notification bell so it lights up without delay.
+  let pendingApprovals = 0;
+  if (currentUser.user_group === 1) {
+    pendingApprovals = (DB.jobs || []).filter(
+      j => j.merchantId === uid && j.status === 'pending'
+    ).length;
+  }
+
+  setBadge('notifBadge', unreadNotifs + pendingApprovals);
   setBadge('chatBadge',  unreadChats);
   syncBottomNavBadges();   // mirror counts to mobile bottom nav
 }
