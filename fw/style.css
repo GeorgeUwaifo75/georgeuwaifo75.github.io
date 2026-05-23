@@ -1158,3 +1158,27 @@ h1, h2, h3, h4 { font-family: 'Playfair Display', serif; }
   .top-nav          { padding: 0 10px; gap: 8px; }
 }
 
+/* ── Password visibility wrapper ── */
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pw-wrap input {
+  flex: 1;
+  padding-right: 42px !important;
+}
+.pw-eye {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray);
+  font-size: 0.92rem;
+  padding: 4px;
+  line-height: 1;
+  touch-action: manipulation;
+  transition: color 0.2s;
+}
+.pw-eye:hover { color: var(--blue); }
