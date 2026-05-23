@@ -351,7 +351,9 @@ async function doSignup() {
   const state = el('regState').value.trim();
   const addr  = el('regAddress').value.trim();
 
+  const passConfirm = el('regPassConfirm').value;
   if (!uid || !pass || !email) return setErr('signupError', 'Please fill required fields.');
+  if (pass !== passConfirm) return setErr('signupError', 'Passwords do not match.');
   if (type === 2 && !el('regChurch').value) return setErr('signupError', 'Sellers must select a Church.');
 
   await dbRead(true);
@@ -448,7 +450,7 @@ function doLogout() {
   if (sideNav)  sideNav.classList.remove('drawer-open');
   if (backdrop) backdrop.classList.add('hidden');
 
-  ['loginId','loginPass','regId','regPass','regEmail','regPhone',
+  ['loginId','loginPass','regId','regPass','regPassConfirm','regEmail','regPhone',
    'regState','regAddress','regBranch',
    'regChurchName','regLeader','regDenom','regMemberSize'].forEach(id => {
     const inp = el(id); if (inp) inp.value = '';
@@ -880,9 +882,14 @@ function _doRenderMyJobs() {
         </div>
         <div>
           <div class="job-price">₦${Number(j.price || 0).toLocaleString()}</div>
-          ${j.status === 'approved'
-            ? `<button class="btn-orange mt-8" onclick="openJobDetail('${j.jobId}')">View</button>`
-            : ''}
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+            ${j.status === 'approved'
+              ? `<button class="btn-orange" onclick="openJobDetail('${j.jobId}')">View</button>`
+              : ''}
+            <button class="btn-secondary" style="padding:6px 12px;font-size:.82rem;" onclick="openEditJob('${j.jobId}')">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -951,6 +958,12 @@ async function submitJob() {
     await dbTransaction(db => db.jobs.push(job));
     addNotification(currentUser.churchId,
       `New job listing pending approval: "${title}" by ${currentUser.userId}`);
+    // Email notification to the Merchant administrator
+    const merchant = DB.users.find(u => u.userId === currentUser.churchId && u.user_group === 1);
+    if (merchant && merchant.email) {
+      sendNewListingEmailAlert(merchant.email, merchant.churchName || merchant.userId,
+        currentUser.userId, title, cat);
+    }
     setErr('jobError', '✅ Listing submitted for approval!', false);
     setTimeout(() => showSection('myJobs'), 1500);
   } catch (e) {
@@ -960,8 +973,113 @@ async function submitJob() {
 
 
 /* ═══════════════════════════════════════════════════════════
-   CHAT
+   EDIT JOB (Seller)
    ═══════════════════════════════════════════════════════════ */
+function openEditJob(jobId) {
+  const j = DB.jobs.find(j => j.jobId === jobId);
+  if (!j) return;
+
+  // Populate category dropdown
+  const ec = el('editJobCategory');
+  if (ec) ec.innerHTML = CATEGORIES.map(c =>
+    `<option value="${c.id}" ${c.id === j.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+  ).join('');
+
+  el('editJobId').value    = j.jobId;
+  el('editJobTitle').value = j.title;
+  el('editJobDesc').value  = j.description;
+  el('editJobPrice').value = j.price || '';
+  el('editJobAvail').value = j.availability || '';
+  el('editJobScope').value = j.scope || 'local';
+
+  const statusEl = el('editJobPhotosStatus');
+  if (statusEl) {
+    const existing = (j.photos || []).filter(Boolean).length;
+    statusEl.textContent = existing
+      ? `${existing} existing photo(s). Upload new files to replace them.`
+      : 'No photos uploaded yet.';
+  }
+
+  setErr('editJobError', '');
+  el('editJobModal').classList.remove('hidden');
+  el('editJobModal').style.display = 'flex';
+}
+
+function closeEditJobModal() {
+  el('editJobModal').classList.add('hidden');
+  el('editJobModal').style.display = 'none';
+}
+
+async function saveEditJob() {
+  const jobId = el('editJobId').value;
+  const title = el('editJobTitle').value.trim();
+  const cat   = el('editJobCategory').value;
+  const desc  = el('editJobDesc').value.trim();
+  const price = el('editJobPrice').value;
+  const avail = el('editJobAvail').value.trim();
+  const scope = el('editJobScope').value;
+
+  if (!title || !cat || !desc) return setErr('editJobError', 'Please fill required fields.');
+
+  const j = DB.jobs.find(j => j.jobId === jobId);
+  if (!j) return setErr('editJobError', 'Listing not found.');
+  if (j.sellerId !== currentUser.userId) return setErr('editJobError', 'Unauthorised.');
+
+  // Handle optional photo replacement
+  const photosInput  = el('editJobPhotos');
+  let newPhotos      = j.photos || [];
+  if (photosInput && photosInput.files && photosInput.files.length) {
+    const statusEl  = el('editJobPhotosStatus');
+    const saveBtn   = document.querySelector('#editJobModal .btn-primary');
+    if (statusEl) statusEl.textContent = 'Uploading photos…';
+    if (saveBtn)  { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…'; }
+    try {
+      newPhotos = [];
+      for (const file of Array.from(photosInput.files).slice(0, 4)) {
+        const url = await uploadImageToFirebase(
+          file, `faithworks/jobs/${currentUser.userId}_${Date.now()}_${file.name}`);
+        newPhotos.push(url);
+      }
+      if (statusEl) statusEl.textContent = `${newPhotos.length} photo(s) uploaded.`;
+    } catch (e) {
+      console.error('Photo upload error during edit:', e);
+      setErr('editJobError', 'Photo upload failed. Changes not saved.');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes'; }
+      return;
+    }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes'; }
+  }
+
+  try {
+    await dbTransaction(db => {
+      const job = db.jobs.find(j => j.jobId === jobId);
+      if (!job) return;
+      job.title         = title;
+      job.category      = cat;
+      job.description   = desc;
+      job.price         = parseFloat(price) || 0;
+      job.availability  = avail;
+      job.scope         = scope;
+      job.photos        = newPhotos;
+      job.extraFeeApplied = scope === 'global';
+      job.updatedAt     = new Date().toISOString();
+      // Re-set to pending so the merchant can re-approve the edited listing
+      job.status        = 'pending';
+    });
+    // Notify the merchant that a listing was edited and needs re-approval
+    addNotification(currentUser.churchId,
+      `Listing "${title}" edited by ${currentUser.userId} — pending re-approval.`);
+    const merchant = DB.users.find(u => u.userId === currentUser.churchId && u.user_group === 1);
+    if (merchant && merchant.email) {
+      sendNewListingEmailAlert(merchant.email, merchant.churchName || merchant.userId,
+        currentUser.userId, title, cat);
+    }
+    setErr('editJobError', '✅ Listing updated and re-submitted for approval.', false);
+    setTimeout(() => { closeEditJobModal(); showSection('myJobs'); }, 1600);
+  } catch (e) {
+    setErr('editJobError', 'Error saving changes. Please try again.');
+  }
+}
 function renderChat() {
   if (!DB) { setTimeout(renderChat, 200); return; }
   const userId  = currentUser.userId;
@@ -1134,6 +1252,21 @@ function sendEmailAlert(toEmail, toName, fromUser, jobId) {
     to_email : toEmail, to_name: toName, from_user: fromUser,
     job_title: job.title || '',
     message  : `New message/contact on FaithWorks re: "${job.title || 'a job'}". Login to respond.`,
+  }).catch(console.error);
+}
+
+/**
+ * Notify a Merchant administrator by email when a seller submits a new listing.
+ */
+function sendNewListingEmailAlert(toEmail, toName, sellerUserId, listingTitle, category) {
+  if (typeof emailjs === 'undefined') return;
+  const catObj = CATEGORIES.find(c => c.id === category) || { name: category };
+  emailjs.send(CONFIG.EMAILJS_SERVICE, CONFIG.EMAILJS_TEMPLATE_CHAT, {
+    to_email : toEmail,
+    to_name  : toName,
+    from_user: sellerUserId,
+    job_title: listingTitle,
+    message  : `A new service listing "${listingTitle}" (${catObj.name}) has been submitted by ${sellerUserId} and is awaiting your approval. Please log in to your FaithWorks Church Panel to review it.`,
   }).catch(console.error);
 }
 
@@ -1693,6 +1826,19 @@ async function payMerchant(paymentId) {
    ═══════════════════════════════════════════════════════════ */
 function el(id) { return document.getElementById(id); }
 
+/** Toggle a password input between visible text and hidden dots. */
+function togglePwVisibility(inputId, btn) {
+  const input = el(inputId);
+  if (!input) return;
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  const icon = btn.querySelector('i');
+  if (icon) {
+    icon.classList.toggle('fa-eye',        !isHidden);
+    icon.classList.toggle('fa-eye-slash',  isHidden);
+  }
+}
+
 function escHtml(str) {
   if (!str) return '';
   return String(str)
@@ -1827,6 +1973,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.doLogout           = doLogout;
   window.switchTab          = switchTab;
   window.toggleSignupFields = toggleSignupFields;
+  window.togglePwVisibility = togglePwVisibility;
 
   /* ── Navigation ── */
   window.showSection        = showSection;
@@ -1840,6 +1987,9 @@ document.addEventListener('DOMContentLoaded', () => {
   window.submitJob          = submitJob;
   window.approveJob         = approveJob;
   window.rejectJob          = rejectJob;
+  window.openEditJob        = openEditJob;
+  window.closeEditJobModal  = closeEditJobModal;
+  window.saveEditJob        = saveEditJob;
 
   /* ── Chat ── */
   window.startChat          = startChat;
