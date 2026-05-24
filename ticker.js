@@ -81,102 +81,114 @@ class MarketTicker {
     
 
 async fetchAnalyticsStats() {
-    // Base endpoint confirmed working from live API responses
-    const BASE_URL = 'https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG';
+    // ── DAILY CACHE ────────────────────────────────────────────────────────
+    // nocodeapi free tier = 300 requests/day.  This method makes 2 requests,
+    // so we persist the result in localStorage keyed by today's date.
+    // On every subsequent call within the same calendar day we return the
+    // cached values immediately — zero extra API requests consumed.
+    const CACHE_KEY   = 'gmk_analytics_cache';   // localStorage key
+    const BASE_URL    = 'https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG';
 
-    // Helper: extract the first metricValues[0].value from the GA response shape:
-    // { rows: [{ metricValues: [{ value: "1" }] }] }
-    function extractMetricValue(data) {
-        try {
-            return parseInt(data.rows[0].metricValues[0].value, 10) || 0;
-        } catch {
-            return 0;
-        }
-    }
-
-    // Build today's date string in YYYY-MM-DD format (e.g. "2026-05-24")
+    // ── helpers ────────────────────────────────────────────────────────────
     function todayDateStr() {
-        const d = new Date();
-        const yyyy = d.getFullYear();
+        const d  = new Date();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
+        return `${d.getFullYear()}-${mm}-${dd}`;
     }
 
-    // Build the date 30 days ago in YYYY-MM-DD format
     function monthStartDateStr() {
         const d = new Date();
-        d.setDate(d.getDate() - 29); // 30-day window inclusive of today
-        const yyyy = d.getFullYear();
+        d.setDate(d.getDate() - 29);          // 30-day window inclusive of today
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
+        return `${d.getFullYear()}-${mm}-${dd}`;
     }
 
+    function extractMetricValue(data) {
+        try   { return parseInt(data.rows[0].metricValues[0].value, 10) || 0; }
+        catch { return 0; }
+    }
+
+    // ── check cache ────────────────────────────────────────────────────────
+    const today = todayDateStr();
     try {
-        const today = todayDateStr();
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+            const cached = JSON.parse(raw);
+            if (cached.date === today) {
+                // Same calendar day — serve from cache, no API call made
+                console.log('Analytics: serving from daily cache', cached);
+                return {
+                    visitorsToday: cached.visitorsToday,
+                    visitorsMonth: cached.visitorsMonth
+                };
+            }
+        }
+    } catch (e) {
+        // localStorage unavailable (private browsing, etc.) — fall through to fetch
+        console.warn('Analytics cache read failed:', e);
+    }
+
+    // ── cache miss: fetch from nocodeapi (max once per day) ───────────────
+    console.log('Analytics: cache miss for', today, '— fetching from nocodeapi (2 requests)');
+    try {
         const monthStart = monthStartDateStr();
 
-        // (1) Daily active users — activeUsers metric, startDate = today
-        const activeUsersTodayRes = await fetch(
-            `${BASE_URL}?metrics=activeUsers&startDate=${today}`
-        );
-
-        // (2) Monthly active users — activeUsers metric, startDate = 30 days ago
-        const activeUsersMonthRes = await fetch(
-            `${BASE_URL}?metrics=activeUsers&startDate=${monthStart}`
-        );
+        const [activeUsersTodayRes, activeUsersMonthRes] = await Promise.all([
+            fetch(`${BASE_URL}?metrics=activeUsers&startDate=${today}`),      // request 1
+            fetch(`${BASE_URL}?metrics=activeUsers&startDate=${monthStart}`)  // request 2
+        ]);
 
         let activeUsersToday = 0;
         let activeUsersMonth = 0;
 
         if (activeUsersTodayRes.ok) {
-            const data = await activeUsersTodayRes.json();
-            activeUsersToday = extractMetricValue(data);
+            activeUsersToday = extractMetricValue(await activeUsersTodayRes.json());
             console.log('Daily active users:', activeUsersToday);
         } else {
             console.error('activeUsers (today) API error:', activeUsersTodayRes.status);
         }
 
         if (activeUsersMonthRes.ok) {
-            const data = await activeUsersMonthRes.json();
-            activeUsersMonth = extractMetricValue(data);
+            activeUsersMonth = extractMetricValue(await activeUsersMonthRes.json());
             console.log('Monthly active users:', activeUsersMonth);
         } else {
             console.error('activeUsers (month) API error:', activeUsersMonthRes.status);
         }
 
+        // ── persist to localStorage for the rest of today ─────────────────
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                date:          today,
+                visitorsToday: activeUsersToday,
+                visitorsMonth: activeUsersMonth,
+                fetchedAt:     new Date().toISOString()
+            }));
+            console.log('Analytics: result cached for', today);
+        } catch (e) {
+            console.warn('Analytics cache write failed:', e);
+        }
+
         return {
-            visitorsToday: activeUsersToday,   // Daily active users
-            visitorsMonth: activeUsersMonth    // Total active users for the month
+            visitorsToday: activeUsersToday,
+            visitorsMonth: activeUsersMonth
         };
 
     } catch (error) {
-        console.error('Error fetching analytics:', error);
-        return {
-            visitorsToday: 0,
-            visitorsMonth: 0
-        };
+        console.error('Error fetching analytics from nocodeapi:', error);
+        // Return zeros rather than random numbers so the display is honest
+        return { visitorsToday: 0, visitorsMonth: 0 };
     }
 }
 
 
 
-// Separate method for monthly active users data
+// Separate method for monthly active users — delegates to fetchAnalyticsStats
+// so it always goes through the daily localStorage cache (no extra API calls).
 async fetchMonthlyVisitors() {
-    try {
-        const d = new Date();
-        d.setDate(d.getDate() - 29);
-        const monthStart = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const response = await fetch(
-            `https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG?metrics=activeUsers&startDate=${monthStart}`
-        );
-        if (!response.ok) return 0;
-        const data = await response.json();
-        return parseInt(data.rows?.[0]?.metricValues?.[0]?.value, 10) || 0;
-    } catch (error) {
-        return 0;
-    }
+    const result = await this.fetchAnalyticsStats();
+    return result.visitorsMonth;
 }
     
   
