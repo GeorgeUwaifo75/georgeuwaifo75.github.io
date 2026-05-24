@@ -65,9 +65,10 @@ class MarketTicker {
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
             
-           // const stats = await this.fetchAnalyticsData2();
+            //const stats2 = await this.fetchAnalyticsStats();
+           // this.renderTicker({ ...marketData, stats, stats2 });
             
-            this.renderTicker({ ...marketData, stats });
+            this.renderTicker({ ...marketData, stats});
             
         } catch (error) {
             console.error('Error fetching market data:', error);
@@ -80,72 +81,102 @@ class MarketTicker {
     
 
 async fetchAnalyticsStats() {
-  try {
-    // Replace 123456789 with your actual numeric Property ID
-    const propertyId = '529021838'; // e.g., '123456789'
-    
-    // Today's visitors
-    const todayResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today', {
-      headers: {
-        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
-      }
-    });
-    
-    // Monthly visitors (last 30 days)
-    const monthResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=30daysAgo', {
-      headers: {
-        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
-      }
-    });
-    
-    let todayUsers = 0;
-    let monthUsers = 0;
-    
-    if (todayResponse.ok) {
-      const todayData = await todayResponse.json();
-      todayUsers = todayData.activeUsers || 0;
-      console.log('Today\'s visitors:', todayUsers);
-    } else {
-      console.error('Today API error:', await todayResponse.text());
+    // Base endpoint confirmed working from live API responses
+    const BASE_URL = 'https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG';
+
+    // Helper: extract the first metricValues[0].value from the GA response shape:
+    // { rows: [{ metricValues: [{ value: "1" }] }] }
+    function extractMetricValue(data) {
+        try {
+            return parseInt(data.rows[0].metricValues[0].value, 10) || 0;
+        } catch {
+            return 0;
+        }
     }
-    
-    if (monthResponse.ok) {
-      const monthData = await monthResponse.json();
-      monthUsers = monthData.activeUsers || 0;
-      console.log('Monthly visitors:', monthUsers);
+
+    // Build today's date string in YYYY-MM-DD format (e.g. "2026-05-24")
+    function todayDateStr() {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }
-    
-    return {
-      visitorsToday: todayUsers,
-      visitorsMonth: monthUsers
-    };
-  } catch (error) {
-    console.error('Error fetching analytics:', error);
-    return {
-      visitorsToday: Math.floor(Math.random() * 150) + 50,
-      visitorsMonth: Math.floor(Math.random() * 4500) + 1500
-    };
-  }
+
+    // Build the date 30 days ago in YYYY-MM-DD format
+    function monthStartDateStr() {
+        const d = new Date();
+        d.setDate(d.getDate() - 29); // 30-day window inclusive of today
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    try {
+        const today = todayDateStr();
+        const monthStart = monthStartDateStr();
+
+        // (1) Daily active users — activeUsers metric, startDate = today
+        const activeUsersTodayRes = await fetch(
+            `${BASE_URL}?metrics=activeUsers&startDate=${today}`
+        );
+
+        // (2) Monthly active users — activeUsers metric, startDate = 30 days ago
+        const activeUsersMonthRes = await fetch(
+            `${BASE_URL}?metrics=activeUsers&startDate=${monthStart}`
+        );
+
+        let activeUsersToday = 0;
+        let activeUsersMonth = 0;
+
+        if (activeUsersTodayRes.ok) {
+            const data = await activeUsersTodayRes.json();
+            activeUsersToday = extractMetricValue(data);
+            console.log('Daily active users:', activeUsersToday);
+        } else {
+            console.error('activeUsers (today) API error:', activeUsersTodayRes.status);
+        }
+
+        if (activeUsersMonthRes.ok) {
+            const data = await activeUsersMonthRes.json();
+            activeUsersMonth = extractMetricValue(data);
+            console.log('Monthly active users:', activeUsersMonth);
+        } else {
+            console.error('activeUsers (month) API error:', activeUsersMonthRes.status);
+        }
+
+        return {
+            visitorsToday: activeUsersToday,   // Daily active users
+            visitorsMonth: activeUsersMonth    // Total active users for the month
+        };
+
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        return {
+            visitorsToday: 0,
+            visitorsMonth: 0
+        };
+    }
 }
 
 
 
-// Separate method for monthly data
+// Separate method for monthly active users data
 async fetchMonthlyVisitors() {
-  try {
-    const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?daterange=30daysAgo', {
-      headers: {
-        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
-      }
-    });
-    
-    if (!response.ok) return 0;
-    
-    const data = await response.json();
-    return data.activeUsers || 0;
-  } catch (error) {
-    return 0;
-  }
+    try {
+        const d = new Date();
+        d.setDate(d.getDate() - 29);
+        const monthStart = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const response = await fetch(
+            `https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG?metrics=activeUsers&startDate=${monthStart}`
+        );
+        if (!response.ok) return 0;
+        const data = await response.json();
+        return parseInt(data.rows?.[0]?.metricValues?.[0]?.value, 10) || 0;
+    } catch (error) {
+        return 0;
+    }
 }
     
   
@@ -172,11 +203,6 @@ async  fetchCurrencyFreaks() {
             
             const rates = {
                 USDNGN: usdToNgn,
-                /*
-                GBPNGN: usdToGbp / usdToNgn,
-                EURNGN: usdToEur / usdToNgn,
-                JPYNGN: usdToJpy / usdToNgn,
-                CNYNGN: usdToCny / usdToNgn,*/
                 
                 GBPNGN: usdToNgn/usdToGbp,
                 EURNGN: usdToNgn/usdToEur,
@@ -255,12 +281,17 @@ async  fetchCurrencyFreaks() {
             const visitorsToday = Math.floor(Math.random() * 150) + 50;
             const visitorsMonth = Math.floor(Math.random() * 4500) + 1500;
             
+            //New Addition
+            const stats2 = await this.fetchAnalyticsStats();
+            
             return {
                 totalProducts: allProducts.length,
                 newProducts: newProducts,
                 recentProducts: recentProducts,
-                visitorsToday: visitorsToday,
-                visitorsMonth: visitorsMonth
+                visitorsToday: stats2.visitorsToday,
+                visitorsMonth: stats2.visitorsMonth
+               
+              
                 
                 
             };
@@ -275,14 +306,16 @@ async  fetchCurrencyFreaks() {
             };
         }
     }
-    
+   
+   /* 
     async fetchPlatformStats() {
         const stats = await this.getPlatformStats();
         if (this.cachedData) {
             this.cachedData.stats = stats;
             this.renderTicker(this.cachedData);
         }
-    }
+    }*/
+    
     
     renderTicker(data) {
         if (!this.container) return;
@@ -350,8 +383,8 @@ async  fetchCurrencyFreaks() {
         const items = [
             { icon: 'fa-boxes', label: 'Total Products', value: stats.totalProducts.toLocaleString() },
             { icon: 'fa-clock', label: "Today's New", value: stats.newProducts },
-            { icon: 'fa-users', label: "Today's Visitors", value: stats.visitorsToday },
-            { icon: 'fa-calendar', label: 'Monthly Visitors', value: stats.visitorsMonth.toLocaleString() }
+            { icon: 'fa-users', label: "Daily Active Users", value: stats.visitorsToday.toLocaleString() },
+            { icon: 'fa-calendar', label: 'Monthly Active Users', value: stats.visitorsMonth.toLocaleString() }
         ];
         
         items.forEach(item => {
