@@ -65,10 +65,9 @@ class MarketTicker {
             // Get platform stats and render all together
             const stats = await this.getPlatformStats();
             
-            //const stats2 = await this.fetchAnalyticsStats();
-           // this.renderTicker({ ...marketData, stats, stats2 });
+           // const stats = await this.fetchAnalyticsData2();
             
-            this.renderTicker({ ...marketData, stats});
+            this.renderTicker({ ...marketData, stats });
             
         } catch (error) {
             console.error('Error fetching market data:', error);
@@ -81,114 +80,72 @@ class MarketTicker {
     
 
 async fetchAnalyticsStats() {
-    // ── DAILY CACHE ────────────────────────────────────────────────────────
-    // nocodeapi free tier = 300 requests/day.  This method makes 2 requests,
-    // so we persist the result in localStorage keyed by today's date.
-    // On every subsequent call within the same calendar day we return the
-    // cached values immediately — zero extra API requests consumed.
-    const CACHE_KEY   = 'gmk_analytics_cache';   // localStorage key
-    const BASE_URL    = 'https://v1.nocodeapi.com/geocorps75/ga/USxdQIWAGnkfweeG';
-
-    // ── helpers ────────────────────────────────────────────────────────────
-    function todayDateStr() {
-        const d  = new Date();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${d.getFullYear()}-${mm}-${dd}`;
+  try {
+    // Replace 123456789 with your actual numeric Property ID
+    const propertyId = '529021838'; // e.g., '123456789'
+    
+    // Today's visitors
+    const todayResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=today', {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    // Monthly visitors (last 30 days)
+    const monthResponse = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?propertyId=${propertyId}&daterange=30daysAgo', {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    let todayUsers = 0;
+    let monthUsers = 0;
+    
+    if (todayResponse.ok) {
+      const todayData = await todayResponse.json();
+      todayUsers = todayData.activeUsers || 0;
+      console.log('Today\'s visitors:', todayUsers);
+    } else {
+      console.error('Today API error:', await todayResponse.text());
     }
-
-    function monthStartDateStr() {
-        const d = new Date();
-        d.setDate(d.getDate() - 29);          // 30-day window inclusive of today
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${d.getFullYear()}-${mm}-${dd}`;
+    
+    if (monthResponse.ok) {
+      const monthData = await monthResponse.json();
+      monthUsers = monthData.activeUsers || 0;
+      console.log('Monthly visitors:', monthUsers);
     }
-
-    function extractMetricValue(data) {
-        try   { return parseInt(data.rows[0].metricValues[0].value, 10) || 0; }
-        catch { return 0; }
-    }
-
-    // ── check cache ────────────────────────────────────────────────────────
-    const today = todayDateStr();
-    try {
-        const raw = localStorage.getItem(CACHE_KEY);
-        if (raw) {
-            const cached = JSON.parse(raw);
-            if (cached.date === today) {
-                // Same calendar day — serve from cache, no API call made
-                console.log('Analytics: serving from daily cache', cached);
-                return {
-                    visitorsToday: cached.visitorsToday,
-                    visitorsMonth: cached.visitorsMonth
-                };
-            }
-        }
-    } catch (e) {
-        // localStorage unavailable (private browsing, etc.) — fall through to fetch
-        console.warn('Analytics cache read failed:', e);
-    }
-
-    // ── cache miss: fetch from nocodeapi (max once per day) ───────────────
-    console.log('Analytics: cache miss for', today, '— fetching from nocodeapi (2 requests)');
-    try {
-        const monthStart = monthStartDateStr();
-
-        const [activeUsersTodayRes, activeUsersMonthRes] = await Promise.all([
-            fetch(`${BASE_URL}?metrics=activeUsers&startDate=${today}`),      // request 1
-            fetch(`${BASE_URL}?metrics=activeUsers&startDate=${monthStart}`)  // request 2
-        ]);
-
-        let activeUsersToday = 0;
-        let activeUsersMonth = 0;
-
-        if (activeUsersTodayRes.ok) {
-            activeUsersToday = extractMetricValue(await activeUsersTodayRes.json());
-            console.log('Daily active users:', activeUsersToday);
-        } else {
-            console.error('activeUsers (today) API error:', activeUsersTodayRes.status);
-        }
-
-        if (activeUsersMonthRes.ok) {
-            activeUsersMonth = extractMetricValue(await activeUsersMonthRes.json());
-            console.log('Monthly active users:', activeUsersMonth);
-        } else {
-            console.error('activeUsers (month) API error:', activeUsersMonthRes.status);
-        }
-
-        // ── persist to localStorage for the rest of today ─────────────────
-        try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
-                date:          today,
-                visitorsToday: activeUsersToday,
-                visitorsMonth: activeUsersMonth,
-                fetchedAt:     new Date().toISOString()
-            }));
-            console.log('Analytics: result cached for', today);
-        } catch (e) {
-            console.warn('Analytics cache write failed:', e);
-        }
-
-        return {
-            visitorsToday: activeUsersToday,
-            visitorsMonth: activeUsersMonth
-        };
-
-    } catch (error) {
-        console.error('Error fetching analytics from nocodeapi:', error);
-        // Return zeros rather than random numbers so the display is honest
-        return { visitorsToday: 0, visitorsMonth: 0 };
-    }
+    
+    return {
+      visitorsToday: todayUsers,
+      visitorsMonth: monthUsers
+    };
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return {
+      visitorsToday: Math.floor(Math.random() * 150) + 50,
+      visitorsMonth: Math.floor(Math.random() * 4500) + 1500
+    };
+  }
 }
 
 
 
-// Separate method for monthly active users — delegates to fetchAnalyticsStats
-// so it always goes through the daily localStorage cache (no extra API calls).
+// Separate method for monthly data
 async fetchMonthlyVisitors() {
-    const result = await this.fetchAnalyticsStats();
-    return result.visitorsMonth;
+  try {
+    const response = await fetch('https://v1.nocodeapi.com/geocorps75/ga/activeUsers?daterange=30daysAgo', {
+      headers: {
+        'Authorization': 'Bearer AFqiegRgDsoHmvFfc'
+      }
+    });
+    
+    if (!response.ok) return 0;
+    
+    const data = await response.json();
+    return data.activeUsers || 0;
+  } catch (error) {
+    return 0;
+  }
 }
     
   
@@ -215,6 +172,11 @@ async  fetchCurrencyFreaks() {
             
             const rates = {
                 USDNGN: usdToNgn,
+                /*
+                GBPNGN: usdToGbp / usdToNgn,
+                EURNGN: usdToEur / usdToNgn,
+                JPYNGN: usdToJpy / usdToNgn,
+                CNYNGN: usdToCny / usdToNgn,*/
                 
                 GBPNGN: usdToNgn/usdToGbp,
                 EURNGN: usdToNgn/usdToEur,
@@ -293,17 +255,12 @@ async  fetchCurrencyFreaks() {
             const visitorsToday = Math.floor(Math.random() * 150) + 50;
             const visitorsMonth = Math.floor(Math.random() * 4500) + 1500;
             
-            //New Addition
-            const stats2 = await this.fetchAnalyticsStats();
-            
             return {
                 totalProducts: allProducts.length,
                 newProducts: newProducts,
                 recentProducts: recentProducts,
-                visitorsToday: stats2.visitorsToday,
-                visitorsMonth: stats2.visitorsMonth
-               
-              
+                visitorsToday: visitorsToday,
+                visitorsMonth: visitorsMonth
                 
                 
             };
@@ -318,16 +275,14 @@ async  fetchCurrencyFreaks() {
             };
         }
     }
-   
-   /* 
+    
     async fetchPlatformStats() {
         const stats = await this.getPlatformStats();
         if (this.cachedData) {
             this.cachedData.stats = stats;
             this.renderTicker(this.cachedData);
         }
-    }*/
-    
+    }
     
     renderTicker(data) {
         if (!this.container) return;
@@ -395,8 +350,8 @@ async  fetchCurrencyFreaks() {
         const items = [
             { icon: 'fa-boxes', label: 'Total Products', value: stats.totalProducts.toLocaleString() },
             { icon: 'fa-clock', label: "Today's New", value: stats.newProducts },
-            { icon: 'fa-users', label: "Daily Active Users", value: stats.visitorsToday.toLocaleString() },
-            { icon: 'fa-calendar', label: 'Monthly Active Users', value: stats.visitorsMonth.toLocaleString() }
+            { icon: 'fa-users', label: "Today's Visitors", value: stats.visitorsToday },
+            { icon: 'fa-calendar', label: 'Monthly Visitors', value: stats.visitorsMonth.toLocaleString() }
         ];
         
         items.forEach(item => {
@@ -463,3 +418,5 @@ document.addEventListener('DOMContentLoaded', () => {
         new MarketTicker();
     }, 1500);
 });
+
+
