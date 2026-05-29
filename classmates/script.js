@@ -1,5 +1,9 @@
-// script.js
-const API_BASE = 'https://jsonbinbro.onrender.com/api/bins/6a198bf1966f596be2a747e2';
+// script.js - Fixed version with proper API structure
+const API_BASE = 'https://jsonbinbro.onrender.com/api';
+const BIN_ID = '6a198bf1966f596be2a747e2';
+
+// User credentials
+const USER_ID = 'george01';
 const API_KEY = 'XcymJbykd573XqKLEHsZvSBo3hYMDv7uRo5P3PKRYDI';
 
 // DOM elements
@@ -16,25 +20,51 @@ const searchInput = document.getElementById('search-input');
 const refreshBtn = document.getElementById('refresh-btn');
 const recordCountSpan = document.getElementById('record-count');
 const formTitle = document.getElementById('form-title');
+const userIdDisplay = document.getElementById('userIdDisplay');
+const logoutBtn = document.getElementById('logoutBtn');
 
-let currentEditIndex = null; // Stores index of classmate being edited
-let allClassmates = [];       // Stores the current array of classmates
+let currentEditIndex = null;
+let allClassmates = [];
+
+// Display user info
+userIdDisplay.textContent = USER_ID;
+logoutBtn.style.display = 'inline-flex';
+
+// Logout function
+logoutBtn.addEventListener('click', () => {
+    localStorage.clear();
+    location.reload();
+});
 
 // Helper: Fetch data from JSONBinBro
 async function fetchClassmates() {
     try {
-        const response = await fetch(`${API_BASE}?api_key=${API_KEY}`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const response = await fetch(`${API_BASE}/bins/${BIN_ID}?api_key=${API_KEY}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
-        // Structure: { data: { allusers: [...] } }
-        const classmates = result.data?.allusers || [];
+        
+        // Extract classmates from the response structure
+        let classmates = [];
+        if (result.data && result.data.allusers) {
+            classmates = result.data.allusers;
+        } else if (result.data && Array.isArray(result.data)) {
+            classmates = result.data;
+        } else if (result.allusers) {
+            classmates = result.allusers;
+        }
+        
         allClassmates = Array.isArray(classmates) ? classmates : [];
+        
         renderTable();
         updateRecordCount();
         return allClassmates;
     } catch (error) {
         console.error('Fetch error:', error);
-        tableBody.innerHTML = `<tr><td colspan="6" class="empty-message">⚠️ Failed to load data. Check network or API key.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="6" class="empty-message">⚠️ Failed to load data. Error: ${error.message}<br>Please check your connection.</td></tr>`;
         return [];
     }
 }
@@ -42,24 +72,74 @@ async function fetchClassmates() {
 // Helper: Update entire BIN on server
 async function updateBin(dataArray) {
     try {
-        const payload = { allusers: dataArray };
-        const response = await fetch(`${API_BASE}?api_key=${API_KEY}`, {
+        // CRITICAL FIX: The backend expects the data wrapped in a 'data' object
+        // Based on the BinCreate model in main.py
+        const payload = {
+            data: { allusers: dataArray },
+            name: "My Classmates",
+            is_private: false
+        };
+        
+        console.log('Sending payload:', payload); // For debugging
+        
+        const response = await fetch(`${API_BASE}/bins/${BIN_ID}?api_key=${API_KEY}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(payload)
         });
-        if (!response.ok) throw new Error(`Update failed: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Update failed: ${response.status} - ${errorText}`);
+        }
+        
         const result = await response.json();
-        allClassmates = result.data?.allusers || dataArray;
+        console.log('Update response:', result); // For debugging
+        
+        // Update local data from the response
+        if (result.data && result.data.allusers) {
+            allClassmates = result.data.allusers;
+        } else if (result.data && Array.isArray(result.data)) {
+            allClassmates = result.data;
+        } else {
+            allClassmates = dataArray;
+        }
+        
         renderTable();
         updateRecordCount();
         resetForm();
+        
+        // Show success message
+        showMessage('Data saved successfully!', 'success');
+        
         return true;
     } catch (error) {
         console.error('Update error:', error);
-        alert('Error saving data to server. Please try again.');
+        showMessage(`Error saving data: ${error.message}`, 'error');
         return false;
     }
+}
+
+// Show temporary message
+function showMessage(message, type) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `${type}-message`;
+    msgDiv.textContent = message;
+    msgDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#28a745' : '#dc3545'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 5px;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    `;
+    document.body.appendChild(msgDiv);
+    setTimeout(() => msgDiv.remove(), 3000);
 }
 
 // Render table based on search filter
@@ -69,10 +149,10 @@ function renderTable() {
     
     if (searchTerm) {
         filteredClassmates = allClassmates.filter(person => 
-            person.fname?.toLowerCase().includes(searchTerm) ||
-            person.lname?.toLowerCase().includes(searchTerm) ||
-            person.profession?.toLowerCase().includes(searchTerm) ||
-            person.telephone?.includes(searchTerm)
+            (person.fname?.toLowerCase() || '').includes(searchTerm) ||
+            (person.lname?.toLowerCase() || '').includes(searchTerm) ||
+            (person.profession?.toLowerCase() || '').includes(searchTerm) ||
+            (person.telephone || '').includes(searchTerm)
         );
     }
     
@@ -83,13 +163,14 @@ function renderTable() {
     
     let html = '';
     filteredClassmates.forEach((person, idx) => {
-        // Find original index for editing/deleting
-        const originalIndex = allClassmates.findIndex((p, i) => 
+        // Find the actual index in allClassmates for edit/delete operations
+        const actualIndex = allClassmates.findIndex(p => 
             p.fname === person.fname && 
             p.lname === person.lname && 
             p.telephone === person.telephone
         );
-        const actualIdx = originalIndex !== -1 ? originalIndex : idx;
+        
+        const indexToUse = actualIndex !== -1 ? actualIndex : idx;
         
         html += `
             <tr>
@@ -99,8 +180,8 @@ function renderTable() {
                 <td>${escapeHtml(person.telephone || '')}</td>
                 <td>${person.age || ''}</td>
                 <td class="action-cell">
-                    <button class="edit-btn" data-index="${actualIdx}">✏️ Edit</button>
-                    <button class="delete-btn" data-index="${actualIdx}">🗑️ Delete</button>
+                    <button class="edit-btn" data-index="${indexToUse}">✏️ Edit</button>
+                    <button class="delete-btn" data-index="${indexToUse}">🗑️ Delete</button>
                 </td>
             </tr>
         `;
@@ -111,13 +192,14 @@ function renderTable() {
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const idx = parseInt(btn.getAttribute('data-index'));
-            editClassmate(idx);
+            if (!isNaN(idx)) editClassmate(idx);
         });
     });
+    
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const idx = parseInt(btn.getAttribute('data-index'));
-            if (confirm('Delete this classmate permanently?')) {
+            if (!isNaN(idx) && confirm('Delete this classmate permanently?')) {
                 await deleteClassmate(idx);
             }
         });
@@ -127,14 +209,12 @@ function renderTable() {
 // Escape HTML to prevent injection
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-        return c;
-    });
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function updateRecordCount() {
@@ -149,36 +229,41 @@ function resetForm() {
     formTitle.textContent = 'Add New Classmate';
     saveBtn.textContent = '💾 Save Classmate';
     cancelBtn.style.display = 'inline-flex';
-    // Clear validation styles
-    firstNameInput.focus();
+    if (firstNameInput) firstNameInput.focus();
 }
 
 // Fill form for editing
 function editClassmate(index) {
     if (index < 0 || index >= allClassmates.length) return;
+    
     const classmate = allClassmates[index];
     firstNameInput.value = classmate.fname || '';
     lastNameInput.value = classmate.lname || '';
     professionInput.value = classmate.profession || '';
     telephoneInput.value = classmate.telephone || '';
     ageInput.value = classmate.age || '';
+    
     currentEditIndex = index;
     formTitle.textContent = '✏️ Edit Classmate';
     saveBtn.textContent = '🔄 Update Classmate';
     cancelBtn.style.display = 'inline-flex';
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Delete classmate
 async function deleteClassmate(index) {
     if (index < 0 || index >= allClassmates.length) return;
+    
     const newClassmates = [...allClassmates];
     newClassmates.splice(index, 1);
     const success = await updateBin(newClassmates);
+    
     if (success && currentEditIndex !== null) {
-        // If we were editing a deleted one, cancel edit mode
         if (currentEditIndex === index || index < currentEditIndex) {
             resetForm();
+        } else if (currentEditIndex > index) {
+            currentEditIndex--;
         }
     }
 }
@@ -194,8 +279,13 @@ async function saveClassmate(event) {
     const telephone = telephoneInput.value.trim();
     const age = parseInt(ageInput.value);
     
-    if (!fname || !lname || !profession || !telephone || isNaN(age) || age < 1 || age > 120) {
-        alert('Please fill all fields correctly: First Name, Last Name, Profession, Telephone, and Age (1-120).');
+    if (!fname || !lname || !profession || !telephone) {
+        alert('Please fill all fields: First Name, Last Name, Profession, and Telephone.');
+        return;
+    }
+    
+    if (isNaN(age) || age < 1 || age > 120) {
+        alert('Please enter a valid age between 1 and 120.');
         return;
     }
     
@@ -212,9 +302,11 @@ async function saveClassmate(event) {
         // Update existing
         updatedList = [...allClassmates];
         updatedList[currentEditIndex] = newClassmate;
+        showMessage('Updating existing record...', 'success');
     } else {
-        // Add new
+        // Add new - append to existing list
         updatedList = [...allClassmates, newClassmate];
+        showMessage('Adding new record...', 'success');
     }
     
     const success = await updateBin(updatedList);
@@ -232,7 +324,24 @@ function cancelEdit() {
 async function refreshData() {
     tableBody.innerHTML = `<tr><td colspan="6" class="loading-message">🔄 Refreshing...</td></tr>`;
     await fetchClassmates();
+    showMessage('Data refreshed!', 'success');
 }
+
+// Add animation keyframes to document
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+`;
+document.head.appendChild(style);
 
 // Event listeners
 form.addEventListener('submit', saveClassmate);
