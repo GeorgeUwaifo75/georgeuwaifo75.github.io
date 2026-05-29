@@ -1,4 +1,4 @@
-<!-- index.html -->
+<!-- index.html - Updated with User ID field -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,6 +15,16 @@
         </header>
 
         <main>
+            <!-- User Info Bar -->
+            <div id="userInfoBar" style="background: var(--grey-light); border-radius: 10px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>👤 User:</strong> <span id="userIdDisplay">Not authenticated</span>
+                </div>
+                <div>
+                    <button id="logoutBtn" class="btn secondary-btn" style="display: none;">🚪 Logout</button>
+                </div>
+            </div>
+
             <!-- Form Section for Add/Edit -->
             <section class="form-card">
                 <h2 id="form-title">Add New Classmate</h2>
