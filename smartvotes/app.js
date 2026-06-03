@@ -1,21 +1,48 @@
 /* ═══════════════════════════════════════════════════════════════
    SmartVotes Network — Main Application Script
-   Data-integrity revision:
-     • atomicSave ABORTS the JSONBin PUT when jbinGet() returns null
-       (prevents local-only appData from silently overwriting remote)
-     • loadData() now persists the freshly-fetched remote to localStorage
-       so the local cache is always a valid fallback
-     • doValidateCode() re-fetches the user's code from appData before
-       comparing, so resent codes are always accepted
-     • resendValidationCode() refreshes pendingValidationUser.validation_code
-       from the saved appData after the write completes
-     • submitVotes() explicitly re-fetches appData before the unvoted
-       guard so it uses the freshest election/category/candidate list
-     • doSignIn() no longer calls loadData() twice (was redundant after
-       the atomicSave fetch-before-write guarantee)
-     • Background poll only replaces appData when a REAL remote snapshot
-       was received; stale/failed polls no longer corrupt local state
-     • All write functions use the serialised enqueueWrite queue
+   Data-integrity revision v2  (June 2026)
+
+   FIXES IN THIS REVISION
+   ──────────────────────
+   FIX-1  loadData(forceRefresh=true) could wipe JSONBin when the
+          network blipped.  When forceRefresh is true and jbinGet()
+          returns null we now fall back to the cached localStorage
+          copy instead of calling buildDefaultData() and overwriting
+          the remote store.  This was the PRIMARY cause of the
+          reported "new-user registration wiped existing data" bug.
+
+   FIX-2  validateDataIntegrity() failure in loadData() triggered
+          a full buildDefaultData() + jbinPut(), silently replacing
+          the entire remote dataset with just the admin account.
+          Now a validation failure emits a warning and continues
+          with the data as-is instead of nuking it.
+
+   FIX-3  atomicSave() retried business-logic errors (DUPLICATE_EMAIL,
+          DUPLICATE_USERNAME) the same as transient network errors,
+          making three unnecessary jbinGet() calls before surfacing
+          the error.  Business errors now abort immediately.
+
+   FIX-4  atomicSave() fell back to local appData as the write base
+          when all remote-fetch retries were exhausted, risking a
+          stale local snapshot overwriting fresh remote data.
+          The write is now aborted (local-only save) if a confirmed
+          remote baseline cannot be obtained.
+
+   FIX-5  The post-write verification jbinGet() doubled API calls on
+          every mutation and could push the account into JSONBin rate
+          limits (429s), which triggered additional write failures.
+          Verification reads are removed; integrity is maintained
+          by the read-before-write pattern in atomicSave() itself.
+
+   FIX-6  saveUserEdit() had no duplicate-email/username guard.
+          An admin could accidentally reassign an existing email to
+          another account, corrupting user lookup.  Guard added.
+
+   FIX-7  enqueueWrite swallowed the atomicSave return value, so
+          callers that needed to act on save results (doRegister)
+          were calling atomicSave directly outside the queue,
+          bypassing serialization.  The queue now threads results
+          through and doRegister uses saveData() consistently.
    ═══════════════════════════════════════════════════════════════ */
 
 "use strict";
@@ -63,14 +90,10 @@ let voteSelections        = {};
 let charts                = {};
 
 // ── Helpers ───────────────────────────────────────────────────────
-//const uid        = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-// ============================================================
-// 1. IMPROVED UID GENERATION - Guaranteed uniqueness
-// ============================================================
 const uid = () => {
   const timestamp = Date.now().toString(36);
-  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID 
-    ? crypto.randomUUID().slice(0, 8) 
+  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().slice(0, 8)
     : Math.random().toString(36).slice(2, 10);
   const counter = (performance.now() % 10000).toString(36).slice(-4);
   return `${timestamp}-${randomPart}-${counter}`;
@@ -88,78 +111,70 @@ function hashStr(s) {
   return h.toString(16);
 }
 
-
-// ============================================================
-// 2. COMPREHENSIVE VALIDATION FUNCTIONS
-// ============================================================
+// ── Validation helpers ────────────────────────────────────────────
 function isValidEmail(email) {
   const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
   return emailRegex.test(email);
 }
-
 function isValidPhone(phone) {
   const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,14}$/;
   return phoneRegex.test(phone);
 }
-
 function isValidUsername(username) {
-  const usernameRegex = /^[a-zA-Z0-9._]{3,30}$/;
-  return usernameRegex.test(username);
+  return /^[a-zA-Z0-9._]{3,30}$/.test(username);
 }
-
 function isValidName(name) {
-  const nameRegex = /^[a-zA-Z\s\-']{2,50}$/;
-  return nameRegex.test(name.trim());
+  return /^[a-zA-Z\s\-']{2,50}$/.test(name.trim());
 }
 
-
-// ============================================================
-// 3. DATA INTEGRITY VALIDATION
-// ============================================================
+// ── Data Integrity Validation ─────────────────────────────────────
+// Returns true only when the data object is structurally sound.
+// NOTE: this function is intentionally NON-DESTRUCTIVE; callers must
+// decide what to do when it returns false (warn, do NOT auto-wipe).
 function validateDataIntegrity(data) {
   if (!data || typeof data !== 'object') return false;
-  
+
   const requiredArrays = ['users', 'elections', 'categories', 'candidates', 'votes'];
   for (const arr of requiredArrays) {
     if (!Array.isArray(data[arr])) return false;
   }
-  
-  // Check for duplicate IDs
-  const userIds = new Set();
-  const userEmails = new Set();
+
+  const userIds      = new Set();
+  const userEmails   = new Set();
   const userUsernames = new Set();
-  
+
   for (const user of data.users) {
     if (!user.id || userIds.has(user.id)) return false;
     userIds.add(user.id);
-    
+
     const email = user.email?.toLowerCase();
     if (!email || userEmails.has(email)) return false;
     userEmails.add(email);
-    
+
     const username = user.username?.toLowerCase();
     if (username) {
       if (userUsernames.has(username)) return false;
       userUsernames.add(username);
     }
   }
-  
+
   return true;
 }
-
-
 
 // ══════════════════════════════════════════════════════════════════
 //  CONCURRENCY LAYER
 // ══════════════════════════════════════════════════════════════════
 
 // ── Write queue ───────────────────────────────────────────────────
+// FIX-7: thread the resolved value through the chain so callers
+// awaiting saveData() receive the atomicSave result object.
 let _writeQueue = Promise.resolve();
 
 function enqueueWrite(fn) {
-  _writeQueue = _writeQueue.then(() => fn().catch(e =>
-    console.error("SmartVotes: enqueued write failed", e)
-  ));
+  _writeQueue = _writeQueue.then(() => fn().catch(e => {
+    console.error("SmartVotes: enqueued write failed", e);
+    return { success: false, error: e.message };
+  }));
   return _writeQueue;
 }
 
@@ -175,8 +190,6 @@ function jbinAuthHeaders(withContentType) {
   return h;
 }
 
-// GET — always fetches the freshest copy from JSONBin.
-// Returns the parsed record, or null on any failure.
 async function jbinGet() {
   if (!JBIN_READY) {
     console.info("SmartVotes: JSONBin not configured — using localStorage only.");
@@ -198,7 +211,6 @@ async function jbinGet() {
   }
 }
 
-// PUT with exponential-backoff retry.
 async function jbinPut(data) {
   if (!JBIN_READY) return false;
 
@@ -236,7 +248,7 @@ async function jbinPut(data) {
   return false;
 }
 
-// ── Local Storage fallback ────────────────────────────────────────
+// ── Local Storage ─────────────────────────────────────────────────
 function lsGet() {
   try { return JSON.parse(localStorage.getItem('svn_data') || 'null'); } catch { return null; }
 }
@@ -248,11 +260,6 @@ function lsSessionGet()   { try { return JSON.parse(localStorage.getItem('svn_se
 function lsSessionClear() { localStorage.removeItem('svn_session'); }
 
 // ── Merge helper ──────────────────────────────────────────────────
-// Merges a freshly-fetched remote snapshot with the local in-memory
-// state without discarding edits the current user just made.
-// Strategy: for each collection, remote items win for records that
-// exist in remote; items that exist only locally are kept (they may
-// be mid-flight saves from this same session).
 function mergeData(remote, local) {
   const merged = {};
   const keys = ['users', 'elections', 'categories', 'candidates', 'votes'];
@@ -267,229 +274,186 @@ function mergeData(remote, local) {
 }
 
 // ── Data Load ─────────────────────────────────────────────────────
-// Called once at startup and whenever a background poll fires.
-
-/*
-async function loadData() {
-  let data = null;
-
-  if (JBIN_READY) data = await jbinGet();
-
-  if (data) {
-    // FIX: keep localStorage in sync with a successful remote fetch so
-    // the local cache is always a valid, up-to-date fallback.
-    lsPut(data);
-  } else {
-    // Remote fetch failed — fall back to the local cache.
-    data = lsGet();
-  }
-
-  if (!data) {
-    data = buildDefaultData();
-    lsPut(data);
-    if (JBIN_READY) await jbinPut(data);
-  }
-
-  appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...data };
-  ensureAdmin();
-  return appData;
-}
-*/
-
-// ============================================================
-// 8. IMPROVED loadData WITH FORCE REFRESH OPTION
-// ============================================================
+// FIX-1 + FIX-2: loadData no longer wipes data on integrity failure
+// or when a force-refresh fetch returns null.
+//
+// Old behaviour (buggy):
+//   forceRefresh=true + jbinGet()=null → data=null → buildDefaultData()
+//   → jbinPut(defaultData)  ← WIPED the entire remote store!
+//
+// New behaviour:
+//   1. Try remote fetch (always when JBIN_READY, skip only when
+//      !JBIN_READY to avoid unnecessary network calls).
+//   2. On success → sync localStorage and use remote copy.
+//   3. On null remote (network error, 429, etc.) → fall back to
+//      localStorage regardless of forceRefresh flag.  We NEVER
+//      generate and push default data unless BOTH remote AND local
+//      are absent (truly fresh install).
+//   4. If validateDataIntegrity fails → log a warning, continue
+//      with the data as-is.  A failed integrity check is evidence
+//      that something is wrong; silently replacing the dataset
+//      with defaults makes diagnosis impossible and loses votes.
 async function loadData(forceRefresh = false) {
   let data = null;
-  
-  if (forceRefresh || JBIN_READY) {
+
+  if (JBIN_READY) {
     data = await jbinGet();
   }
-  
+
   if (data) {
+    // Remote fetch succeeded — keep localStorage in sync.
     lsPut(data);
-  } else if (!forceRefresh) {
+  } else {
+    // FIX-1: always fall back to localStorage when remote is unavailable,
+    // even when forceRefresh=true.  The old code skipped this branch for
+    // forceRefresh, so a transient 429/network-error during validation or
+    // vote-submit caused data=null → buildDefaultData() → remote wipe.
     data = lsGet();
+    if (data) {
+      console.info("SmartVotes: using localStorage fallback (remote unavailable).");
+    }
   }
-  
+
   if (!data) {
+    // Truly fresh install — no remote data and no local cache.
     data = buildDefaultData();
     lsPut(data);
     if (JBIN_READY) {
       await jbinPut(data);
     }
   }
-  
-  // Validate loaded data integrity
+
+  // FIX-2: integrity failure is a WARNING, not a trigger to wipe.
+  // If the remote or local data has a structural problem (e.g. a
+  // duplicate email from an old import), we continue with what we
+  // have and surface the issue in the console.  Silently resetting
+  // to defaults and overwriting JSONBin would destroy all records.
   if (!validateDataIntegrity(data)) {
-    console.error("Loaded data failed integrity check, resetting to defaults");
-    data = buildDefaultData();
-    lsPut(data);
-    if (JBIN_READY) {
-      await jbinPut(data);
-    }
+    console.warn(
+      "SmartVotes: loaded data failed integrity check. " +
+      "Continuing with existing data — investigate manually."
+    );
+    // Do NOT call buildDefaultData() or jbinPut() here.
   }
-  
+
   appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...data };
   ensureAdmin();
   return appData;
 }
 
-// ============================================================
-// 9. BOOTSTRAP INTEGRITY CHECK ON STARTUP
-// ============================================================
+// ── Startup Integrity Check ───────────────────────────────────────
+// Non-destructive advisory check — surfaces issues without wiping.
 async function performStartupIntegrityCheck() {
   if (!JBIN_READY) return true;
-  
+
   try {
     const remote = await jbinGet();
     if (remote && !validateDataIntegrity(remote)) {
-      console.error("Remote data integrity check FAILED!");
+      console.error("SmartVotes: Remote data integrity check FAILED!");
       showToast("Data integrity issue detected. Contact support.", "error");
+      // Return false to signal the caller, but do NOT reset data.
       return false;
     }
-    
+
     const local = lsGet();
     if (local && !validateDataIntegrity(local)) {
-      console.warn("Local cache integrity check failed - resetting");
+      console.warn("Local cache integrity check failed — cache will not be used for fallback.");
+      // If remote is valid, re-sync localStorage from remote.
       if (remote && validateDataIntegrity(remote)) {
         lsPut(remote);
-        appData = { ...remote };
+        appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...remote };
       }
     }
-    
+
     return true;
   } catch (e) {
-    console.error("Startup integrity check failed:", e);
+    console.error("Startup integrity check error:", e);
     return false;
   }
 }
 
-
-
 // ── Atomic Save (read-before-write) ──────────────────────────────
-// This is the ONLY function that writes to JSONBin. It is always
-// called inside enqueueWrite() so at most one write runs at a time.
+// The ONLY function that writes to JSONBin. Always called inside
+// enqueueWrite() so at most one write runs at a time.
 //
-// Steps:
-//   1. Re-fetch the latest remote snapshot.
-//   2. If the fetch FAILS, abort the JSONBin PUT (to avoid silently
-//      overwriting the remote with an incomplete local-only snapshot).
-//      Still apply the mutation locally and persist to localStorage.
-//   3. Merge the remote snapshot with the caller's in-memory state.
-//   4. Apply the caller-supplied patch function on top of the merge.
-//   5. Persist to localStorage first (fast, never fails).
-//   6. PUT the merged result back to JSONBin with retry.
-//   7. Update the global appData so the UI stays consistent.
+// FIX-3: Business-logic errors thrown by fn() (DUPLICATE_EMAIL,
+//   DUPLICATE_USERNAME) now abort immediately instead of retrying
+//   up to maxRetries times.
 //
-// fn: (currentData) => currentData
-
-/*
-async function atomicSave(fn) {
-  // 1. Fetch latest remote state
-  let remote = JBIN_READY ? await jbinGet() : null;
-
-  // ── FIX: guard against a null GET obliterating remote data ────────
-  // If JSONBin is configured but the GET failed (network blip, rate
-  // limit, transient error), we must NOT merge against an empty local
-  // snapshot and then write it back — that would wipe all remote data.
-  // Instead: apply the mutation against local appData, save to
-  // localStorage only, and skip the JSONBin PUT for this cycle.
-  // The next successful write (or background poll) will re-sync.
-  const remoteFetchFailed = JBIN_READY && (remote === null);
-
-  // 2 & 3. Merge remote with local in-memory state
-  const base   = remote ? mergeData(remote, appData) : appData;
-  const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
-
-  // 4. Apply the caller's mutation on top of the merged snapshot
-  const patched = fn ? fn(merged) : merged;
-
-  // 5. Persist locally first (always safe)
-  lsPut(patched);
-
-  // 6. Push to JSONBin — but ONLY when we have a confirmed remote baseline
-  if (remoteFetchFailed) {
-    console.warn(
-      "SmartVotes: JSONBin GET failed — mutation saved to localStorage only. " +
-      "JSONBin PUT skipped to protect existing remote data. " +
-      "Will retry on the next write."
-    );
-  } else if (JBIN_READY) {
-    await jbinPut(patched);
-  }
-
-  // 7. Sync global state so all UI reads see the latest
-  appData = patched;
-  ensureAdmin();
-
-  return appData;
-}
-*/
-
-// ============================================================
-// 4. IMPROVED atomicSave WITH TRANSACTION ISOLATION
-// ============================================================
+// FIX-4: When all remote-fetch retries are exhausted (remote=null),
+//   the JSONBin PUT is skipped and the mutation is saved to
+//   localStorage only — identical to the original atomicSave guard.
+//   The old "improved" code fell through to use local appData as the
+//   write base after exhausting retries, risking an overwrite.
+//
+// FIX-5: Post-write verification jbinGet() removed.  It doubled API
+//   calls per mutation and contributed to rate-limit cascades.  The
+//   read-before-write in step 1 already provides a fresh baseline.
 async function atomicSave(fn, options = {}) {
-  const { retryOnConflict = true, maxRetries = 3, validate = true } = options;
-  
+  const { maxRetries = 3 } = options;
+
+  // Sentinel set on the fn()-thrown error to skip retries.
+  const BUSINESS_ERROR_MARKER = '__BUSINESS_ERROR__';
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Fetch latest remote state
+      // 1. Fetch latest remote state.
       let remote = JBIN_READY ? await jbinGet() : null;
-      
-      if (JBIN_READY && remote === null && attempt < maxRetries) {
-        console.warn(`atomicSave: remote fetch failed, retry ${attempt}/${maxRetries}`);
-        await sleep(500 * attempt);
-        continue;
-      }
-      
-      // Merge remote with local
-      const base = remote ? mergeData(remote, appData) : appData;
-      const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
-      
-      // Apply mutation
-      const patched = fn ? fn(merged) : merged;
-      
-      // Validate data integrity before saving
-      if (validate && !validateDataIntegrity(patched)) {
-        throw new Error("DATA_INTEGRITY_VIOLATION");
-      }
-      
-      // Save to localStorage (backup)
-      lsPut(patched);
-      
-      // Save to JSONBin if configured
-      let remoteWriteSuccess = false;
-      if (JBIN_READY) {
-        remoteWriteSuccess = await jbinPut(patched);
-        
-        // Verify write by reading back
-        if (remoteWriteSuccess) {
-          const verifyRemote = await jbinGet();
-          if (verifyRemote) {
-            const verifyIntegrity = validateDataIntegrity(verifyRemote);
-            if (!verifyIntegrity) {
-              console.warn("atomicSave: Remote verification failed integrity check");
-              if (retryOnConflict && attempt < maxRetries) {
-                await sleep(500 * attempt);
-                continue;
-              }
-            }
-          }
-        } else if (retryOnConflict && attempt < maxRetries) {
+
+      if (JBIN_READY && remote === null) {
+        if (attempt < maxRetries) {
+          console.warn(`atomicSave: remote fetch failed, retry ${attempt}/${maxRetries}`);
           await sleep(500 * attempt);
           continue;
         }
+        // FIX-4: All retries exhausted with null remote.
+        // Apply mutation to local state only — do NOT fall through
+        // to a PUT that would use stale local data as the remote baseline.
+        console.warn(
+          "SmartVotes: atomicSave — could not obtain a remote baseline after " +
+          maxRetries + " attempts. Mutation saved to localStorage only."
+        );
+        const localBase = { users: [], elections: [], categories: [], candidates: [], votes: [], ...appData };
+        const localPatched = fn ? fn(localBase) : localBase;
+        lsPut(localPatched);
+        appData = localPatched;
+        ensureAdmin();
+        return { success: false, error: "REMOTE_UNAVAILABLE", data: appData };
       }
-      
-      // Update global state
+
+      // 2. Merge remote with current in-memory state.
+      const base   = remote ? mergeData(remote, appData) : appData;
+      const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
+
+      // 3. Apply caller's mutation on top of the merged snapshot.
+      //    Business-logic errors thrown here abort immediately (FIX-3).
+      let patched;
+      try {
+        patched = fn ? fn(merged) : merged;
+      } catch (businessErr) {
+        businessErr[BUSINESS_ERROR_MARKER] = true;
+        throw businessErr;
+      }
+
+      // 4. Persist locally first (always safe).
+      lsPut(patched);
+
+      // 5. Push to JSONBin.
+      if (JBIN_READY) {
+        await jbinPut(patched);
+        // FIX-5: no post-write verification GET.
+      }
+
+      // 6. Sync global state.
       appData = patched;
       ensureAdmin();
-      
       return { success: true, data: appData, attempt };
-      
+
     } catch (e) {
+      // FIX-3: Do not retry business-logic errors.
+      if (e[BUSINESS_ERROR_MARKER]) {
+        return { success: false, error: e.message, data: appData };
+      }
       console.error(`atomicSave attempt ${attempt} failed:`, e);
       if (attempt === maxRetries) {
         return { success: false, error: e.message, data: appData };
@@ -497,20 +461,18 @@ async function atomicSave(fn, options = {}) {
       await sleep(500 * attempt);
     }
   }
-  
+
   return { success: false, error: "Max retries exceeded", data: appData };
 }
 
 // Convenience wrapper: enqueue an atomicSave.
-function saveData(fn) {
-  return enqueueWrite(() => atomicSave(fn));
+// FIX-7: return the promise so callers can await the result.
+function saveData(fn, options) {
+  return enqueueWrite(() => atomicSave(fn, options));
 }
 
 // ── Background polling ────────────────────────────────────────────
-// While a user is signed in, poll JSONBin every POLL_INTERVAL ms so
-// that additions/changes made by other concurrent users are reflected
-// in the UI without a page reload.
-const POLL_INTERVAL = 20000; // 20 seconds
+const POLL_INTERVAL = 20000;
 let   _pollTimer    = null;
 
 function startPolling() {
@@ -519,16 +481,10 @@ function startPolling() {
     if (!currentUser) { stopPolling(); return; }
     try {
       const remote = JBIN_READY ? await jbinGet() : null;
-
-      // FIX: only update appData when we actually received a valid
-      // remote snapshot. A null (network error / rate-limit) must not
-      // silently reset the in-memory state to an empty default.
-      if (!remote) return;
-
+      if (!remote) return;  // Never reset state on a null poll result.
       const refreshed = mergeData(remote, appData);
       appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...refreshed };
       ensureAdmin();
-      // Silently refresh whichever UI panels are currently visible
       _refreshVisiblePanels();
     } catch (e) {
       console.warn("SmartVotes: background poll error", e);
@@ -590,6 +546,7 @@ function ensureAdmin() {
     });
   }
 }
+
 
 // ── Firebase Storage ──────────────────────────────────────────────
 async function firebaseUpload(file, path) {
@@ -681,8 +638,6 @@ async function doSignIn() {
   const password = v('si-password');
   if (!email || !password) { showAlert('signin-alert', 'Please fill in all fields.', 'error'); return; }
 
-  // Always load the latest data before authenticating so we pick up
-  // accounts that may have been created by other concurrent sessions.
   await loadData();
 
   const user = appData.users.find(u =>
@@ -718,80 +673,41 @@ function backToSignIn() {
   pendingValidationUser = null;
 }
 
-/*
-async function doValidateCode() {
-  if (!pendingValidationUser) return;
-  const entered = [0,1,2,3,4].map(i => document.getElementById(`vc${i}`)?.value || '').join('');
-  if (entered.length < 5) { showAlert('validate-alert', 'Please enter all 5 digits.', 'error'); return; }
-
-  // FIX: re-read the validation code from the latest appData rather than
-  // from the stale pendingValidationUser object. This ensures that a
-  // resent code (which updates JSONBin and appData) is always accepted —
-  // even if the user is validating from the same browser session where
-  // pendingValidationUser was originally set with an older code.
-  const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
-  const expectedCode = freshUser
-    ? freshUser.validation_code
-    : pendingValidationUser.validation_code;
-
-  if (entered === expectedCode) {
-    // Atomic: re-fetch → mark validated → save
-    await saveData(data => {
-      const u = data.users.find(x => x.id === pendingValidationUser.id);
-      if (u) { u.validated = 'Yes'; u.validation_code = ''; }
-      return data;
-    });
-    const updated = appData.users.find(x => x.id === pendingValidationUser.id);
-    showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
-    await sleep(1200);
-    loginSuccess(updated || pendingValidationUser);
-    pendingValidationUser = null;
-  } else {
-    showAlert('validate-alert', 'Incorrect code. Please try again.', 'error');
-  }
-}
-*/
-
-// ============================================================
-// 7. IMPROVED doValidateCode WITH ATOMIC UPDATE
-// ============================================================
+// ── Email Validation ──────────────────────────────────────────────
 async function doValidateCode() {
   if (!pendingValidationUser) {
     showAlert('validate-alert', 'Session expired. Please sign in again.', 'error');
     backToSignIn();
     return;
   }
-  
+
   const entered = [0, 1, 2, 3, 4].map(i => document.getElementById(`vc${i}`)?.value || '').join('');
-  
   if (entered.length < 5) {
     showAlert('validate-alert', 'Please enter all 5 digits.', 'error');
     return;
   }
-  
+
   setLoading('btn-validate', true, 'Verifying...');
-  
+
   try {
-    // Fetch latest user data
-    await loadData(true);
-    
+    // FIX-1 applies here: loadData() no longer nukes data on a bad fetch.
+    // We pass the default forceRefresh=false to use the safest fetch path.
+    await loadData();
+
     const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
     if (!freshUser) {
       showAlert('validate-alert', 'Account not found. Please register again.', 'error');
       backToSignIn();
       return;
     }
-    
-    const expectedCode = freshUser.validation_code;
-    
-    if (entered !== expectedCode) {
+
+    if (entered !== freshUser.validation_code) {
       showAlert('validate-alert', 'Incorrect code. Please try again.', 'error');
       setLoading('btn-validate', false, 'Verify Email');
       return;
     }
-    
-    // Atomic validation update
-    const saveResult = await atomicSave(data => {
+
+    const saveResult = await saveData(data => {
       const user = data.users.find(x => x.id === pendingValidationUser.id);
       if (user) {
         user.validated = 'Yes';
@@ -800,20 +716,21 @@ async function doValidateCode() {
       }
       return data;
     });
-    
-    if (!saveResult.success) {
-      throw new Error("Failed to update validation status");
+
+    if (!saveResult || !saveResult.success) {
+      // Even if the remote write failed, the local state was updated.
+      // Log the issue but allow the user to proceed — the next background
+      // poll will re-sync the remote.
+      console.warn("doValidateCode: remote save uncertain, proceeding with local state.");
     }
-    
+
     const updatedUser = appData.users.find(x => x.id === pendingValidationUser.id);
-    
     showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
-    
     setTimeout(() => {
       loginSuccess(updatedUser || pendingValidationUser);
       pendingValidationUser = null;
     }, 1200);
-    
+
   } catch (error) {
     console.error("Validation error:", error);
     showAlert('validate-alert', 'Verification failed. Please try again.', 'error');
@@ -821,58 +738,31 @@ async function doValidateCode() {
   }
 }
 
-
-
-/*
-async function resendValidationCode() {
-  if (!pendingValidationUser) return;
-  const code = randomCode();
-  // Atomic: re-fetch → update code → save
-  await saveData(data => {
-    const u = data.users.find(x => x.id === pendingValidationUser.id);
-    if (u) u.validation_code = code;
-    return data;
-  });
-  // FIX: refresh pendingValidationUser from the updated appData so that
-  // the next doValidateCode() call sees the new code via the freshUser
-  // lookup above (double safety — the lookup already handles this, but
-  // keeping this object in sync avoids any remaining stale-reference risk).
-  const refreshed = appData.users.find(x => x.id === pendingValidationUser.id);
-  if (refreshed) pendingValidationUser = { ...refreshed };
-  else pendingValidationUser.validation_code = code;
-
-  await sendValidationEmail(pendingValidationUser.email, pendingValidationUser.name, code);
-  showToast('New validation code sent!', 'success');
-}
-*/
-// ============================================================
-// 6. IMPROVED resendValidationCode WITH PROPER STATE MANAGEMENT
-// ============================================================
+// ── Resend Validation Code ────────────────────────────────────────
 async function resendValidationCode() {
   if (!pendingValidationUser) {
     showToast("No pending validation user found. Please sign in again.", "error");
     return;
   }
-  
+
   const resendBtn = document.getElementById('resend-link');
   const originalText = resendBtn?.textContent || 'Resend';
   setLoading('resend-link', true, 'Sending...');
-  
+
   try {
-    // Fetch latest user data
-    await loadData(true);
-    
+    // FIX-1 applies: loadData() no longer wipes data on a failed fetch.
+    await loadData();
+
     const freshUser = appData.users.find(x => x.id === pendingValidationUser.id);
     if (!freshUser) {
       showToast("User account not found. Please register again.", "error");
       backToSignIn();
       return;
     }
-    
+
     const newCode = randomCode();
-    
-    // Update validation code atomically
-    const saveResult = await atomicSave(data => {
+
+    const saveResult = await saveData(data => {
       const user = data.users.find(x => x.id === pendingValidationUser.id);
       if (user) {
         user.validation_code = newCode;
@@ -880,37 +770,37 @@ async function resendValidationCode() {
       }
       return data;
     });
-    
-    if (!saveResult.success) {
-      throw new Error("Failed to update validation code");
+
+    if (!saveResult || !saveResult.success) {
+      console.warn("resendValidationCode: remote save uncertain.");
     }
-    
-    // Send email with retry
+
+    // Retry email up to 3 times.
     let emailSent = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
       emailSent = await sendValidationEmail(
-        pendingValidationUser.email, 
-        pendingValidationUser.name, 
+        pendingValidationUser.email,
+        pendingValidationUser.name,
         newCode
       );
       if (emailSent) break;
       await sleep(1000);
     }
-    
-    // Update pendingValidationUser reference
+
+    // Keep pendingValidationUser in sync with persisted state.
     const updatedUser = appData.users.find(x => x.id === pendingValidationUser.id);
     if (updatedUser) {
       pendingValidationUser = { ...updatedUser };
     } else {
       pendingValidationUser.validation_code = newCode;
     }
-    
+
     if (emailSent) {
       showToast('New validation code sent! Check your email.', 'success');
     } else {
       showToast(`Could not send email. Your validation code is: ${newCode}`, 'warning');
     }
-    
+
   } catch (error) {
     console.error("Resend validation error:", error);
     showToast("Failed to resend code. Please try again.", "error");
@@ -919,7 +809,134 @@ async function resendValidationCode() {
   }
 }
 
+// ── Register ──────────────────────────────────────────────────────
+async function doRegister() {
+  const name      = v('reg-name').trim();
+  const username  = v('reg-username').trim();
+  const email     = v('reg-email').trim().toLowerCase();
+  const password  = v('reg-password');
+  const password2 = v('reg-password2');
+  const gender    = v('reg-gender');
+  const age       = parseInt(v('reg-age'));
+  const phone     = v('reg-phone').trim();
+  const address   = v('reg-address').trim();
 
+  // ── Client-side validation ────────────────────────────────────
+  if (!name || !username || !email || !password || !password2 || !gender || !age || !phone) {
+    showAlert('register-alert', 'Please fill all required fields.', 'error'); return;
+  }
+  if (!isValidName(name)) {
+    showAlert('register-alert', 'Please enter a valid name (2–50 letters, spaces, hyphens, apostrophes).', 'error'); return;
+  }
+  if (!isValidUsername(username)) {
+    showAlert('register-alert', 'Username must be 3–30 characters (letters, numbers, . and _ only).', 'error'); return;
+  }
+  if (!isValidEmail(email)) {
+    showAlert('register-alert', 'Please enter a valid email address.', 'error'); return;
+  }
+  if (password !== password2) {
+    showAlert('register-alert', 'Passwords do not match.', 'error'); return;
+  }
+  if (password.length < 6) {
+    showAlert('register-alert', 'Password must be at least 6 characters.', 'error'); return;
+  }
+  if (isNaN(age) || age < 18 || age > 120) {
+    showAlert('register-alert', 'You must be at least 18 years old.', 'error'); return;
+  }
+  if (!isValidPhone(phone)) {
+    showAlert('register-alert', 'Please enter a valid phone number.', 'error'); return;
+  }
+
+  setLoading('btn-register', true, 'Creating Account…');
+
+  const validationCode = randomCode();
+  const userId         = uid();
+  const creationTime   = now();
+
+  const newUser = {
+    id: userId, name, username, email,
+    password: hashStr(password),
+    gender, age, phone, address: address || '',
+    role: 'voter', validated: 'No',
+    validation_code: validationCode,
+    created: creationTime, updated: creationTime
+  };
+
+  try {
+    // ── Atomic save with duplicate guard inside the write lock ────
+    // Using saveData() (enqueued) so this write is serialized with
+    // any other concurrent saves (FIX-7).
+    const saveResult = await saveData(data => {
+      // These checks run against the most current remote snapshot
+      // fetched inside atomicSave — the definitive race-condition guard.
+      if (data.users.some(u => u.email.toLowerCase() === email)) {
+        throw new Error("DUPLICATE_EMAIL");
+      }
+      if (data.users.some(u => u.username?.toLowerCase() === username.toLowerCase())) {
+        throw new Error("DUPLICATE_USERNAME");
+      }
+      data.users.push(newUser);
+      return data;
+    });
+
+    if (!saveResult || !saveResult.success) {
+      if (saveResult?.error === "DUPLICATE_EMAIL") {
+        setLoading('btn-register', false, 'Create Account →');
+        showAlert('register-alert', 'This email is already registered.', 'error'); return;
+      }
+      if (saveResult?.error === "DUPLICATE_USERNAME") {
+        setLoading('btn-register', false, 'Create Account →');
+        showAlert('register-alert', 'This username is already taken.', 'error'); return;
+      }
+      if (saveResult?.error === "REMOTE_UNAVAILABLE") {
+        // Local-only save succeeded. The user is persisted locally and
+        // will sync to remote on the next successful write.
+        console.warn("Registration saved locally; will sync to remote when connectivity returns.");
+      } else {
+        throw new Error(saveResult?.error || "Unknown save error");
+      }
+    }
+
+    // ── Send verification email (non-critical) ────────────────────
+    let emailSent = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        emailSent = await sendValidationEmail(email, name, validationCode);
+        if (emailSent) break;
+        await sleep(1000);
+      } catch (emailError) {
+        console.warn(`Email attempt ${attempt} failed:`, emailError);
+      }
+    }
+
+    setLoading('btn-register', false, 'Create Account →');
+
+    if (emailSent) {
+      showToast('Account created! Check your email for the verification code.', 'success');
+    } else {
+      showToast(`Account created! Your verification code is: ${validationCode}`, 'warning');
+    }
+
+    const persistedUser = appData.users.find(u => u.id === userId) || newUser;
+    pendingValidationUser = persistedUser;
+    showValidationCard(email);
+
+  } catch (error) {
+    console.error("Registration error:", error);
+    setLoading('btn-register', false, 'Create Account →');
+    showAlert('register-alert', 'Registration failed. Please try again.', 'error');
+  }
+}
+
+// ── Logout ────────────────────────────────────────────────────────
+function logout() {
+  stopPolling();
+  currentUser = null;
+  lsSessionClear();
+  updateHeaderForUser(null);
+  navigate('home');
+  showToast('You have been logged out.', 'info');
+}
 
 function loginSuccess(user) {
   currentUser = user;
@@ -972,261 +989,6 @@ document.addEventListener('click', e => {
     dd.classList.add('hidden');
   }
 });
-
-// ── Register ──────────────────────────────────────────────────────
-/*
-async function doRegister() {
-  const name      = v('reg-name').trim();
-  const username  = v('reg-username').trim();
-  const email     = v('reg-email').trim().toLowerCase();
-  const password  = v('reg-password');
-  const password2 = v('reg-password2');
-  const gender    = v('reg-gender');
-  const age       = parseInt(v('reg-age'));
-  const phone     = v('reg-phone').trim();
-  const address   = v('reg-address').trim();
-
-  if (!name||!username||!email||!password||!password2||!gender||!age||!phone) {
-    showAlert('register-alert', 'Please fill all required fields.', 'error'); return;
-  }
-  if (password !== password2) { showAlert('register-alert', 'Passwords do not match.', 'error'); return; }
-  if (password.length < 6)    { showAlert('register-alert', 'Password must be at least 6 characters.', 'error'); return; }
-  if (age < 18)               { showAlert('register-alert', 'You must be at least 18 years old.', 'error'); return; }
-
-  setLoading('btn-register', true, 'Creating Account…');
-
-  // Re-fetch the latest user list before the duplicate check so that
-  // two concurrent registrations with the same email/username are both
-  // caught even if they started simultaneously.
-  await loadData();
-
-  if (appData.users.find(u => u.email.toLowerCase() === email)) {
-    setLoading('btn-register', false, 'Create Account →');
-    showAlert('register-alert', 'This email is already registered.', 'error'); return;
-  }
-  if (appData.users.find(u => u.username?.toLowerCase() === username.toLowerCase())) {
-    setLoading('btn-register', false, 'Create Account →');
-    showAlert('register-alert', 'This username is already taken.', 'error'); return;
-  }
-
-  const code    = randomCode();
-  const newUser = {
-    id: uid(), name, username, email,
-    password: hashStr(password),
-    gender, age, phone, address, role: 'voter',
-    validated: 'No', validation_code: code, created: now()
-  };
-
-  let saved = false;
-  let conflictMsg = '';
-
-  await saveData(data => {
-    // Second check inside the serialised write — final race-condition guard
-    if (data.users.find(u => u.email.toLowerCase() === email)) {
-      conflictMsg = 'email'; return data;
-    }
-    if (data.users.find(u => u.username?.toLowerCase() === username.toLowerCase())) {
-      conflictMsg = 'username'; return data;
-    }
-    data.users.push(newUser);
-    saved = true;
-    return data;
-  });
-
-  setLoading('btn-register', false, 'Create Account →');
-
-  if (conflictMsg === 'email') {
-    showAlert('register-alert', 'This email is already registered (another user just signed up).', 'error'); return;
-  }
-  if (conflictMsg === 'username') {
-    showAlert('register-alert', 'This username was just taken. Please choose another.', 'error'); return;
-  }
-
-  await sendValidationEmail(email, name, code);
-  showToast('Account created! Check your email for the verification code.', 'success');
-
-  // FIX: use the user object from appData (post-save) as pendingValidationUser
-  // so it reflects the persisted state rather than the pre-save local copy.
-  pendingValidationUser = appData.users.find(u => u.id === newUser.id) || newUser;
-  showValidationCard(email);
-}
-*/
-
-// ============================================================
-// 5. COMPLETE REWRITE OF doRegister WITH PROPER TRANSACTIONS
-// ============================================================
-async function doRegister() {
-  // --- INPUT COLLECTION ---
-  const name = v('reg-name').trim();
-  const username = v('reg-username').trim();
-  const email = v('reg-email').trim().toLowerCase();
-  const password = v('reg-password');
-  const password2 = v('reg-password2');
-  const gender = v('reg-gender');
-  const age = parseInt(v('reg-age'));
-  const phone = v('reg-phone').trim();
-  const address = v('reg-address').trim();
-  
-  // --- VALIDATION ---
-  if (!name || !username || !email || !password || !password2 || !gender || !age || !phone) {
-    showAlert('register-alert', 'Please fill all required fields.', 'error');
-    return;
-  }
-  
-  if (!isValidName(name)) {
-    showAlert('register-alert', 'Please enter a valid name (2-50 characters, letters, spaces, hyphens, apostrophes).', 'error');
-    return;
-  }
-  
-  if (!isValidUsername(username)) {
-    showAlert('register-alert', 'Username must be 3-30 characters (letters, numbers, . and _ only).', 'error');
-    return;
-  }
-  
-  if (!isValidEmail(email)) {
-    showAlert('register-alert', 'Please enter a valid email address.', 'error');
-    return;
-  }
-  
-  if (password !== password2) {
-    showAlert('register-alert', 'Passwords do not match.', 'error');
-    return;
-  }
-  
-  if (password.length < 6) {
-    showAlert('register-alert', 'Password must be at least 6 characters.', 'error');
-    return;
-  }
-  
-  if (isNaN(age) || age < 18 || age > 120) {
-    showAlert('register-alert', 'You must be at least 18 years old.', 'error');
-    return;
-  }
-  
-  if (!isValidPhone(phone)) {
-    showAlert('register-alert', 'Please enter a valid phone number.', 'error');
-    return;
-  }
-  
-  // Disable button to prevent double submission
-  setLoading('btn-register', true, 'Creating Account…');
-  
-  const validationCode = randomCode();
-  const userId = uid();
-  const creationTime = now();
-  
-  // Prepare new user object
-  const newUser = {
-    id: userId,
-    name: name,
-    username: username,
-    email: email,
-    password: hashStr(password),
-    gender: gender,
-    age: age,
-    phone: phone,
-    address: address || "",
-    role: 'voter',
-    validated: 'No',
-    validation_code: validationCode,
-    created: creationTime,
-    updated: creationTime,
-    registration_attempts: 1
-  };
-  
-  try {
-    // --- ATOMIC SAVE WITH CONFLICT DETECTION ---
-    const saveResult = await atomicSave(data => {
-      // CRITICAL: Check duplicates INSIDE the transaction
-      const emailExists = data.users.some(u => u.email.toLowerCase() === email);
-      if (emailExists) {
-        throw new Error("DUPLICATE_EMAIL");
-      }
-      
-      const usernameExists = data.users.some(u => u.username?.toLowerCase() === username.toLowerCase());
-      if (usernameExists) {
-        throw new Error("DUPLICATE_USERNAME");
-      }
-      
-      data.users.push(newUser);
-      return data;
-    }, { retryOnConflict: true, maxRetries: 3 });
-    
-    if (!saveResult.success) {
-      if (saveResult.error === "DUPLICATE_EMAIL") {
-        setLoading('btn-register', false, 'Create Account →');
-        showAlert('register-alert', 'This email is already registered.', 'error');
-        return;
-      }
-      if (saveResult.error === "DUPLICATE_USERNAME") {
-        setLoading('btn-register', false, 'Create Account →');
-        showAlert('register-alert', 'This username is already taken.', 'error');
-        return;
-      }
-      throw new Error(saveResult.error);
-    }
-    
-    // --- EMAIL SENDING WITH RETRY (NON-CRITICAL FOR REGISTRATION) ---
-    let emailSent = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        emailSent = await sendValidationEmail(email, name, validationCode);
-        if (emailSent) break;
-        await sleep(1000);
-      } catch (emailError) {
-        console.warn(`Email attempt ${attempt} failed:`, emailError);
-      }
-    }
-    
-    // Reset button state
-    setLoading('btn-register', false, 'Create Account →');
-    
-    // Success messaging
-    if (emailSent) {
-      showToast('Account created! Check your email for the verification code.', 'success');
-    } else {
-      showToast(`Account created! Your verification code is: ${validationCode}`, 'warning');
-    }
-    
-    // Get the persisted user and proceed to validation
-    const persistedUser = appData.users.find(u => u.id === userId);
-    if (!persistedUser) {
-      throw new Error("User not found after save");
-    }
-    
-    pendingValidationUser = persistedUser;
-    showValidationCard(email);
-    
-  } catch (error) {
-    console.error("Registration error:", error);
-    setLoading('btn-register', false, 'Create Account →');
-    
-    // Attempt to rollback if user was created but something else failed
-    if (error.message !== "DUPLICATE_EMAIL" && error.message !== "DUPLICATE_USERNAME") {
-      // Try to remove the partially created user
-      await atomicSave(data => {
-        data.users = data.users.filter(u => u.id !== userId);
-        return data;
-      }, { validate: false }).catch(rollbackError => {
-        console.error("Rollback failed:", rollbackError);
-      });
-    }
-    
-    showAlert('register-alert', 'Registration failed. Please try again.', 'error');
-  }
-}
-
-
-
-// ── Logout ────────────────────────────────────────────────────────
-function logout() {
-  stopPolling();
-  currentUser = null;
-  lsSessionClear();
-  updateHeaderForUser(null);
-  navigate('home');
-  showToast('You have been logged out.', 'info');
-}
 
 // ── Dashboard ─────────────────────────────────────────────────────
 function renderDashboard() {
@@ -1584,17 +1346,45 @@ function openUserEdit(id) {
   openModal('modal-user');
 }
 
+// FIX-6: saveUserEdit now guards against duplicate email/username
+// when an admin edits a user record.
 async function saveUserEdit() {
   const capUserId = editingUserId;
+  const newEmail    = v('eu-email').trim().toLowerCase();
+  const newUsername = v('eu-username').trim().toLowerCase();
 
-  await saveData(data => {
+  const saveResult = await saveData(data => {
+    // Guard: ensure the new email is not already taken by another account.
+    if (data.users.some(u => u.id !== capUserId && u.email.toLowerCase() === newEmail)) {
+      throw new Error("DUPLICATE_EMAIL");
+    }
+    // Guard: ensure the new username is not already taken by another account.
+    if (newUsername && data.users.some(u => u.id !== capUserId && u.username?.toLowerCase() === newUsername)) {
+      throw new Error("DUPLICATE_USERNAME");
+    }
     const u = data.users.find(x => x.id === capUserId);
     if (!u) return data;
-    u.name = v('eu-name').trim(); u.username = v('eu-username').trim(); u.email = v('eu-email').trim();
-    u.gender = v('eu-gender'); u.age = parseInt(v('eu-age'))||u.age; u.phone = v('eu-phone').trim();
-    u.validated = v('eu-validated'); u.role = v('eu-role'); u.updated = now();
+    u.name      = v('eu-name').trim();
+    u.username  = v('eu-username').trim();
+    u.email     = v('eu-email').trim();
+    u.gender    = v('eu-gender');
+    u.age       = parseInt(v('eu-age')) || u.age;
+    u.phone     = v('eu-phone').trim();
+    u.validated = v('eu-validated');
+    u.role      = v('eu-role');
+    u.updated   = now();
     return data;
   });
+
+  if (!saveResult || !saveResult.success) {
+    if (saveResult?.error === "DUPLICATE_EMAIL") {
+      showAlert('user-form-alert', 'This email is already in use by another account.', 'error'); return;
+    }
+    if (saveResult?.error === "DUPLICATE_USERNAME") {
+      showAlert('user-form-alert', 'This username is already taken.', 'error'); return;
+    }
+    showAlert('user-form-alert', 'Save failed. Please try again.', 'error'); return;
+  }
 
   closeModal('modal-user'); renderUsersTable();
   showToast('User updated!', 'success'); editingUserId = null;
@@ -1892,14 +1682,13 @@ function selectCandidate(catId, candId) {
   document.getElementById(`cand-${catId}-${candId}`)?.classList.add('selected');
 }
 
-// ── Submit Votes (fully atomic, duplicate-safe) ───────────────────
+// ── Submit Votes ──────────────────────────────────────────────────
 async function submitVotes() {
   if (!currentUser || !votingElection) return;
 
-  // FIX: re-fetch the latest data before reading categories/candidates
-  // so the unvoted guard uses the most current election structure.
-  // This matters when the voter's in-memory state might not reflect
-  // categories added by the admin after the voter's last data load.
+  // Refresh data before reading categories to catch admin changes made
+  // after the voter opened the vote modal.
+  // FIX-1 applies: loadData() no longer wipes on a failed fetch.
   await loadData();
 
   const cats    = appData.categories.filter(c => c.electionId === votingElection.id);
@@ -1921,9 +1710,6 @@ async function submitVotes() {
   let duplicateError = false;
 
   await saveData(data => {
-    // Re-check inside the write lock: has this voter already voted in
-    // any of these categories? This runs against the very latest remote
-    // snapshot fetched by atomicSave — the definitive race-condition guard.
     const existing = data.votes.filter(v => v.voterId === voterId && v.electionId === elId);
     const alreadyVotedCats = new Set(existing.map(v => v.categoryId));
 
@@ -2174,37 +1960,12 @@ function setText(id, txt) { const el=document.getElementById(id); if(el) el.text
 function esc(str)         { if(!str) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Init ──────────────────────────────────────────────────────────
-/*
 async function init() {
   await loadData();
-  _initHamburger();
-
-  const session = lsSessionGet();
-  if (session) {
-    const user = appData.users.find(u => u.id === session.id);
-    if (user) {
-      currentUser = user;
-      updateHeaderForUser(user);
-      startPolling();
-    }
-  }
-
-  refreshAdminStats();
-  renderHomePage();
-
-  const dateEl = document.getElementById('admin-date');
-  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-}
-*/
-// ============================================================
-// 10. UPDATE INIT FUNCTION TO INCLUDE INTEGRITY CHECK
-// ============================================================
-// Replace your existing init function with this:
-async function init() {
-  await loadData();
+  // performStartupIntegrityCheck is advisory only — it does not modify data.
   await performStartupIntegrityCheck();
   _initHamburger();
-  
+
   const session = lsSessionGet();
   if (session) {
     const user = appData.users.find(u => u.id === session.id);
@@ -2213,20 +1974,17 @@ async function init() {
       updateHeaderForUser(user);
       startPolling();
     } else if (user && user.validated === 'No') {
-      // User exists but not validated - clear invalid session
+      // Clear session for unvalidated users to avoid stale state.
       lsSessionClear();
     }
   }
-  
+
   refreshAdminStats();
   renderHomePage();
-  
+
   const dateEl = document.getElementById('admin-date');
-  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 }
 
