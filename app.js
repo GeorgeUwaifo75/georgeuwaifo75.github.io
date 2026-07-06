@@ -2712,7 +2712,7 @@ function updateUIForUser(user) {
 
 
 // In loadUserDashboard function
-async function loadUserDashboard() {
+async function loadUserDashboard(forceRefresh = false) {
     console.log('Loading user dashboard for:', auth.currentUser?.userId);
     
     const dashboardContent = document.getElementById('dashboardContent');
@@ -2731,7 +2731,8 @@ async function loadUserDashboard() {
             return;
         }
         
-        const products = await api.getProductsBySeller(auth.currentUser.userId);
+        // Pass forceRefresh to getProductsBySeller
+        const products = await api.getProductsBySeller(auth.currentUser.userId, forceRefresh);
         console.log(`Found ${products.length} products for user`);
         
         // Calculate stats
