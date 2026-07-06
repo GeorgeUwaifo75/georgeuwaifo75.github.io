@@ -1011,6 +1011,51 @@ class ApiService {
         await this.updateBin(CONFIG.BINS.ALLPRODUCTS, filtered);
     }
 
+// ============ FULL DATA REPLACE (for Restore) ============
+
+async replaceFullData(newRecord) {
+    // newRecord must have allusers, allproducts, allpayments arrays
+    if (!newRecord.allusers || !newrecord.allproducts || !newRecord.allpayments) {
+        throw new Error('Invalid record structure: missing required arrays');
+    }
+    if (!Array.isArray(newRecord.allusers) ||
+        !Array.isArray(newRecord.allproducts) ||
+        !Array.isArray(newRecord.allpayments)) {
+        throw new Error('Data arrays must be arrays');
+    }
+
+    const response = await this.fetchWithRetry(
+        `${this.baseUrl}/b/${this.mainBinId}`,
+        {
+            method: 'PUT',
+            includeMeta: false,
+            body: JSON.stringify(newRecord)
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to replace data: ${response.status}`);
+    }
+
+    // Update local cache
+    this.localCache.allusers = newRecord.allusers;
+    this.localCache.allproducts = newRecord.allproducts;
+    this.localCache.allpayments = newRecord.allpayments;
+    const now = Date.now();
+    this.lastFetchTime.allusers = now;
+    this.lastFetchTime.allproducts = now;
+    this.lastFetchTime.allpayments = now;
+    this.saveToLocalStorage();
+
+    // Bump versions
+    this.binVersions.allusers = (this.binVersions.allusers || 0) + 1;
+    this.binVersions.allproducts = (this.binVersions.allproducts || 0) + 1;
+    this.binVersions.allpayments = (this.binVersions.allpayments || 0) + 1;
+    this.saveVersionInfo();
+
+    return true;
+}
+
     async deactivateExpiredProduct(sku) {
         const products = await this.getAllProducts(true);
         const product = products.find(p => p.sku === sku);
