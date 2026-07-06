@@ -3431,7 +3431,6 @@ async function editProduct(sku) {
     });
 }
 
-/*
 async function deleteProduct(sku) {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
@@ -3439,23 +3438,6 @@ async function deleteProduct(sku) {
         await api.deleteProduct(sku);
         showNotification('✅ Product deleted successfully!', 'success');
         loadUserDashboard(); // refresh the dashboard
-    } catch (error) {
-        console.error('Error deleting product:', error);
-        showNotification('❌ Failed to delete product: ' + error.message, 'error');
-    }
-}
-*/
-
-async function deleteProduct(sku) {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-
-    try {
-        // Wait for any pending writes to finish before reading
-        await api._drainWriteQueue();
-        await api.deleteProduct(sku);
-        showNotification('✅ Product deleted successfully!', 'success');
-        // Force a fresh reload after a short delay to ensure cache is updated
-        setTimeout(() => loadUserDashboard(), 300);
     } catch (error) {
         console.error('Error deleting product:', error);
         showNotification('❌ Failed to delete product: ' + error.message, 'error');
@@ -4562,7 +4544,7 @@ async function adminToggleProductStatus(sku) {
     }
 }
 
-/*
+
 async function adminDeleteProduct(sku) {
     if (confirm('Are you sure you want to delete this product?')) {
         await api.deleteProduct(sku);
@@ -4570,8 +4552,9 @@ async function adminDeleteProduct(sku) {
         loadAllProductsAdmin();
     }
 }
-*/
 
+
+/*
 async function adminDeleteProduct(sku) {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
@@ -4583,7 +4566,7 @@ async function adminDeleteProduct(sku) {
         console.error('Error deleting product:', error);
         showNotification('❌ Failed to delete product: ' + error.message, 'error');
     }
-}
+}*/
 
 
 function showAboutModal() {
