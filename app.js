@@ -3437,13 +3437,13 @@ async function deleteProduct(sku) {
     try {
         await api.deleteProduct(sku);
         showNotification('✅ Product deleted successfully!', 'success');
-        loadUserDashboard(); // refresh the dashboard
+        // Force a fresh reload of the dashboard (with cache bypass)
+        await loadUserDashboard(true);  // we need to modify loadUserDashboard to accept forceRefresh
     } catch (error) {
         console.error('Error deleting product:', error);
         showNotification('❌ Failed to delete product: ' + error.message, 'error');
     }
 }
-
 
 
 // Compress image to approximately 40% of original size
