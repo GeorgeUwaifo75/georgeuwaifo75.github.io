@@ -125,39 +125,6 @@ function shouldSendEmailAlert(chatData) {
 // ============ SEARCH FUNCTIONALITY ============
 
 // Initialize search
-/*
-function initializeSearch() {
-    console.log('Initializing search...');
-    
-    const searchInput = document.getElementById('searchInput');
-    const searchBtn = document.getElementById('searchButton');
-    
-    if (!searchInput || !searchBtn) return;
-    
-    // Search on button click
-    searchBtn.addEventListener('click', performSearch);
-    
-    // Search on Enter key
-    // In initializeSearch function, replace the input event listener:
-      searchInput.addEventListener('input', debounce(() => {
-          if (searchInput.value.trim().length >= 2) {
-              performSearch();
-          }
-      }, 500));
-    
-    
-    // Real-time search with debounce (optional)
-    let debounceTimeout;
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(() => {
-            if (searchInput.value.trim().length >= 2) {
-                performSearch();
-            }
-        }, 400);
-    });
-}
-*/
 
 function initializeSearch() {
     console.log('Initializing search...');
@@ -1912,258 +1879,6 @@ async function loadProductsByCategory(category) {
 
 
 // Initialize image slider for mobile only - with bottom controls
-/*
-function initializeImageSlider(product) {
-    // Only initialize on mobile
-    if (window.innerWidth > 768) return;
-    
-    console.log('Initializing mobile slider for product:', product.sku);
-    
-    // FORCE ALL IMAGES TO BE VISIBLE
-    const allImages = document.querySelectorAll('.product-image-item img');
-    allImages.forEach(img => {
-        img.style.opacity = '1';
-        img.style.display = 'block';
-        img.style.visibility = 'visible';
-    });
-    
-    // Show mobile controls
-    const controls = document.getElementById('sliderControls');
-    if (controls) {
-        controls.style.display = 'flex';
-        console.log('Slider controls displayed');
-    } else {
-        console.error('Slider controls element not found');
-        return;
-    }
-    
-    const slider = document.getElementById('productImageSlider');
-    const prevBtn = document.getElementById('prevImage');
-    const nextBtn = document.getElementById('nextImage');
-    const dots = document.querySelectorAll('.slider-dot');
-    const positionSpan = document.getElementById('imagePosition');
-    
-    if (!slider) {
-        console.error('Slider element not found');
-        return;
-    }
-    
-    if (!prevBtn || !nextBtn) {
-        console.error('Navigation buttons not found');
-        return;
-    }
-    
-    if (!dots.length) {
-        console.error('Slider dots not found');
-        return;
-    }
-    
-    let currentIndex = 0;
-    const totalImages = product.images.length;
-    let scrollTimeout;
-    let isUpdatingFromButton = false;
-    let isProgrammaticScroll = false;
-    
-    console.log(`Slider initialized with ${totalImages} images`);
-    
-    // Update all indicators
-    function updateIndicators(index) {
-        // Update dots
-        dots.forEach((dot, i) => {
-            if (i === index) {
-                dot.classList.add('active');
-            } else {
-                dot.classList.remove('active');
-            }
-        });
-        
-        // Update position text
-        if (positionSpan) {
-            positionSpan.textContent = `${index + 1}/${totalImages}`;
-        }
-        
-        // Update button states
-        prevBtn.disabled = index === 0;
-        nextBtn.disabled = index === totalImages - 1;
-    }
-    
-    // Scroll to specific image
-    function scrollToIndex(index, smooth = true) {
-        if (index < 0 || index >= totalImages) return;
-        
-        const imageItems = slider.querySelectorAll('.product-image-item');
-        if (imageItems.length > index) {
-            isProgrammaticScroll = true;
-            imageItems[index].scrollIntoView({
-                behavior: smooth ? 'smooth' : 'auto',
-                block: 'nearest',
-                inline: 'center'
-            });
-            currentIndex = index;
-            updateIndicators(index);
-            
-            // Reset flag after scroll completes
-            setTimeout(() => {
-                isProgrammaticScroll = false;
-            }, smooth ? 300 : 50);
-        }
-    }
-    
-    // Previous image
-    prevBtn.addEventListener('click', () => {
-        isUpdatingFromButton = true;
-        if (currentIndex > 0) {
-            scrollToIndex(currentIndex - 1);
-        }
-        setTimeout(() => {
-            isUpdatingFromButton = false;
-        }, 300);
-    });
-    
-    // Next image
-    nextBtn.addEventListener('click', () => {
-        isUpdatingFromButton = true;
-        if (currentIndex < totalImages - 1) {
-            scrollToIndex(currentIndex + 1);
-        }
-        setTimeout(() => {
-            isUpdatingFromButton = false;
-        }, 300);
-    });
-    
-    // Click on dots to navigate
-    dots.forEach((dot, index) => {
-        dot.addEventListener('click', () => {
-            isUpdatingFromButton = true;
-            scrollToIndex(index);
-            setTimeout(() => {
-                isUpdatingFromButton = false;
-            }, 300);
-        });
-    });
-    
-    // FIX: Use scrollend event if available, otherwise fallback to scroll with debounce
-    // This only updates when the scroll actually stops
-    function handleScrollEnd() {
-        if (isProgrammaticScroll || isUpdatingFromButton) return;
-        
-        const imageItems = slider.querySelectorAll('.product-image-item');
-        const sliderRect = slider.getBoundingClientRect();
-        const centerPoint = sliderRect.left + sliderRect.width / 2;
-        
-        let closestIndex = 0;
-        let closestDistance = Infinity;
-        
-        imageItems.forEach((item, index) => {
-            const itemRect = item.getBoundingClientRect();
-            const itemCenter = itemRect.left + itemRect.width / 2;
-            const distance = Math.abs(itemCenter - centerPoint);
-            
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestIndex = index;
-            }
-        });
-        
-        if (closestIndex !== currentIndex) {
-            console.log(`Scroll ended, updating from ${currentIndex + 1} to ${closestIndex + 1}`);
-            currentIndex = closestIndex;
-            updateIndicators(currentIndex);
-        }
-    }
-    
-    // Use scrollend event if supported (modern browsers)
-    if ('onscrollend' in slider) {
-        slider.addEventListener('scrollend', handleScrollEnd);
-    } else {
-        // Fallback for older browsers - use debounced scroll
-        let scrollEndTimer;
-        slider.addEventListener('scroll', () => {
-            clearTimeout(scrollEndTimer);
-            scrollEndTimer = setTimeout(handleScrollEnd, 150);
-        });
-    }
-    
-    // Handle touch events for swipe with better prevention
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let isSwiping = false;
-    
-    slider.addEventListener('touchstart', (e) => {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        isSwiping = false;
-    }, { passive: true });
-    
-    slider.addEventListener('touchmove', (e) => {
-        const touchCurrentX = e.touches[0].clientX;
-        const touchCurrentY = e.touches[0].clientY;
-        const diffX = Math.abs(touchCurrentX - touchStartX);
-        const diffY = Math.abs(touchCurrentY - touchStartY);
-        
-        // If horizontal swipe detected, prevent page scroll
-        if (diffX > diffY && diffX > 10) {
-            isSwiping = true;
-            e.preventDefault();
-        }
-    }, { passive: false });
-    
-    slider.addEventListener('touchend', (e) => {
-        if (!isSwiping) return;
-        
-        const touchEndX = e.changedTouches[0].clientX;
-        const diffX = touchStartX - touchEndX;
-        const swipeThreshold = 50;
-        
-        if (Math.abs(diffX) > swipeThreshold) {
-            if (diffX > 0 && currentIndex < totalImages - 1) {
-                // Swipe left - go to next
-                scrollToIndex(currentIndex + 1);
-            } else if (diffX < 0 && currentIndex > 0) {
-                // Swipe right - go to previous
-                scrollToIndex(currentIndex - 1);
-            }
-        }
-        isSwiping = false;
-    });
-    
-    // Handle image load to ensure proper sizing
-    const images = slider.querySelectorAll('.product-image-item img');
-    images.forEach(img => {
-        if (img.complete) {
-            img.classList.add('loaded');
-        } else {
-            img.addEventListener('load', () => {
-                img.classList.add('loaded');
-            });
-            img.addEventListener('error', () => {
-                img.classList.add('error');
-                img.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
-            });
-        }
-    });
-    
-    // Initialize first position
-    updateIndicators(0);
-    
-    // Ensure first image is properly aligned after a short delay
-    setTimeout(() => {
-        scrollToIndex(0, false);
-        console.log('Initial scroll to first image');
-    }, 100);
-    
-    // Add CSS to prevent page scroll interference
-    const style = document.createElement('style');
-    style.textContent = `
-        @media (max-width: 768px) {
-            .product-images-grid {
-                touch-action: pan-y pinch-zoom;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-}
-*/
 
 function initializeImageSlider(product) {
     if (window.innerWidth > 768) return;
@@ -2323,249 +2038,6 @@ function initializeImageSlider(product) {
 
 
 
-/*
-async function loadProductDetail(sku) {
-    try {
-        const products = await api.getAllProducts();
-        const product = products.find(p => p.sku === sku);
-        
-        if (!product) {
-            alert('Product not found');
-            return;
-        }
-        
-        const seller = await api.getUserByUserId(product.sellerId);
-        const detailContainer = document.getElementById('productDetail');
-        
-        // Mark chats as read if current user is the seller
-        if (auth.currentUser && auth.currentUser.userId === product.sellerId) {
-            await api.markChatAsRead(sku, auth.currentUser.userId);
-        }
-        
-        // Format dates
-        const advertisedDate = new Date(product.dateAdvertised).toLocaleDateString('en-NG', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-        
-        const endDate = product.endDate ? new Date(product.endDate).toLocaleDateString('en-NG', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        }) : 'Not set';
-        
-        // Calculate days remaining
-        let daysRemaining = 'N/A';
-        if (product.endDate) {
-            const remaining = Math.ceil((new Date(product.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-            daysRemaining = remaining > 0 ? `${remaining} days` : 'Expired';
-        }
-        
-        // Format seller's phone for WhatsApp
-        const sellerPhone = seller?.telephone || product.sellerContact || '';
-        // Remove any non-digit characters and ensure it has country code
-        const formattedPhone = formatPhoneForWhatsApp(sellerPhone);
-        
-       // Create enhanced image display with desktop grid and mobile slider// Create enhanced image display with desktop grid and mobile slider with bottom controls
-// Create enhanced image display with desktop grid and mobile slider with bottom controls
-const imageGridHTML = product.images && product.images.length > 0 
-    ? `
-        <!-- Image Container - Holds both grid/slider and controls -->
-        <div class="product-image-container">
-            
-            <!-- Image Grid/Slider - Desktop shows 2x2, Mobile shows slider -->
-            <div class="product-images-grid" id="productImageSlider">
-                ${product.images.map((img, index) => `
-                    <div class="product-image-item" data-index="${index}" onclick="expandImage('${img}', ${JSON.stringify(product.images).replace(/"/g, '&quot;')}, ${index})">
-                        <img src="${img}" alt="${product.name} - Image ${index + 1}" loading="lazy">
-                    </div>
-                `).join('')}
-            </div>
-            
-            <!-- Mobile Only: Slider Controls at BOTTOM -->
-            <div class="mobile-slider-controls mobile-only" id="sliderControls" style="display: none;">
-                
-                <!-- Dot indicators -->
-                <div class="slider-dots" id="sliderDots">
-                    ${product.images.map((_, index) => `
-                        <button class="slider-dot ${index === 0 ? 'active' : ''}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
-                    `).join('')}
-                </div>
-                
-                <!-- Navigation buttons and counter -->
-                <div class="slider-nav-row">
-                    <button class="slider-nav-btn" id="prevImage" disabled aria-label="Previous image">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    
-                    <span class="image-counter-pill">
-                        <i class="fas fa-images"></i>
-                        <span id="imagePosition">1/${product.images.length}</span>
-                    </span>
-                    
-                    <button class="slider-nav-btn" id="nextImage" aria-label="Next image">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `
-    : '<div class="product-image-item"><img src="https://via.placeholder.com/400x400?text=No+Image" alt="No image available"></div>';
-        
-        detailContainer.innerHTML = `
-            <div class="product-detail-container">
-                <div class="product-header">
-                    <h2>${product.name}</h2>
-                    <p class="product-sku">SKU: ${product.sku}</p>
-                </div>
-                
-                <!-- Product Images - This is the key fix -->
-                ${imageGridHTML}
-                
-                <div class="product-info-grid">
-                    <div class="product-description">
-                        <h3>📝 Description</h3>
-                        <p>${product.description || 'No description provided.'}</p>
-                    </div>
-                    
-                    <div class="product-price-large">
-                        <h3>💰 Price</h3>
-                        <p class="price">₦${product.price.toLocaleString()}</p>
-                    </div>
-                </div>
-                
-                <div class="product-meta">
-                    <div class="meta-item">
-                        <div class="meta-label">Category</div>
-                        <div class="meta-value">${product.category}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Location</div>
-                        <div class="meta-value">${product.state || 'Nigeria'}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Listed on</div>
-                        <div class="meta-value">${advertisedDate}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Ad expires</div>
-                        <div class="meta-value">${endDate}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Time remaining</div>
-                        <div class="meta-value">${daysRemaining}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Views</div>
-                        <div class="meta-value">${product.viewCount || 0}</div>
-                    </div>
-                </div>
-                
-                <div class="seller-info">
-                    <h3>👤 Seller Information</h3>
-                    <div class="seller-details">
-                        <div class="seller-detail-item">
-                            <i class="fas fa-user"></i>
-                            <span>${seller ? seller.firstName + ' ' + seller.lastName : product.sellerName || 'Unknown'}</span>
-                        </div>
-                        
-                        <div class="seller-detail-item">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span>${product.state || 'Nigeria'}</span>
-                        </div>
-                        
-                        <div class="seller-detail-item">
-                            <i class="fas fa-phone"></i>
-                            <span>${seller ? seller.telephone : product.sellerContact || 'N/A'}</span>
-                        </div>
-                        
-                        <!-- WhatsApp Button -->
-                        ${formattedPhone ? `
-                        <div class="seller-detail-item whatsapp-container">
-                            <a href="https://wa.me/${formattedPhone}?text=${encodeURIComponent(generateWhatsAppMessage(product, seller))}" 
-                               target="_blank" 
-                               class="whatsapp-btn">
-                                <i class="fab fa-whatsapp"></i> Chat on WhatsApp
-                            </a>
-                        </div>
-                        ` : ''}
-                        
-                        <div class="seller-detail-item">
-                            <i class="fas fa-calendar"></i>
-                            <span>Member since: ${seller ? new Date(seller.dateOfRegistration).toLocaleDateString() : 'N/A'}</span>
-                        </div>
-                        <div class="seller-detail-item">
-                            <i class="fas fa-tag"></i>
-                            <span>${product.paymentStatus === 'free' ? 'Free Advert' : 'Paid Advert'}</span>
-                        </div>
-                    </div>
-                 </div>
-                
-                <!-- Social Share Section -->
-                ${socialShare.createShareButtons(product)}
-                
-                <div class="chat-section">
-                    <div class="chat-header">
-                        <h3>💬 Chat with Seller</h3>
-                        ${product.unreadChatCount > 0 ? 
-                            `<span class="chat-notification">${product.unreadChatCount} new</span>` : ''}
-                    </div>
-                    
-                    <div class="chat-messages" id="chatMessages">
-                        ${product.chats && product.chats.length > 0 
-                            ? product.chats.map(chat => {
-                                const isOwn = chat.sender === auth.currentUser?.userId;
-                                return `
-                                    <div class="chat-message ${isOwn ? 'own-message' : 'other-message'}">
-                                        <div class="message-sender">${chat.senderName || chat.sender}</div>
-                                        <div>${chat.message}</div>
-                                        <div class="message-time">${new Date(chat.timestamp).toLocaleString()}</div>
-                                    </div>
-                                `;
-                            }).join('') 
-                            : '<p style="text-align: center; color: #666;">No messages yet. Start a conversation!</p>'}
-                    </div>
-                    
-                    ${auth.currentUser ? `
-                        <div class="chat-input">
-                            <textarea id="chatMessageInput" placeholder="Type your message..." rows="2"></textarea>
-                            <button onclick="sendChatMessage('${product.sku}')">
-                                <i class="fas fa-paper-plane"></i> Send
-                            </button>
-                        </div>
-                    ` : `
-                        <p style="text-align: center; color: #666;">
-                            Please <a href="#" onclick="showAuthForm('signin')">sign in</a> to chat with the seller.
-                        </p>
-                    `}
-                </div>
-            </div>
-        `;
-        
-        // Increment view count
-        await api.updateProduct(sku, { viewCount: (product.viewCount || 0) + 1 });
-        
-        showSection('productDetailSection');
-        // Only initialize slider on mobile
-            if (window.innerWidth <= 768) {
-                initializeImageSlider(product);
-                // Call image loading handler immediately
-                setTimeout(handleImageLoading, 50);
-                // And again after a short delay to catch any late-loading images
-                setTimeout(handleImageLoading, 500);
-            } else {
-                // On desktop, just handle image loading
-                setTimeout(handleImageLoading, 50);
-            }
-        
-        
-    } catch (error) {
-        console.error('Error loading product detail:', error);
-        alert('Error loading product details. Please try again.');
-    }
-}
-*/
 async function loadProductDetail(skuOrProduct) {
     try {
         // ── A: Re-use already-loaded product data when possible ──
@@ -3681,110 +3153,6 @@ async function processPaidProduct(productDataStr) {
 
 
 
-// Updated createProduct function with Firebase Storage and state
-/*async function createProduct(paymentStatus, productData = null, paymentType = null) {
-    try {
-        let imageFiles = [];
-        let name, category, description, price, state;
-        
-        if (productData) {
-            name = productData.name;
-            category = productData.category;
-            state = productData.state;
-            description = productData.description;
-            price = productData.price;
-            imageFiles = productData.images || [];
-        } else {
-            imageFiles = await collectImages();
-            if (!imageFiles || imageFiles.length < 4) {
-                alert('Please upload at least 4 images');
-                return null;
-            }
-            
-            name = document.getElementById('productName').value;
-            category = document.getElementById('productCategory').value;
-            state = document.getElementById('productState').value;
-            description = document.getElementById('productDescription').value;
-            price = document.getElementById('productPrice').value;
-        }
-        
-        // Validate inputs including state
-        if (!name || !category || !state || !description || !price) {
-            throw new Error('Missing required fields');
-        }
-        
-        // Show loading indicator
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'loading-spinner';
-        loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); z-index: 10000;';
-        loadingDiv.innerHTML = 'Creating product...';
-        document.body.appendChild(loadingDiv);
-        
-        // Generate SKU first (needed for Firebase path)
-        const sku = 'SKU-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        
-        // Upload images to Firebase
-        loadingDiv.innerHTML = `Uploading ${imageFiles.length} images to Firebase...`;
-        let imageUrls = [];
-        
-        try {
-            imageUrls = await firebaseService.uploadMultipleImages(imageFiles, sku);
-            console.log('✅ Images uploaded to Firebase:', imageUrls);
-        } catch (uploadError) {
-            loadingDiv.remove();
-            throw new Error('Failed to upload images: ' + uploadError.message);
-        }
-        
-        // Prepare product data with image URLs only
-        const completeProductData = {
-            name: name,
-            description: description,
-            price: parseFloat(price),
-            category: category,
-            state: state, // NEW: Include state
-            images: imageUrls,
-            sellerId: auth.currentUser.userId,
-            sellerName: `${auth.currentUser.firstName} ${auth.currentUser.lastName}`,
-            sellerContact: auth.currentUser.telephone,
-            paymentStatus: paymentStatus,
-            paymentType: paymentType
-        };
-        
-        // Calculate payload size (should be tiny now!)
-        const finalSizeKB = JSON.stringify(completeProductData).length / 1024;
-        console.log(`📦 Final payload: ${finalSizeKB.toFixed(2)}KB (with state)`);
-        
-        // This should always pass now since URLs are tiny
-        if (finalSizeKB > 95) {
-            loadingDiv.remove();
-            // If somehow still too large, clean up uploaded images
-            await firebaseService.deleteMultipleImages(imageUrls);
-            throw new Error(`Payload too large (${finalSizeKB.toFixed(0)}KB). This shouldn't happen with URLs only.`);
-        }
-        
-        // Create product in JSONBin.io
-        loadingDiv.innerHTML = 'Saving product data...';
-        const product = await api.createProduct(completeProductData);
-        
-        loadingDiv.remove();
-        
-        console.log('✅ Product created successfully with Firebase images and state:', product);
-        showNotification('✅ Product created successfully!', 'success');
-        
-        return product;
-        
-    } catch (error) {
-        console.error('❌ Error creating product:', error);
-        
-        const loadingDiv = document.querySelector('.loading-spinner');
-        if (loadingDiv) loadingDiv.remove();
-        
-        showNotification('❌ Failed to create product: ' + error.message, 'error');
-        throw error;
-    }
-}*/
-
-
 function showPaymentOptions() {
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -3993,21 +3361,6 @@ async function processProductPayment(sku, paymentType, amount) {
     }
 }
 
-/*
-async function processExistingPayment(sku) {
-    const paymentType = document.getElementById('paymentType').value;
-    
-    try {
-        await paymentService.processAdvertPayment(sku, paymentType);
-        alert('Payment successful! Your ad is now active.');
-        loadUserDashboard();
-    } catch (error) {
-        alert('Payment failed: ' + error.message);
-    }
-    
-    document.querySelector('.modal').remove();
-}
-*/
 
 async function editProduct(sku) {
     const products = await api.getAllProducts();
@@ -4079,10 +3432,15 @@ async function editProduct(sku) {
 }
 
 async function deleteProduct(sku) {
-    if (confirm('Are you sure you want to delete this product?')) {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+
+    try {
         await api.deleteProduct(sku);
-        alert('Product deleted successfully!');
-        loadUserDashboard();
+        showNotification('✅ Product deleted successfully!', 'success');
+        loadUserDashboard(); // refresh the dashboard
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        showNotification('❌ Failed to delete product: ' + error.message, 'error');
     }
 }
 
@@ -4573,7 +3931,9 @@ function attachAdminMenuListeners() {
                 loadPaymentsReport();
             } else if (view === 'settings') {
                 loadAdminSettings();
-            }
+            } else if (view === 'backup') {
+               loadAdminBackupRestore();
+              }
         });
     });
 }
@@ -4962,6 +4322,138 @@ async function loadAdminSettings() {
     });
 }
 
+// ============ ADMIN BACKUP & RESTORE ============
+
+async function loadAdminBackupRestore() {
+    const adminContent = document.getElementById('adminContent');
+    if (!adminContent) return;
+
+    adminContent.innerHTML = `
+        <h3>Backup & Restore</h3>
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="backup-section">
+                <h4>📥 Backup Data</h4>
+                <p>Download a complete backup of all data (users, products, payments) as a JSON file.</p>
+                <button id="backupBtn" class="btn"><i class="fas fa-download"></i> Download Backup</button>
+            </div>
+            <div class="restore-section" style="border-top: 1px solid #ddd; padding-top: 1.5rem;">
+                <h4>📤 Restore Data</h4>
+                <p>Select a backup file to restore. This will <strong>REPLACE</strong> all current data.</p>
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <input type="file" id="restoreFileInput" accept=".txt" style="display: none;">
+                    <button id="restoreSelectBtn" class="btn"><i class="fas fa-folder-open"></i> Select Backup File</button>
+                    <span id="restoreFileName">No file selected</span>
+                    <button id="restoreBtn" class="btn" style="background: #e63946;" disabled>
+                        <i class="fas fa-upload"></i> Restore
+                    </button>
+                </div>
+                <div id="restoreStatus" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+    `;
+
+    // ---- Backup ----
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+        try {
+            const { record } = await api.getFullDataWithVersion();
+            const json = JSON.stringify(record, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const now = new Date();
+            const dateStr = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            a.download = `gtk_bak_${dateStr}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotification('✅ Backup downloaded successfully!', 'success');
+        } catch (error) {
+            console.error('Backup failed:', error);
+            showNotification('❌ Backup failed: ' + error.message, 'error');
+        }
+    });
+
+    // ---- Restore ----
+    const fileInput = document.getElementById('restoreFileInput');
+    const selectBtn = document.getElementById('restoreSelectBtn');
+    const fileNameSpan = document.getElementById('restoreFileName');
+    const restoreBtn = document.getElementById('restoreBtn');
+    const restoreStatus = document.getElementById('restoreStatus');
+
+    selectBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            fileNameSpan.textContent = e.target.files[0].name;
+            restoreBtn.disabled = false;
+        } else {
+            fileNameSpan.textContent = 'No file selected';
+            restoreBtn.disabled = true;
+        }
+    });
+
+    restoreBtn.addEventListener('click', async () => {
+        const file = fileInput.files[0];
+        if (!file) {
+            alert('Please select a backup file first.');
+            return;
+        }
+
+        if (!confirm('⚠️ WARNING: This will REPLACE all current data with the backup data. Are you sure?')) {
+            return;
+        }
+
+        try {
+            const text = await file.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                throw new Error('Invalid JSON format in backup file.');
+            }
+
+            if (!data.allusers || !data.allproducts || !data.allpayments) {
+                throw new Error('Backup file missing required data arrays (allusers, allproducts, allpayments).');
+            }
+            if (!Array.isArray(data.allusers) || !Array.isArray(data.allproducts) || !Array.isArray(data.allpayments)) {
+                throw new Error('Backup data arrays must be arrays.');
+            }
+
+            restoreBtn.disabled = true;
+            restoreBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring...';
+            restoreStatus.innerHTML = '<p class="text-muted">Restoring data... Please wait.</p>';
+
+            await api.replaceFullData(data);
+
+            restoreStatus.innerHTML = '<p style="color: green;">✅ Restore completed successfully!</p>';
+            showNotification('✅ Data restored successfully!', 'success');
+
+            // Refresh admin dashboard after a moment
+            setTimeout(() => {
+                loadAdminDashboard();
+            }, 1500);
+
+        } catch (error) {
+            console.error('Restore failed:', error);
+            restoreStatus.innerHTML = `<p style="color: red;">❌ Restore failed: ${error.message}</p>`;
+            showNotification('❌ Restore failed: ' + error.message, 'error');
+        } finally {
+            restoreBtn.disabled = false;
+            restoreBtn.innerHTML = '<i class="fas fa-upload"></i> Restore';
+            fileInput.value = '';
+            fileNameSpan.textContent = 'No file selected';
+            restoreBtn.disabled = true;
+        }
+    });
+}
+
 async function adminEditUser(userId) {
     const users = await api.getAllUsers();
     const user = users.find(u => u.userId === userId);
@@ -5078,6 +4570,7 @@ async function adminToggleProductStatus(sku) {
     }
 }
 
+/*
 async function adminDeleteProduct(sku) {
     if (confirm('Are you sure you want to delete this product?')) {
         await api.deleteProduct(sku);
@@ -5085,6 +4578,21 @@ async function adminDeleteProduct(sku) {
         loadAllProductsAdmin();
     }
 }
+*/
+
+async function adminDeleteProduct(sku) {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+
+    try {
+        await api.deleteProduct(sku);
+        showNotification('✅ Product deleted successfully!', 'success');
+        loadUserDashboard(); // refresh the dashboard
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        showNotification('❌ Failed to delete product: ' + error.message, 'error');
+    }
+}
+
 
 function showAboutModal() {
     const modal = document.createElement('div');
@@ -5167,6 +4675,7 @@ window.clearUserSearch = clearUserSearch;
 window.changeUsersPerPage = changeUsersPerPage;
 window.attachAdminMenuListeners = attachAdminMenuListeners;
 window.initializeImageSlider = initializeImageSlider;
+window.loadAdminBackupRestore = loadAdminBackupRestore;
 
 window.renewProduct = renewProduct;
 window.processFreeRenewal = processFreeRenewal;
