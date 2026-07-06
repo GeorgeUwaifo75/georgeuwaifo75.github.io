@@ -794,35 +794,37 @@ class ApiService {
 
     // ============ PRODUCT METHODS ============
 
-    async getAllProducts(forceRefresh = false) {
-        const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
-        if (!Array.isArray(products)) return [];
+    // In api.js, replace these methods:
 
-        const needsNormalise = products.some(p =>
-            !p.sku || !p.name || !p.description || p.price === undefined ||
-            !p.category || !Array.isArray(p.images) || !p.sellerId || !p.activityStatus || !p.paymentStatus
-        );
+async getAllProducts(forceRefresh = false) {
+    const products = await this.getBin(CONFIG.BINS.ALLPRODUCTS, forceRefresh);
+    if (!Array.isArray(products)) return [];
 
-        if (!needsNormalise) return products;
+    const needsNormalise = products.some(p =>
+        !p.sku || !p.name || !p.description || p.price === undefined ||
+        !p.category || !Array.isArray(p.images) || !p.sellerId || !p.activityStatus || !p.paymentStatus
+    );
 
-        return products.map(p => ({
-            sku:            p.sku            || '',
-            name:           p.name           || '',
-            description:    p.description    || '',
-            price:          p.price          || 0,
-            category:       p.category       || '',
-            images:         Array.isArray(p.images) ? p.images : [],
-            sellerId:       p.sellerId       || '',
-            activityStatus: p.activityStatus || 'Inactive',
-            paymentStatus:  p.paymentStatus  || 'free',
-            ...p
-        }));
-    }
+    if (!needsNormalise) return products;
 
-    async getProductsBySeller(userId) {
-        const products = await this.getAllProducts();
-        return products.filter(p => p.sellerId === userId);
-    }
+    return products.map(p => ({
+        sku:            p.sku            || '',
+        name:           p.name           || '',
+        description:    p.description    || '',
+        price:          p.price          || 0,
+        category:       p.category       || '',
+        images:         Array.isArray(p.images) ? p.images : [],
+        sellerId:       p.sellerId       || '',
+        activityStatus: p.activityStatus || 'Inactive',
+        paymentStatus:  p.paymentStatus  || 'free',
+        ...p
+    }));
+}
+
+async getProductsBySeller(userId, forceRefresh = false) {
+    const products = await this.getAllProducts(forceRefresh);
+    return products.filter(p => p.sellerId === userId);
+}
 
     async getProductsByCategory(category) {
         try {
@@ -1013,14 +1015,9 @@ class ApiService {
 
 // ============ FULL DATA REPLACE (for Restore) ============
 
-// ============ FULL DATA REPLACE (for Restore) ============
-
 async replaceFullData(newRecord) {
-    // Wait for any pending writes to finish before replacing
-    await this._drainWriteQueue();
-
-    // Validate structure
-    if (!newRecord.allusers || !newRecord.allproducts || !newRecord.allpayments) {
+    // newRecord must have allusers, allproducts, allpayments arrays
+    if (!newRecord.allusers || !newrecord.allproducts || !newRecord.allpayments) {
         throw new Error('Invalid record structure: missing required arrays');
     }
     if (!Array.isArray(newRecord.allusers) ||
@@ -1060,6 +1057,7 @@ async replaceFullData(newRecord) {
 
     return true;
 }
+
     async deactivateExpiredProduct(sku) {
         const products = await this.getAllProducts(true);
         const product = products.find(p => p.sku === sku);
