@@ -3990,32 +3990,6 @@ function changeUsersPerPage(value) {
     }
 }
 
-// Function to attach admin menu listeners
-function attachAdminMenuListeners() {
-    document.querySelectorAll('.dashboard-menu li').forEach(item => {
-        // Remove existing listeners to prevent duplicates
-        item.replaceWith(item.cloneNode(true));
-    });
-    
-    document.querySelectorAll('.dashboard-menu li').forEach(item => {
-        item.addEventListener('click', (e) => {
-            document.querySelectorAll('.dashboard-menu li').forEach(li => li.classList.remove('active'));
-            item.classList.add('active');
-            
-            const view = item.dataset.view;
-            if (view === 'users') {
-                loadAdminDashboard();
-            } else if (view === 'all-products') {
-                loadAllProductsAdmin();
-            } else if (view === 'payments-report') {
-                loadPaymentsReport();
-            } else if (view === 'settings') {
-                loadAdminSettings();
-            }
-        });
-    });
-}
-
 
 async function loadAllProductsAdmin() {
     const adminContent = document.getElementById('adminContent');
