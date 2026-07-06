@@ -3436,16 +3436,22 @@ async function deleteProduct(sku) {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
     try {
+        // 1. Delete the product (writes to queue)
         await api.deleteProduct(sku);
+
+        // 2. Wait until the write is actually processed and committed
+        await api._drainWriteQueue();
+
+        // 3. Now force-reload the dashboard with fresh data
+        await loadUserDashboard(true);
+
+        // 4. Show success notification
         showNotification('✅ Product deleted successfully!', 'success');
-        // Force a fresh reload of the dashboard (with cache bypass)
-        await loadUserDashboard(true);  // we need to modify loadUserDashboard to accept forceRefresh
     } catch (error) {
         console.error('Error deleting product:', error);
         showNotification('❌ Failed to delete product: ' + error.message, 'error');
     }
 }
-
 
 // Compress image to approximately 40% of original size
 async function compressImage(base64String, targetReduction = 0.4) {
