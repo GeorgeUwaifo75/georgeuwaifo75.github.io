@@ -3447,3 +3447,19 @@ footer {
         min-height: 160px;
     }
 }
+/* Backup & Restore */
+.backup-section, .restore-section {
+    background: var(--light-gray);
+    padding: 1.5rem;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.backup-section h4, .restore-section h4 {
+    color: var(--primary-purple);
+    margin-bottom: 0.5rem;
+}
+
+#restoreStatus {
+    margin-top: 1rem;
+}
