@@ -445,7 +445,7 @@ class ApiService {
 
     // ============ HIGH-INTEGRITY WRITE QUEUE ============
 
-    async updateBin(binName, data, metadata = {}) {
+    async updateBin(binName, data, metadata = {}, replace = false) {
         if (!this.validateData(binName, data)) {
             console.error(`❌ Data validation failed for ${binName}`);
             throw new Error(`Invalid data structure for ${binName}`);
@@ -472,7 +472,8 @@ class ApiService {
                     rejectors: [reject],
                     attempts: 0,
                     maxAttempts: 5,
-                    metadata
+                    metadata,
+                    replace: replace  
                 };
 
                 this.pendingWrites[binName] = operation;
@@ -531,6 +532,18 @@ class ApiService {
                     );
                 } else {
                     fullDoc[operation.binName] = operation.data;
+                }
+
+
+                if (operation.replace) {
+                    fullDoc[operation.binName] = operation.data;
+                } else {
+                    const serverSide = fullDoc[operation.binName];
+                    if (Array.isArray(serverSide) && serverSide.length > 0) {
+                        fullDoc[operation.binName] = this.mergeData(serverSide, operation.data, operation.binName);
+                    } else {
+                        fullDoc[operation.binName] = operation.data;
+                    }
                 }
 
                 // CRITICAL FIX: Ensure the other two arrays are never emptied.
@@ -1007,12 +1020,13 @@ async getProductsBySeller(userId, forceRefresh = false) {
         return products[index];
     }
 
+
+
     async deleteProduct(sku) {
         const products = await this.getAllProducts(true);
         const filtered = products.filter(p => p.sku !== sku);
-        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, filtered);
+        await this.updateBin(CONFIG.BINS.ALLPRODUCTS, filtered, {}, true);
     }
-
 // ============ FULL DATA REPLACE (for Restore) ============
 
 async replaceFullData(newRecord) {
