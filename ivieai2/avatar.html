@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>talking avatar · real image</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(145deg, #1e2b3a 0%, #0f1a26 100%);
+    min-height: 100vh; display: flex; justify-content: center; align-items: center;
+    font-family: 'Segoe UI', Roboto, system-ui, sans-serif; padding: 16px;
+  }
+  .app-container {
+    background: rgba(22,34,48,0.75); backdrop-filter: blur(12px);
+    border-radius: 48px; padding: 32px 28px;
+    box-shadow: 0 30px 45px -15px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+    max-width: 700px; width: 100%;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  h1 { color: #d9e9ff; font-weight: 400; font-size: 1.6rem;
+       letter-spacing: 2px; text-transform: uppercase;
+       margin-bottom: 20px; opacity: 0.8; }
+  .avatar-stage {
+    position: relative; margin: 10px 0 25px;
+    filter: drop-shadow(0 15px 15px rgba(0,0,0,0.5));
+  }
+  canvas {
+    display: block; width: 320px; height: 320px;
+    border-radius: 50%; background: #19232e;
+    box-shadow: inset 0 0 30px #00000066, 0 0 0 2px #3e5569, 0 0 0 6px #101a22;
+    transition: box-shadow 0.2s;
+  }
+  canvas.talking {
+    box-shadow: inset 0 0 30px #00000088, 0 0 0 2px #7ab7e0,
+                0 0 0 6px #1d3f53, 0 0 25px #5a9bc0;
+  }
+  .input-area { width: 100%; display: flex; flex-direction: column; gap: 16px; }
+  textarea {
+    width: 100%; padding: 18px 20px; border-radius: 40px;
+    border: 1px solid #3f5567; background: #1d2c3a;
+    box-shadow: inset 0 5px 10px #0c131b;
+    color: #eef5ff; font-size: 1.1rem; font-family: inherit;
+    resize: vertical; min-height: 100px; outline: none;
+  }
+  textarea:focus { border-color: #6c9cc0; box-shadow: inset 0 5px 10px #0c131b, 0 0 0 2px #3f6b8a; }
+  .button-row { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }
+  button {
+    background: #2a3e52; border: none; color: #e2efff;
+    font-weight: 500; font-size: 1.15rem; padding: 14px 32px;
+    border-radius: 50px; cursor: pointer;
+    box-shadow: 0 10px 15px -8px #00000080, 0 0 0 1px #3e5b71 inset;
+    transition: all 0.15s ease; flex: 1 0 auto; min-width: 150px;
+  }
+  button:hover { background: #34536d; transform: scale(1.02); }
+  button:active { transform: scale(0.98); background: #1f3345; }
+  button:disabled { opacity: 0.5; pointer-events: none; }
+  .status { color: #9bb7d4; font-size: 0.95rem; margin-top: 8px;
+            text-align: center; height: 24px; }
+  .controls { display: flex; gap: 10px; justify-content: center;
+              flex-wrap: wrap; margin-top: 6px; font-size: 0.85rem; color: #9bb7d4; }
+  .controls label { display: flex; align-items: center; gap: 6px; }
+  .footer-note { color: #4d667b; font-size: 0.75rem; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="app-container">
+  <h1>🗣️ talking avatar</h1>
+
+  <div class="avatar-stage">
+    <canvas id="avatarCanvas" width="640" height="640"></canvas>
+  </div>
+
+  <div class="input-area">
+    <textarea id="speechText" maxlength="300">Hello! I am your talking avatar. Type anything and press speak.</textarea>
+    <div class="button-row">
+      <button id="speakBtn">🔊 Speak</button>
+      <button id="stopBtn">⏹️ Stop</button>
+    </div>
+
+    <!-- Alignment controls so you can fit the mouth to your photo -->
+    <div class="controls">
+      <label>Mouth X <input type="range" id="mouthX" min="0" max="100" value="50" style="width:80px"></label>
+      <label>Mouth Y <input type="range" id="mouthY" min="0" max="100" value="72" style="width:80px"></label>
+      <label>Mouth W <input type="range" id="mouthW" min="5" max="60" value="26" style="width:80px"></label>
+      <label>Mouth H <input type="range" id="mouthH" min="2" max="40" value="14" style="width:80px"></label>
+    </div>
+
+    <div id="statusMessage" class="status">ready</div>
+  </div>
+  <div class="footer-note">real image · warped lipsync engine</div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('avatarCanvas');
+  const ctx = canvas.getContext('2d');
+  const speakBtn = document.getElementById('speakBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const speechText = document.getElementById('speechText');
+  const statusDiv = document.getElementById('statusMessage');
+
+  // --- Load the real portrait image ---
+  // Replace 'avatar.jpg' with your own image file.
+  const avatarImg = new Image();
+  avatarImg.crossOrigin = 'anonymous';
+  let imgReady = false;
+
+  // Fallback placeholder if image fails to load
+  avatarImg.onload = () => { imgReady = true; drawFrame(); };
+  avatarImg.onerror = () => {
+    console.warn('avatar.jpg not found — using gradient fallback');
+    imgReady = false; drawFrame();
+  };
+  avatarImg.src = 'avatar.jpg';
+
+  // --- Mouth region config (fractions of canvas size) ---
+  const mouthCfg = {
+    x: 0.50,   // center X
+    y: 0.72,   // center Y
+    w: 0.26,   // width
+    h: 0.14    // height
+  };
+
+  // Wire up sliders
+  const bind = (id, key) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => {
+      mouthCfg[key] = parseFloat(el.value) / 100;
+      drawFrame();
+    });
+  };
+  bind('mouthX', 'x');
+  bind('mouthY', 'y');
+  bind('mouthW', 'w');
+  bind('mouthH', 'h');
+
+  // --- Animation state ---
+  let mouthOpenness = 0.18;
+  let targetMouthOpen = 0.18;
+  let isSpeaking = false;
+  let animFrame = null;
+  let phonemeSequence = [];
+  let speechStartTime = 0;
+
+  // --- Draw one frame ---
+  function drawFrame() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // 1. Draw circular clip
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, W / 2 - 4, 0, Math.PI * 2);
+    ctx.clip();
+
+    // 2. Draw the image (cover-fit into the circle)
+    if (imgReady) {
+      const imgAspect = avatarImg.width / avatarImg.height;
+      const canvasAspect = W / H;
+      let dw, dh, dx, dy;
+      if (imgAspect > canvasAspect) {
+        dh = H; dw = H * imgAspect;
+        dx = (W - dw) / 2; dy = 0;
+      } else {
+        dw = W; dh = W / imgAspect;
+        dx = 0; dy = (H - dh) / 2;
+      }
+      ctx.drawImage(avatarImg, dx, dy, dw, dh);
+    } else {
+      // Fallback gradient
+      const g = ctx.createRadialGradient(W*0.35, H*0.3, 40, W/2, H/2, W/2);
+      g.addColorStop(0, '#4a607a');
+      g.addColorStop(1, '#1a2430');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // 3. Warp the mouth region of the photo based on mouthOpenness
+    // We do this by sampling the source region and re-drawing it
+    // stretched vertically around its center.
+    const mcx = mouthCfg.x * W;
+    const mcy = mouthCfg.y * H;
+    const mw  = mouthCfg.w * W;
+    const mh  = mouthCfg.h * H;
+
+    // Expansion factor: at openness 0 -> 1.0, at 0.95 -> ~2.2
+    const expand = 1 + mouthOpenness * 1.4;
+
+    // Source region (the actual photo's mouth)
+    const sx = mcx - mw / 2;
+    const sy = mcy - mh / 2;
+
+    // Destination region: same center, taller
+    const dh2 = mh * expand;
+    const dy2 = mcy - dh2 / 2;
+
+    // Only warp if the photo is loaded (so we have real pixels)
+    if (imgReady) {
+      // Recompute the image's draw offset (same math as step 2)
+      const imgAspect = avatarImg.width / avatarImg.height;
+      const canvasAspect = W / H;
+      let dw, dh, dx, dy;
+      if (imgAspect > canvasAspect) {
+        dh = H; dw = H * imgAspect; dx = (W - dw) / 2; dy = 0;
+      } else {
+        dw = W; dh = W / imgAspect; dx = 0; dy = (H - dh) / 2;
+      }
+
+      // Map the source rect from canvas space to image space
+      const sxImg = (sx - dx) * (avatarImg.width / dw);
+      const syImg = (sy - dy) * (avatarImg.height / dh);
+      const swImg = mw * (avatarImg.width / dw);
+      const shImg = mh * (avatarImg.height / dh);
+
+      // Save, clip, and draw the stretched mouth patch
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(mcx, mcy, mw * 0.55, dh2 * 0.55, 0, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(avatarImg,
+                    sxImg, syImg, swImg, shImg,   // source
+                    sx, dy2, mw, dh2);            // destination (stretched)
+      ctx.restore();
+
+      // Darken the inner mouth a little when wide open for realism
+      if (mouthOpenness > 0.35) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(mcx, mcy, mw * 0.32, (dh2 * 0.32), 0, 0, Math.PI * 2);
+        const darkness = Math.min(0.55, (mouthOpenness - 0.3) * 0.9);
+        ctx.fillStyle = `rgba(20,5,5,${darkness})`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 4. Subtle vignette on the circle edge
+    ctx.restore();
+    const vg = ctx.createRadialGradient(W/2, H/2, W*0.35, W/2, H/2, W/2);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.beginPath();
+    ctx.arc(W/2, H/2, W/2 - 4, 0, Math.PI*2);
+    ctx.fillStyle = vg;
+    ctx.fill();
+  }
+
+  // --- Phoneme generation (same idea as before, condensed) ---
+  function textToPhonemeSequence(text, rate) {
+    const clean = text.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    const words = clean.split(/\s+/).filter(Boolean);
+    const seq = [];
+    const base = 95 / rate;
+    let t = 0;
+
+    for (let wi = 0; wi < words.length; wi++) {
+      const word = words[wi];
+      for (let i = 0; i < word.length; i++) {
+        const c = word[i];
+        let open = 0.45, dur = base;
+        if ('pbm'.includes(c)) { open = 0.10; dur = base * 0.7; }
+        else if ('tdkg'.includes(c)) { open = 0.20; dur = base * 0.8; }
+        else if ('fvszh'.includes(c)) { open = 0.35; dur = base * 1.0; }
+        else if ('aeiou'.includes(c)) { open = 0.85; dur = base * 1.2; }
+        else if (c === 'y') { open = 0.60; dur = base * 1.0; }
+        else if ('lrwmn'.includes(c)) { open = 0.50; dur = base * 0.9; }
+        const jitter = Math.random() * 0.2 - 0.1;
+        open = Math.min(0.95, Math.max(0.1, open + jitter));
+        seq.push({ time: t, target: open, duration: dur });
+        t += dur;
+      }
+      if (wi < words.length - 1) {
+        seq.push({ time: t, target: 0.25, duration: base * 0.8 });
+        t += base * 0.8;
+      }
+    }
+    seq.push({ time: t, target: 0.18, duration: base * 1.5 });
+    return seq;
+  }
+
+  // --- Animation loop ---
+  function animate() {
+    if (!isSpeaking) {
+      mouthOpenness += (0.18 - mouthOpenness) * 0.15;
+      if (Math.abs(mouthOpenness - 0.18) < 0.005) mouthOpenness = 0.18;
+      drawFrame();
+      animFrame = null;
+      return;
+    }
+    const elapsed = performance.now() - speechStartTime;
+    let target = 0.18;
+    for (let i = 0; i < phonemeSequence.length; i++) {
+      const p = phonemeSequence[i];
+      if (elapsed >= p.time && elapsed < p.time + p.duration) { target = p.target; break; }
+      if (elapsed < p.time) {
+        target = i === 0 ? 0.18 : phonemeSequence[i - 1].target * 0.7 + 0.18 * 0.3;
+        break;
+      }
+    }
+    const last = phonemeSequence[phonemeSequence.length - 1];
+    if (last && elapsed >= last.time + last.duration) target = 0.18;
+
+    mouthOpenness += (target - mouthOpenness) * 0.22;
+    mouthOpenness = Math.max(0.01, Math.min(0.95, mouthOpenness));
+    drawFrame();
+    animFrame = requestAnimationFrame(animate);
+  }
+
+  function startAnim() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    animFrame = requestAnimationFrame(animate);
+  }
+
+  // --- Speech ---
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    statusDiv.textContent = '⚠️ speech synthesis not supported';
+    speakBtn.disabled = stopBtn.disabled = true;
+    drawFrame();
+    return;
+  }
+
+  function speakText() {
+    const text = speechText.value.trim();
+    if (!text) { statusDiv.textContent = '✏️ enter some text'; return; }
+    if (synth.speaking) { synth.cancel(); setTimeout(speakText, 60); return; }
+
+    const u = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    const pref = voices.find(v => v.lang.includes('en'));
+    if (pref) u.voice = pref;
+    u.rate = 0.95; u.pitch = 1.1; u.volume = 1;
+
+    u.onstart = () => {
+      isSpeaking = true;
+      canvas.classList.add('talking');
+      statusDiv.textContent = '🗣️ speaking…';
+      phonemeSequence = textToPhonemeSequence(text, 0.95);
+      speechStartTime = performance.now();
+      startAnim();
+    };
+    u.onend = () => {
+      isSpeaking = false;
+      canvas.classList.remove('talking');
+      statusDiv.textContent = '✓ finished';
+      phonemeSequence = [];
+      if (!animFrame) startAnim();
+    };
+    u.onerror = () => {
+      isSpeaking = false;
+      canvas.classList.remove('talking');
+      phonemeSequence = [];
+      if (!animFrame) startAnim();
+    };
+    synth.speak(u);
+    statusDiv.textContent = '🎤 speaking…';
+  }
+
+  function stopSpeech() {
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+      isSpeaking = false;
+      canvas.classList.remove('talking');
+      phonemeSequence = [];
+      statusDiv.textContent = '⏹️ stopped';
+      if (!animFrame) startAnim();
+    }
+  }
+
+  speakBtn.addEventListener('click', speakText);
+  stopBtn.addEventListener('click', stopSpeech);
+  speechText.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); speakText(); }
+  });
+
+  // Initial draw
+  drawFrame();
+  statusDiv.textContent = 'ready · align the mouth with sliders, then speak';
+})();
+</script>
+</body>
+</html>
