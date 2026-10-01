@@ -1,649 +1,317 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>talking avatar · realistic lipsync</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            background: linear-gradient(145deg, #1e2b3a 0%, #0f1a26 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
-            padding: 16px;
-        }
-        .app-container {
-            background: rgba(22, 34, 48, 0.75);
-            backdrop-filter: blur(12px);
-            border-radius: 48px;
-            padding: 32px 28px;
-            box-shadow: 0 30px 45px -15px rgba(0, 0, 0, 0.6), inset 0 1px 3px rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            max-width: 700px;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 {
-            color: #d9e9ff;
-            font-weight: 400;
-            font-size: 1.6rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-            opacity: 0.8;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.4);
-            word-break: break-word;
-            text-align: center;
-        }
-        .avatar-stage {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 10px 0 25px;
-            position: relative;
-            filter: drop-shadow(0 15px 15px rgba(0, 0, 0, 0.5));
-        }
-        canvas {
-            display: block;
-            width: 260px;
-            height: 260px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #3b4e62, #19232e);
-            box-shadow: inset 0 0 30px #00000066, 0 0 0 2px #3e5569, 0 0 0 6px #101a22;
-            transition: box-shadow 0.2s;
-        }
-        canvas.talking {
-            box-shadow: inset 0 0 30px #00000088, 0 0 0 2px #7ab7e0, 0 0 0 6px #1d3f53, 0 0 25px #5a9bc0;
-        }
-        .input-area {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-top: 8px;
-        }
-        textarea {
-            width: 100%;
-            padding: 18px 20px;
-            border-radius: 40px;
-            border: none;
-            background: #1d2c3a;
-            box-shadow: inset 0 5px 10px #0c131b, 0 1px 0 #4d6379;
-            color: #eef5ff;
-            font-size: 1.1rem;
-            font-family: inherit;
-            resize: vertical;
-            min-height: 100px;
-            outline: none;
-            border: 1px solid #3f5567;
-            transition: border 0.2s, box-shadow 0.2s;
-        }
-        textarea:focus {
-            border-color: #6c9cc0;
-            box-shadow: inset 0 5px 10px #0c131b, 0 0 0 2px #3f6b8a;
-        }
-        textarea::placeholder {
-            color: #7d93a8;
-            font-style: italic;
-            opacity: 0.7;
-        }
-        .button-row {
-            display: flex;
-            justify-content: center;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
-        button {
-            background: #2a3e52;
-            border: none;
-            color: #e2efff;
-            font-weight: 500;
-            font-size: 1.15rem;
-            padding: 14px 32px;
-            border-radius: 50px;
-            cursor: pointer;
-            box-shadow: 0 10px 15px -8px #00000080, 0 0 0 1px #3e5b71 inset, 0 1px 2px #ffffff1a inset;
-            transition: all 0.15s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            letter-spacing: 0.5px;
-            flex: 1 0 auto;
-            min-width: 150px;
-        }
-        button:hover {
-            background: #34536d;
-            color: white;
-            box-shadow: 0 12px 18px -6px #000000b3, 0 0 0 1px #6a94b4 inset;
-            transform: scale(1.02);
-        }
-        button:active {
-            transform: scale(0.98);
-            background: #1f3345;
-            box-shadow: 0 5px 10px -3px #000000cc, 0 0 0 1px #517e9e inset;
-        }
-        button:disabled {
-            opacity: 0.5;
-            pointer-events: none;
-            filter: grayscale(0.3);
-        }
-        .status {
-            color: #9bb7d4;
-            font-size: 0.95rem;
-            margin-top: 8px;
-            text-align: center;
-            height: 24px;
-            transition: color 0.2s;
-        }
-        .footer-note {
-            color: #4d667b;
-            font-size: 0.75rem;
-            margin-top: 16px;
-            text-align: center;
-            letter-spacing: 0.5px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ivie AI — Talking Avatar</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .container {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 30px;
+    width: 90%; max-width: 500px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  h1 { font-size: 1.4em; margin-bottom: 20px; color: #7ec8e3; }
+
+  /* ===== Avatar ===== */
+  .avatar-stage {
+    position: relative;
+    width: 220px; height: 260px;
+    margin: 0 auto 25px;
+  }
+  .avatar { position: absolute; inset: 0; transition: transform 0.1s; }
+  .head {
+    position: absolute;
+    top: 20px; left: 50%; transform: translateX(-50%);
+    width: 130px; height: 160px;
+    background: #f2c9a0;
+    border-radius: 50% 50% 45% 45%;
+    box-shadow: inset -10px -10px 20px rgba(0,0,0,0.1);
+  }
+  .hair {
+    position: absolute;
+    top: 8px; left: 50%; transform: translateX(-50%);
+    width: 145px; height: 90px;
+    background: #2b1b12;
+    border-radius: 70px 70px 20px 20px;
+  }
+  .eye {
+    position: absolute; top: 70px;
+    width: 16px; height: 16px;
+    background: #2b1b12;
+    border-radius: 50%;
+    animation: blink 4s infinite;
+  }
+  .eye.left  { left: 38px; }
+  .eye.right { right: 38px; }
+  @keyframes blink { 0%,92%,100% { height:16px; } 95% { height:2px; } }
+
+  .mouth {
+    position: absolute;
+    bottom: 30px; left: 50%; transform: translateX(-50%);
+    width: 40px; height: 8px;
+    background: #b3554e;
+    border-radius: 0 0 40px 40px;
+    transition: height 0.08s ease;
+  }
+  .avatar.talking .mouth { animation: talk 0.25s infinite alternate; }
+  @keyframes talk {
+    from { height: 6px;  width: 34px; }
+    to   { height: 22px; width: 44px; }
+  }
+  .avatar.talking { animation: headbob 0.6s infinite alternate ease-in-out; }
+  @keyframes headbob {
+    from { transform: rotate(-2deg) translateY(0); }
+    to   { transform: rotate(2deg)  translateY(-4px); }
+  }
+  .body {
+    position: absolute;
+    bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 180px; height: 80px;
+    background: #4a6fa5;
+    border-radius: 60px 60px 0 0;
+  }
+  .status {
+    position: absolute; bottom: -28px; left: 0; right: 0;
+    font-size: 0.85em; color: #7ec8e3; min-height: 1.2em;
+  }
+
+  /* ===== Connection badge ===== */
+  .conn-badge {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font.78em;
+    margin-bottom: 15px;
+    background: rgba(0,0,0,0.3);
+    transition: all 0.3s;
+  }
+  .conn-badge.ok   { background: rgba(76,175,80,0.25);  color: #a5d6a7; }
+  .conn-badge.bad  { background: rgba(244,67,54,0.25);  color: #ef9a9a; }
+  .conn-badge.wait { background: rgba(255,193,7,0.25);  color: #ffe082; }
+
+  /* ===== Chat area ===== */
+  .chat-log {
+    height: 160px; overflow-y: auto;
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
+    padding: 12px; margin-bottom: 15px;
+    text-align: left; font-size: 0.9em;
+  }
+  .msg { margin-bottom: 10px; line-height: 1.4; }
+  .msg.user   { color: #a8d8ea; }
+  .msg.avatar { color: #ffd9a0; }
+  .msg .who { font-weight: bold; font-size: 0.8em; opacity: 0.7; }
+
+  .input-row { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1; padding: 12px 15px;
+    border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.12);
+    color: #fff; font-size: 1em; outline: none;
+  }
+  input::placeholder { color: rgba(255,255,255,0.5); }
+  button {
+    padding: 12px 22px;
+    border: none; border-radius: 10px;
+    background: #7ec8e3; color: #16213e;
+    font-weight: bold; cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: #a8d8ea; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .settings { margin-top: 15px; font-size: 0.8em; text-align: left; }
+  .settings input {
+    width: 100%; margin-top: 4px; padding: 8px;
+    background: rgba(0,0,0,0.3); border: none;
+    border-radius: 6px; color: #7ec8e3; font-size: 0.9em;
+  }
+</style>
 </head>
 <body>
-    <div class="app-container">
-        <h1>🗣️ talking avatar</h1>
+<div class="container">
+  <h1>🗣️ Ivie AI — Talking Avatar</h1>
 
-        <!-- avatar canvas -->
-        <div class="avatar-stage">
-            <canvas id="avatarCanvas" width="520" height="520"></canvas>
-        </div>
+  <div class="conn-badge wait" id="connBadge">⏳ Checking connection to Ivie AI Space...</div>
 
-        <!-- input and controls -->
-        <div class="input-area">
-            <textarea id="speechText" placeholder="Type something for the avatar to say…" maxlength="300">Hello! I am your talking avatar. Type anything and press speak.</textarea>
-            <div class="button-row">
-                <button id="speakBtn" aria-label="speak text">🔊 Speak</button>
-                <button id="stopBtn" aria-label="stop speaking">⏹️ Stop</button>
-            </div>
-            <div id="statusMessage" class="status">ready</div>
-        </div>
-        <div class="footer-note">web speech api · phonetic lipsync engine</div>
+  <div class="avatar-stage">
+    <div class="avatar" id="avatar">
+      <div class="hair"></div>
+      <div class="head">
+        <div class="eye left"></div>
+        <div class="eye right"></div>
+        <div class="mouth"></div>
+      </div>
+      <div class="body"></div>
     </div>
-
-    <script>
-        (function() {
-            // ----- canvas & avatar drawing -----
-            const canvas = document.getElementById('avatarCanvas');
-            const ctx = canvas.getContext('2d');
-
-            // avatar mouth state
-            let mouthOpenness = 0.18;          // 0 = closed, 1 = fully open
-            let targetMouthOpen = 0.18;        // target for smooth interpolation
-            let animationFrame = null;
-            let isSpeaking = false;
-
-            // phonetic envelope data
-            let phonemeSequence = [];           // array of { time, target, duration }
-            let currentPhonemeIndex = 0;
-            let speechStartTime = 0;
-            let speechTimer = null;             // for precise animation timing
-            let utteranceEndTime = 0;
-
-            // DOM elements
-            const speakBtn = document.getElementById('speakBtn');
-            const stopBtn = document.getElementById('stopBtn');
-            const speechText = document.getElementById('speechText');
-            const statusDiv = document.getElementById('statusMessage');
-
-            // ----- speech synthesis setup -----
-            let synth = window.speechSynthesis;
-            let currentUtterance = null;
-
-            if (!synth) {
-                statusDiv.textContent = '⚠️ speech synthesis not supported';
-                speakBtn.disabled = true;
-                stopBtn.disabled = true;
-                drawAvatar();
-                return;
-            }
-
-            // ---------- drawing function (with mouth openness) ----------
-            function drawAvatar() {
-                const w = canvas.width;
-                const h = canvas.height;
-                const centerX = w / 2;
-                const centerY = h / 2;
-                const radius = Math.min(w, h) * 0.40;
-
-                ctx.clearRect(0, 0, w, h);
-
-                // background halo
-                const gradient = ctx.createRadialGradient(centerX-20, centerY-20, radius*0.4, centerX, centerY, radius*1.6);
-                gradient.addColorStop(0, '#2f4357');
-                gradient.addColorStop(0.9, '#0b141e');
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius*1.45, 0, Math.PI*2);
-                ctx.fillStyle = gradient;
-                ctx.fill();
-                ctx.shadowColor = '#00000066';
-                ctx.shadowBlur = 40;
-                ctx.shadowOffsetY = 10;
-
-                // head
-                ctx.shadowBlur = 30;
-                ctx.shadowOffsetY = 8;
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0, Math.PI*2);
-                const faceGrad = ctx.createRadialGradient(centerX-45, centerY-55, radius*0.2, centerX+20, centerY+20, radius*1.2);
-                faceGrad.addColorStop(0, '#f7e6d4');
-                faceGrad.addColorStop(0.7, '#dbb99c');
-                faceGrad.addColorStop(1, '#b28b6f');
-                ctx.fillStyle = faceGrad;
-                ctx.fill();
-                ctx.shadowBlur = 0;
-
-                // eyes
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetY = 0;
-                // left eye
-                ctx.beginPath();
-                ctx.ellipse(centerX - radius*0.42, centerY - radius*0.15, radius*0.16, radius*0.19, 0, 0, Math.PI*2);
-                ctx.fillStyle = '#f0f4fa';
-                ctx.fill();
-                ctx.strokeStyle = '#2f2e38';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-                // right eye
-                ctx.beginPath();
-                ctx.ellipse(centerX + radius*0.42, centerY - radius*0.15, radius*0.16, radius*0.19, 0, 0, Math.PI*2);
-                ctx.fill();
-                ctx.stroke();
-
-                // pupils
-                ctx.beginPath();
-                ctx.arc(centerX - radius*0.42, centerY - radius*0.15, radius*0.08, 0, Math.PI*2);
-                ctx.fillStyle = '#2f1f14';
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(centerX + radius*0.42, centerY - radius*0.15, radius*0.08, 0, Math.PI*2);
-                ctx.fill();
-
-                // highlights
-                ctx.beginPath();
-                ctx.arc(centerX - radius*0.46, centerY - radius*0.19, radius*0.025, 0, Math.PI*2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(centerX + radius*0.38, centerY - radius*0.19, radius*0.025, 0, Math.PI*2);
-                ctx.fill();
-
-                // eyebrows
-                ctx.beginPath();
-                ctx.strokeStyle = '#4f3c2e';
-                ctx.lineWidth = radius*0.06;
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(centerX - radius*0.60, centerY - radius*0.42);
-                ctx.lineTo(centerX - radius*0.24, centerY - radius*0.48);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(centerX + radius*0.60, centerY - radius*0.42);
-                ctx.lineTo(centerX + radius*0.24, centerY - radius*0.48);
-                ctx.stroke();
-
-                // nose
-                ctx.beginPath();
-                ctx.strokeStyle = '#b28b6f';
-                ctx.lineWidth = radius*0.045;
-                ctx.lineCap = 'round';
-                ctx.moveTo(centerX - radius*0.06, centerY - radius*0.02);
-                ctx.lineTo(centerX, centerY + radius*0.14);
-                ctx.lineTo(centerX + radius*0.08, centerY + radius*0.05);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(centerX - radius*0.12, centerY + radius*0.08, radius*0.025, 0, Math.PI*2);
-                ctx.fillStyle = '#a0725a';
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(centerX + radius*0.12, centerY + radius*0.08, radius*0.025, 0, Math.PI*2);
-                ctx.fill();
-
-                // mouth (dynamic)
-                const mouthWidth = radius * 0.65;
-                const mouthHeight = radius * (0.08 + 0.45 * mouthOpenness);
-                const mouthY = centerY + radius*0.30;
-
-                ctx.beginPath();
-                ctx.ellipse(centerX, mouthY, mouthWidth/2, mouthHeight/2, 0, 0, Math.PI*2);
-                const lipGrad = ctx.createRadialGradient(centerX-10, mouthY-6, 5, centerX, mouthY, mouthWidth);
-                lipGrad.addColorStop(0, '#c96b6b');
-                lipGrad.addColorStop(0.8, '#9e4a4a');
-                ctx.fillStyle = lipGrad;
-                ctx.shadowBlur = 10;
-                ctx.shadowOffsetY = 2;
-                ctx.shadowColor = '#00000030';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-
-                if (mouthOpenness > 0.1) {
-                    ctx.beginPath();
-                    ctx.ellipse(centerX, mouthY, mouthWidth*0.3, mouthHeight*0.4, 0, 0, Math.PI*2);
-                    ctx.fillStyle = '#2b1b1b';
-                    ctx.fill();
-                    if (mouthOpenness > 0.45) {
-                        ctx.beginPath();
-                        ctx.ellipse(centerX, mouthY - mouthHeight*0.12, mouthWidth*0.2, mouthHeight*0.12, 0, 0, Math.PI*2);
-                        ctx.fillStyle = '#f0f0f0e0';
-                        ctx.fill();
-                    }
-                }
-
-                // hair
-                ctx.beginPath();
-                ctx.arc(centerX, centerY - radius*0.68, radius*0.65, 0, Math.PI*2);
-                ctx.fillStyle = '#2b1f17';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#00000055';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-                ctx.beginPath();
-                ctx.ellipse(centerX, centerY - radius*0.9, radius*0.5, radius*0.18, 0, 0, Math.PI*2);
-                ctx.fillStyle = '#2b1f17';
-                ctx.fill();
-
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetY = 0;
-
-                // blush
-                ctx.beginPath();
-                ctx.arc(centerX - radius*0.62, centerY + radius*0.12, radius*0.12, 0, Math.PI*2);
-                ctx.fillStyle = '#e8b4a0b0';
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(centerX + radius*0.62, centerY + radius*0.12, radius*0.12, 0, Math.PI*2);
-                ctx.fill();
-            }
-
-            // ----- smooth animation engine (driven by phoneme sequence) -----
-            function animateMouth() {
-                if (!isSpeaking) {
-                    // relax mouth when not speaking
-                    mouthOpenness += (0.18 - mouthOpenness) * 0.15;
-                    if (Math.abs(mouthOpenness - 0.18) < 0.005) mouthOpenness = 0.18;
-                    drawAvatar();
-                    animationFrame = null;
-                    return;
-                }
-
-                // Calculate current time since speech started
-                const now = performance.now();
-                const elapsed = now - speechStartTime;
-
-                // Find the current phoneme target based on elapsed time
-                let target = 0.18; // default closed/rest
-
-                if (phonemeSequence.length > 0) {
-                    // Find the active phoneme
-                    for (let i = 0; i < phonemeSequence.length; i++) {
-                        const p = phonemeSequence[i];
-                        if (elapsed >= p.time && elapsed < p.time + p.duration) {
-                            target = p.target;
-                            break;
-                        } else if (elapsed >= p.time + p.duration) {
-                            // look for next
-                            continue;
-                        } else if (elapsed < p.time) {
-                            // before next phoneme, keep previous target or rest
-                            if (i === 0) target = 0.18;
-                            else target = phonemeSequence[i-1].target * 0.7 + 0.18 * 0.3;
-                            break;
-                        }
-                    }
-                    // If elapsed is beyond last phoneme, rest
-                    const last = phonemeSequence[phonemeSequence.length - 1];
-                    if (last && elapsed >= last.time + last.duration) {
-                        target = 0.18;
-                    }
-                }
-
-                // Smooth interpolation
-                const smoothFactor = 0.22;
-                mouthOpenness += (target - mouthOpenness) * smoothFactor;
-                if (mouthOpenness < 0.01) mouthOpenness = 0.01;
-                if (mouthOpenness > 0.95) mouthOpenness = 0.95;
-
-                drawAvatar();
-
-                // Continue animation loop
-                animationFrame = requestAnimationFrame(animateMouth);
-            }
-
-            function startAnimation() {
-                if (animationFrame) cancelAnimationFrame(animationFrame);
-                animationFrame = requestAnimationFrame(animateMouth);
-            }
-
-            // ----- phoneme generation from text -----
-            // Map characters/patterns to mouth openness (0=closed, 1=wide open)
-            // This is a simplified but effective phonetic mapping for English.
-            function textToPhonemeSequence(text, speechRate = 1.0) {
-                // Clean text: remove punctuation for timing, but keep spaces
-                const cleanText = text.toLowerCase().replace(/[^a-z0-9\s]/g, '');
-                const words = cleanText.split(/\s+/).filter(w => w.length > 0);
-
-                const sequence = [];
-                // Base duration per character (milliseconds) adjusted by speech rate
-                // Typical speech: ~100-150ms per phoneme. We'll simulate per character.
-                const baseCharDuration = 95 / speechRate; // milliseconds per character
-
-                let currentTime = 0;
-
-                for (let word of words) {
-                    // Process each character in the word
-                    for (let i = 0; i < word.length; i++) {
-                        const char = word[i];
-                        let targetOpen = 0.18; // default rest
-                        let duration = baseCharDuration;
-
-                        // Map characters to mouth shapes based on phonetic category
-                        // Plosives: p, b, m, t, d, k, g -> closed or narrow
-                        if ('pbm'.includes(char)) {
-                            targetOpen = 0.1;
-                            duration = baseCharDuration * 0.7;
-                        } else if ('tdkg'.includes(char)) {
-                            targetOpen = 0.2;
-                            duration = baseCharDuration * 0.8;
-                        }
-                        // Fricatives: f, v, s, z, sh, th, etc -> medium
-                        else if ('fvszh'.includes(char)) {
-                            targetOpen = 0.35;
-                            duration = baseCharDuration * 1.0;
-                        }
-                        // Vowels: a, e, i, o, u -> open wide
-                        else if ('aeiou'.includes(char)) {
-                            targetOpen = 0.85;
-                            duration = baseCharDuration * 1.2;
-                        }
-                        // y sometimes acts as vowel
-                        else if (char === 'y') {
-                            targetOpen = 0.6;
-                            duration = baseCharDuration * 1.0;
-                        }
-                        // Other consonants: l, r, w, n, etc -> medium
-                        else if ('lrwmn'.includes(char)) {
-                            targetOpen = 0.5;
-                            duration = baseCharDuration * 0.9;
-                        }
-                        // Default for other chars
-                        else {
-                            targetOpen = 0.45;
-                        }
-
-                        // Add jitter for natural variation
-                        const jitter = (Math.random() * 0.2 - 0.1);
-                        targetOpen = Math.min(0.95, Math.max(0.1, targetOpen + jitter));
-
-                        sequence.push({
-                            time: currentTime,
-                            target: targetOpen,
-                            duration: duration
-                        });
-
-                        currentTime += duration;
-                    }
-
-                    // Add a small gap between words (mouth relaxes slightly)
-                    if (word !== words[words.length - 1]) {
-                        sequence.push({
-                            time: currentTime,
-                            target: 0.25,
-                            duration: baseCharDuration * 0.8
-                        });
-                        currentTime += baseCharDuration * 0.8;
-                    }
-                }
-
-                // Add a final rest before ending
-                sequence.push({
-                    time: currentTime,
-                    target: 0.18,
-                    duration: baseCharDuration * 1.5
-                });
-                currentTime += baseCharDuration * 1.5;
-
-                return { sequence, totalDuration: currentTime };
-            }
-
-            // ----- speech handlers -----
-            function onSpeechStart() {
-                isSpeaking = true;
-                canvas.classList.add('talking');
-                statusDiv.textContent = '🗣️ speaking…';
-
-                // Generate phoneme sequence from the text
-                const text = speechText.value.trim();
-                // Estimate rate: speechSynthesis default rate is 1, we used 0.95
-                const { sequence, totalDuration } = textToPhonemeSequence(text, 0.95);
-
-                phonemeSequence = sequence;
-                speechStartTime = performance.now();
-
-                // Start animation loop
-                startAnimation();
-
-                // Safety: if speech ends earlier or later, we'll handle in onSpeechEnd
-            }
-
-            function onSpeechEnd() {
-                isSpeaking = false;
-                canvas.classList.remove('talking');
-                statusDiv.textContent = '✓ finished';
-
-                // Let the mouth relax smoothly via animation
-                if (!animationFrame) startAnimation();
-
-                // Clear sequence
-                phonemeSequence = [];
-            }
-
-            function onSpeechError(event) {
-                console.warn('Speech error:', event.error);
-                if (event.error === 'interrupted' || event.error === 'canceled') {
-                    statusDiv.textContent = '⏹️ stopped';
-                } else {
-                    statusDiv.textContent = `⚠️ speech error: ${event.error}`;
-                }
-                isSpeaking = false;
-                canvas.classList.remove('talking');
-                phonemeSequence = [];
-                if (!animationFrame) startAnimation();
-            }
-
-            // ----- speak function -----
-            function speakText() {
-                const text = speechText.value.trim();
-                if (!text) {
-                    statusDiv.textContent = '✏️ please enter some text';
-                    return;
-                }
-
-                // Cancel any ongoing speech
-                if (synth.speaking) {
-                    synth.cancel();
-                    setTimeout(() => speakText(), 60);
-                    return;
-                }
-
-                const utterance = new SpeechSynthesisUtterance(text);
-                currentUtterance = utterance;
-
-                // Set voice
-                const voices = synth.getVoices();
-                const preferredVoice = voices.find(v => v.name.includes('Google UK English Female')) ||
-                                      voices.find(v => v.name.includes('Google US English')) ||
-                                      voices.find(v => v.name.includes('Microsoft Zira')) ||
-                                      voices.find(v => v.name.includes('Samantha')) ||
-                                      voices.find(v => v.lang.includes('en'));
-                if (preferredVoice) utterance.voice = preferredVoice;
-
-                utterance.rate = 0.95;
-                utterance.pitch = 1.1;
-                utterance.volume = 1;
-
-                // Event listeners
-                utterance.onstart = onSpeechStart;
-                utterance.onend = onSpeechEnd;
-                utterance.onerror = onSpeechError;
-
-                // Start speaking
-                synth.speak(utterance);
-                statusDiv.textContent = '🎤 speaking…';
-            }
-
-            // ----- stop speech -----
-            function stopSpeech() {
-                if (synth.speaking || synth.pending) {
-                    synth.cancel();
-                    isSpeaking = false;
-                    canvas.classList.remove('talking');
-                    phonemeSequence = [];
-                    statusDiv.textContent = '⏹️ stopped';
-                    if (!animationFrame) startAnimation();
-                } else {
-                    statusDiv.textContent = '⏹️ nothing to stop';
-                }
-            }
-
-            // ----- init -----
-            function init() {
-                drawAvatar();
-
-                // Start idle animation loop
-                startAnimation();
-
-                speakBtn.addEventListener('click', speakText);
-                stopBtn.addEventListener('click', stopSpeech);
-
-                speechText.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        speakText();
-                    }
-                });
-
-                window.addEventListener('beforeunload', () => {
-                    if (synth.speaking) synth.cancel();
-                });
-
-                statusDiv.textContent = 'ready · type & speak';
-            }
-
-            init();
-        })();
-    </script>
+    <div class="status" id="status">Ready to chat</div>
+  </div>
+
+  <div class="chat-log" id="chatLog"></div>
+
+  <div class="input-row">
+    <input type="text" id="userInput" placeholder="Type your message..." autocomplete="off">
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <div class="settings">
+    <label>🔌 Ivie AI Space URL:</label>
+    <input type="text" id="endpoint" value="https://GeorgeUwaifo-IvieAI.hf.space">
+  </div>
+</div>
+
+<script>
+// ============ CONFIGURATION ============
+const SPACE_URL      = "https://GeorgeUwaifo-IvieAI.hf.space";
+const CHAT_ENDPOINT  = `${SPACE_URL}/chat`;    // POST — send message, get reply
+const HEALTH_ENDPOINT = `${SPACE_URL}/health`;  // GET  — connection check
+// =======================================
+
+const avatar    = document.getElementById('avatar');
+const statusEl  = document.getElementById('status');
+const chatLog   = document.getElementById('chatLog');
+const input     = document.getElementById('userInput');
+const sendBtn   = document.getElementById('sendBtn');
+const endpoint  = document.getElementById('endpoint');
+const connBadge = document.getElementById('connBadge');
+endpoint.value = SPACE_URL;
+
+/* ---------- Health check on load ---------- */
+async function checkHealth() {
+  const base = endpoint.value.trim().replace(/\/+$/, '');
+  const healthUrl = `${base}/health`;
+  connBadge.className = 'conn-badge wait';
+  connBadge.textContent = '⏳ Checking connection to Ivie AI Space...';
+  try {
+    const res = await fetch(healthUrl, { method: 'GET' });
+    if (res.ok) {
+      let info = '';
+      try {
+        const data = await res.json();
+        // Show a short summary of the health payload if available
+        info = data && typeof data === 'object' ? ` (${JSON.stringify(data).slice(0, 60)})` : '';
+      } catch (_) { /* health may return plain text — that's fine */ }
+      connBadge.className = 'conn-badge ok';
+      connBadge.textContent = `✅ Connected to Ivie AI Space${info}`;
+    } else {
+      connBadge.className = 'conn-badge bad';
+      connBadge.textContent = `⚠️ Space responded with HTTP ${res.status}`;
+    }
+  } catch (err) {
+    connBadge.className = 'conn-badge bad';
+    connBadge.textContent = '❌ Could not reach Ivie AI Space (is it running?)';
+  }
+}
+
+// Re-check health whenever the URL is edited
+endpoint.addEventListener('change', checkHealth);
+checkHealth();
+
+/* ---------- Chat UI ---------- */
+function addMsg(who, text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.innerHTML = `<span class="who">who:</span><br>{who}:</span><br>who:</span><br>{escapeHtml(text)}`;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ---------- Extract reply from various response formats ---------- */
+function extractReply(data) {
+  if (typeof data === 'string') return data;
+  if (Array.isArray(data)) return extractReply(data[0]);
+  if (data && typeof data === 'object') {
+    for (const key of ['response','reply','answer','output','text','message']) {
+      if (key in data) return extractReply(data[key]);
+    }
+    for (const v of Object.values(data)) {
+      if (typeof v === 'string' && v.trim()) return v;
+    }
+  }
+  return JSON.stringify(data);
+}
+
+/* ---------- Talk to the Ivie AI Space (/chat) ---------- */
+async function queryModel(message) {
+  const base = endpoint.value.trim().replace(/\/+$/, '');
+  if (!base) throw new Error('Please set your Space URL first.');
+  const chatUrl = `${base}/chat`;
+
+  const res = await fetch(chatUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message })   // adjust if your /chat expects a different key
+  });
+  if (!res.ok) throw new Error(`HTTP res.statusfrom{res.status} fromres.statusfrom{chatUrl}`);
+
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('json')
+    ? await res.json()
+    : await res.text();               // handle plain-text replies too
+
+  const reply = extractReply(data);
+  if (!reply || !reply.trim()) throw new Error('Received an empty response from Ivie AI');
+  return reply.trim();
+}
+
+/* ---------- Speech ---------- */
+function speak(text, onEnd) {
+  if (!('speechSynthesis' in window)) { onEnd && onEnd(); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1; u.pitch = 1.05;
+  u.onstart = () => avatar.classList.add('talking');
+  u.onend   = () => { avatar.classList.remove('talking'); onEnd && onEnd(); };
+  u.onerror = () => { avatar.classList.remove('talking'); onEnd && onEnd(); };
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+/* ---------- Send flow ---------- */
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendBtn.disabled = true;
+  addMsg('You', text, 'user');
+  statusEl.textContent = 'Contacting Ivie AI... 🤔';
+
+  let reply;
+  try {
+    reply = await queryModel(text);
+  } catch (err) {
+    reply = '⚠️ ' + err.message;
+  }
+
+  addMsg('Ivie', reply, 'avatar');
+  statusEl.textContent = 'Speaking... 🗣️';
+  speak(reply, () => {
+    statusEl.textContent = 'Ready to chat';
+    sendBtn
+
+>
+    statusEl.textContent = 'Ready to chat';
+    sendBtn.disabled = false;
+    input.focus();
+  });
+}
+
+sendBtn.addEventListener('click', send);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+</script>
 </body>
 </html>
