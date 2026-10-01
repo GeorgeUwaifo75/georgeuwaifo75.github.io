@@ -215,7 +215,7 @@ checkHealth();
 function addMsg(who, text, cls) {
   const div = document.createElement('div');
   div.className = 'msg ' + cls;
- div.innerHTML = `<span class="who">who:</span><br>${who}:</span><br>who:</span><br>${escapeHtml(text)}`;
+ div.innerHTML = `<span class="who">who:</span><br>{who}:</span><br>who:</span><br>{escapeHtml(text)}`;
 
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
