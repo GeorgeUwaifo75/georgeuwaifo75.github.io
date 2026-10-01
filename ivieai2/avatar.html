@@ -174,9 +174,9 @@
 
 <script>
 // ============ CONFIGURATION ============
-const SPACE_URL      = "https://GeorgeUwaifo-IvieAI.hf.space";
-const CHAT_ENDPOINT  = `${SPACE_URL}/chat`;    // POST — send message, get reply
-const HEALTH_ENDPOINT = `${SPACE_URL}/health`;  // GET  — connection check
+const SPACE_URL       = "https://GeorgeUwaifo-IvieAI.hf.space";
+const CHAT_ENDPOINT   = `${SPACE_URL}/chat`;
+const HEALTH_ENDPOINT = `${SPACE_URL}/health`;
 // =======================================
 
 const avatar    = document.getElementById('avatar');
@@ -191,31 +191,23 @@ endpoint.value = SPACE_URL;
 /* ---------- Health check on load ---------- */
 async function checkHealth() {
   const base = endpoint.value.trim().replace(/\/+$/, '');
-  const healthUrl = `${base}/health`;
   connBadge.className = 'conn-badge wait';
   connBadge.textContent = '⏳ Checking connection to Ivie AI Space...';
   try {
-    const res = await fetch(healthUrl, { method: 'GET' });
+    const res = await fetch(`${base}/health`, { method: 'GET' });
     if (res.ok) {
-      let info = '';
-      try {
-        const data = await res.json();
-        // Show a short summary of the health payload if available
-        info = data && typeof data === 'object' ? ` (${JSON.stringify(data).slice(0, 60)})` : '';
-      } catch (_) { /* health may return plain text — that's fine */ }
       connBadge.className = 'conn-badge ok';
-      connBadge.textContent = `✅ Connected to Ivie AI Space${info}`;
+      connBadge.textContent = '✅ Connected to Ivie AI Space';
     } else {
       connBadge.className = 'conn-badge bad';
       connBadge.textContent = `⚠️ Space responded with HTTP ${res.status}`;
     }
   } catch (err) {
     connBadge.className = 'conn-badge bad';
-    connBadge.textContent = '❌ Could not reach Ivie AI Space (is it running?)';
+    connBadge.textContent = '❌ Could not reach Ivie AI Space';
   }
 }
 
-// Re-check health whenever the URL is edited
 endpoint.addEventListener('change', checkHealth);
 checkHealth();
 
@@ -231,7 +223,7 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-/* ---------- Extract reply from various response formats ---------- */
+/* ---------- Extract reply ---------- */
 function extractReply(data) {
   if (typeof data === 'string') return data;
   if (Array.isArray(data)) return extractReply(data[0]);
@@ -246,26 +238,20 @@ function extractReply(data) {
   return JSON.stringify(data);
 }
 
-/* ---------- Talk to the Ivie AI Space (/chat) ---------- */
+/* ---------- Talk to Ivie AI (/chat) ---------- */
 async function queryModel(message) {
   const base = endpoint.value.trim().replace(/\/+$/, '');
   if (!base) throw new Error('Please set your Space URL first.');
-  const chatUrl = `${base}/chat`;
-
-  const res = await fetch(chatUrl, {
+  const res = await fetch(`${base}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message })   // adjust if your /chat expects a different key
+    body: JSON.stringify({ message })
   });
-  if (!res.ok) throw new Error(`HTTP res.statusfrom{res.status} fromres.statusfrom{chatUrl}`);
-
+  if (!res.ok) throw new Error(`HTTP res.statusfrom{res.status} fromres.statusfrom{base}/chat`);
   const contentType = res.headers.get('content-type') || '';
-  const data = contentType.includes('json')
-    ? await res.json()
-    : await res.text();               // handle plain-text replies too
-
+  const data = contentType.includes('json') ? await res.json() : await res.text();
   const reply = extractReply(data);
-  if (!reply || !reply.trim()) throw new Error('Received an empty response from Ivie AI');
+  if (!reply || !reply.trim()) throw new Error('Empty response from Ivie AI');
   return reply.trim();
 }
 
@@ -300,9 +286,6 @@ async function send() {
   addMsg('Ivie', reply, 'avatar');
   statusEl.textContent = 'Speaking... 🗣️';
   speak(reply, () => {
-    statusEl.textContent = 'Ready to chat';
-    sendBtn
-
     statusEl.textContent = 'Ready to chat';
     sendBtn.disabled = false;
     input.focus();
