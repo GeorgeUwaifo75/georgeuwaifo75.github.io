@@ -133,19 +133,44 @@
   button:hover { background: #a8d8ea; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  /* ===== Action buttons ===== */
+  .action-bar {
+    display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .action-bar button {
+    flex: 1; padding: 8px 10px;
+    font-size: 0.8em; font-weight: 600;
+    background: rgba(255,255,255,0.1);
+    color: #7ec8e3;
+    border: 1px solid rgba(126,200,227,0.3);
+    border-radius: 8px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .action-bar button:hover {
+    background: rgba(126,200,227,0.2);
+    border-color: #7ec8e3;
+  }
+  .action-bar button.primary {
+    background: #7ec8e3; color: #16213e;
+    border-color: #7ec8e3;
+  }
+  .action-bar button.primary:hover { background: #a8d8ea; }
+
   .settings { margin-top: 15px; font-size: 0.8em; text-align: left; }
+  .settings label { display: block; margin-bottom: 6px; opacity: 0.7; }
   .settings input {
     width: 100%; margin-top: 4px; padding: 8px;
     background: rgba(0,0,0,0.3); border: none;
     border-radius: 6px; color: #7ec8e3; font-size: 0.9em;
   }
+  .hidden-url { display: none; }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>🗣️ Ivie AI — Talking Avatar</h1>
 
-  <div class="conn-badge wait" id="connBadge">⏳ Checking connection to Ivie AI Space...</div>
+  <div class="conn-badge wait" id="connBadge">⏳ Checking connection...</div>
 
   <div class="avatar-stage">
     <div class="avatar" id="avatar">
@@ -162,23 +187,28 @@
 
   <div class="chat-log" id="chatLog"></div>
 
+  <!-- Export & New Session buttons -->
+  <div class="action-bar">
+    <button id="exportJsonBtn" title="Export chat as JSON">📥 JSON</button>
+    <button id="exportTxtBtn" title="Export chat as plain text">📄 TXT</button>
+    <button id="newSessionBtn" class="primary" title="Start a new session">✨ New Session</button>
+  </div>
+
   <div class="input-row">
     <input type="text" id="userInput" placeholder="Type your message..." autocomplete="off">
     <button id="sendBtn">Send</button>
   </div>
 
-  <div class="settings">
-    <label>🔌 Ivie AI Space URL:</label>
+  <!-- Hidden endpoint field — no visible URL reference -->
+  <div class="settings hidden-url">
     <input type="text" id="endpoint" value="https://GeorgeUwaifo-IvieAI.hf.space">
   </div>
 </div>
 
 <script>
-// ============ CONFIGURATION ============
-const SPACE_URL       = "https://GeorgeUwaifo-IvieAI.hf.space";
-const CHAT_ENDPOINT   = `${SPACE_URL}/chat`;
-const HEALTH_ENDPOINT = `${SPACE_URL}/health`;
-// =======================================
+// ============ CONFIGURATION (not displayed to user) ============
+const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
+// ==============================================================
 
 const avatar    = document.getElementById('avatar');
 const statusEl  = document.getElementById('status');
@@ -187,29 +217,29 @@ const input     = document.getElementById('userInput');
 const sendBtn   = document.getElementById('sendBtn');
 const endpoint  = document.getElementById('endpoint');
 const connBadge = document.getElementById('connBadge');
-endpoint.value = SPACE_URL;
 
-/* ---------- Health check on load ---------- */
+/* ---------- Conversation store ---------- */
+let conversation = [];   // array of { role: 'user'|'bot', text: string }
+
+/* ---------- Health check (no URL shown) ---------- */
 async function checkHealth() {
   const base = endpoint.value.trim().replace(/\/+$/, '');
   connBadge.className = 'conn-badge wait';
-  connBadge.textContent = '⏳ Checking connection to Ivie AI Space...';
+  connBadge.textContent = '⏳ Checking connection...';
   try {
     const res = await fetch(`${base}/health`, { method: 'GET' });
     if (res.ok) {
       connBadge.className = 'conn-badge ok';
-      connBadge.textContent = '✅ Connected to Ivie AI Space';
+      connBadge.textContent = '✅ Connected to Ivie AI';
     } else {
       connBadge.className = 'conn-badge bad';
-      connBadge.textContent = `⚠️ Space responded with HTTP ${res.status}`;
+      connBadge.textContent = `⚠️ Service responded with HTTP ${res.status}`;
     }
   } catch (err) {
     connBadge.className = 'conn-badge bad';
-    connBadge.textContent = '❌ Could not reach Ivie AI Space';
+    connBadge.textContent = '❌ Could not reach Ivie AI service';
   }
 }
-
-endpoint.addEventListener('change', checkHealth);
 checkHealth();
 
 /* ---------- Chat UI ---------- */
@@ -219,6 +249,9 @@ function addMsg(who, text, cls) {
   div.innerHTML = `<span class="who">${who}:</span><br>${escapeHtml(text)}`;
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
+
+  // Store in conversation
+  conversation.push({ role: cls === 'user' ? 'user' : 'bot', text: text });
 }
 function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -242,13 +275,13 @@ function extractReply(data) {
 /* ---------- Talk to Ivie AI (/chat) ---------- */
 async function queryModel(message) {
   const base = endpoint.value.trim().replace(/\/+$/, '');
-  if (!base) throw new Error('Please set your Space URL first.');
+  if (!base) throw new Error('Service unavailable.');
   const res = await fetch(`${base}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message })
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${base}/chat`);
+  if (!res.ok) throw new Error(`Service error (HTTP ${res.status})`);
   const contentType = res.headers.get('content-type') || '';
   const data = contentType.includes('json') ? await res.json() : await res.text();
   const reply = extractReply(data);
@@ -295,6 +328,81 @@ async function send() {
 
 sendBtn.addEventListener('click', send);
 input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+/* ---------- EXPORT FUNCTIONS ---------- */
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function getTimestamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
+
+document.getElementById('exportJsonBtn').addEventListener('click', () => {
+  if (conversation.length === 0) {
+    statusEl.textContent = 'Nothing to export — start chatting!';
+    setTimeout(() => statusEl.textContent = 'Ready to chat', 2000);
+    return;
+  }
+  const exportData = {
+    exportedAt: new Date().toISOString(),
+    messageCount: conversation.length,
+    messages: conversation
+  };
+  downloadFile(
+    JSON.stringify(exportData, null, 2),
+    `ivie_chat_${getTimestamp()}.json`,
+    'application/json'
+  );
+});
+
+document.getElementById('exportTxtBtn').addEventListener('click', () => {
+  if (conversation.length === 0) {
+    statusEl.textContent = 'Nothing to export — start chatting!';
+    setTimeout(() => statusEl.textContent = 'Ready to chat', 2000);
+    return;
+  }
+  let txt = `Ivie AI Chat Export — ${new Date().toLocaleString()}\n`;
+  txt += `========================================\n\n`;
+  for (const msg of conversation) {
+    const label = msg.role === 'user' ? 'You' : 'Ivie';
+    txt += `[${label}]\n${msg.text}\n\n`;
+  }
+  downloadFile(txt, `ivie_chat_${getTimestamp()}.txt`, 'text/plain');
+});
+
+/* ---------- NEW SESSION ---------- */
+
+document.getElementById('newSessionBtn').addEventListener('click', () => {
+  // Stop any ongoing speech
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  avatar.classList.remove('talking');
+
+  // Clear conversation store and UI
+  conversation = [];
+  chatLog.innerHTML = '';
+  input.value = '';
+  sendBtn.disabled = false;
+
+  statusEl.textContent = 'New session started ✨';
+  setTimeout(() => { statusEl.textContent = 'Ready to chat'; }, 1800);
+
+  // Re-check connection
+  checkHealth();
+
+  input.focus();
+});
 </script>
 </body>
 </html>
