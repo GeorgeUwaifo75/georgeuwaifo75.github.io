@@ -82,11 +82,17 @@
     pointer-events: none;
   }
 
-  /* Blink */
-  .eye-group { transition: transform 0.08s; }
-  .eye-group.blink { transform: scaleY(0.08); transform-origin: center; }
+  /* ===== Blink — fixed: scale each eye from its own center ===== */
+  .eye-group {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.09s ease-in-out;
+  }
+  .eye-group.blink {
+    transform: scaleY(0.08);
+  }
 
-  /* Natural talking — driven by JS via Web Animations API, but fallback CSS here */
+  /* Talking head bob */
   #avatar.talking {
     animation: headbob 1.1s infinite alternate ease-in-out;
   }
@@ -255,6 +261,7 @@
     #avatar, #avatar.talking, #avatar:not(.talking) {
       animation: none !important;
     }
+    .eye-group { transition: none !important; }
   }
 </style>
 </head>
@@ -376,6 +383,11 @@
         <path d="M 108 90 Q 120 87 130 92" stroke="#2b1b12" stroke-width="2.2"
               stroke-linecap="round" fill="none" opacity="0.9"/>
 
+        <!--
+          Eyes: the .eye-group element now has transform-box: fill-box,
+          so scaleY() collapses toward the eye's own vertical center.
+          This prevents the "eyes dropping from the top" effect.
+        -->
         <!-- Left eye -->
         <g class="eye-group" id="leftEye">
           <ellipse cx="80" cy="108" rx="10" ry="7" fill="#d8a67c" opacity="0.5"/>
@@ -414,34 +426,26 @@
         <path d="M 99 108 Q 99 120 98 126" stroke="#f8d9b8" stroke-width="0.8"
               fill="none" opacity="0.6"/>
 
-        <!-- ===== MOUTH — layered for natural speech ===== -->
+        <!-- Mouth -->
         <g id="mouthGroup">
-          <!-- Mouth cavity (dark inside) — revealed when mouth opens -->
           <ellipse id="mouthCavity" cx="100" cy="146" rx="12" ry="2"
                    fill="#3d1414"/>
-          <!-- Upper lip (static) -->
           <path id="upperLip"
                 d="M 87 143 Q 93 141 100 143 Q 107 141 113 143
                    Q 108 145.5 100 146 Q 92 145.5 87 143 Z"
                 fill="url(#lipGrad)"/>
-          <!-- Lower lip (animated) -->
           <path id="lowerLip"
                 d="M 88 145 Q 100 148 112 145
                    Q 108 148 100 149 Q 92 148 88 145 Z"
                 fill="url(#lipGrad)"/>
-          <!-- Lip highlight -->
           <path id="lipHighlight"
                 d="M 93 147 Q 100 148.5 107 147"
                 stroke="#d78a80" stroke-width="0.6" fill="none" opacity="0.5"/>
-          <!-- Mouth shadow under lower lip -->
           <ellipse id="chinShadow" cx="100" cy="152" rx="9" ry="1.6"
                    fill="#a8714a" opacity="0.35"/>
         </g>
 
-        <!-- Chin -->
         <ellipse cx="100" cy="158" rx="14" ry="4" fill="#c99368" opacity="0.3"/>
-
-        <!-- Forehead highlight -->
         <ellipse cx="95" cy="72" rx="18" ry="10" fill="#f8d9b8" opacity="0.35"/>
       </svg>
     </div>
@@ -470,7 +474,6 @@
 // ============ CONFIGURATION ============
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
-// Preferred female voice name candidates (first match found is used)
 const FEMALE_VOICE_HINTS = [
   'Samantha', 'Victoria', 'Karen', 'Moira', 'Tessa', 'Fiona',
   'Google UK English Female', 'Google US English',
@@ -494,7 +497,10 @@ const mouthCavity  = document.getElementById('mouthCavity');
 const lowerLip     = document.getElementById('lowerLip');
 const lipHighlight = document.getElementById('lipHighlight');
 
-/* ---------- Natural random blink ---------- */
+/* ---------- Natural random blink (fixed) ----------
+   Note: .eye-group has `transform-box: fill-box; transform-origin: center;`
+   so scaleY collapses toward each eye's own center — not the SVG top-left.
+----------------------------------------------------- */
 (function blinkLoop() {
   const delay = 2200 + Math.random() * 3500;
   setTimeout(() => {
@@ -503,7 +509,7 @@ const lipHighlight = document.getElementById('lipHighlight');
     setTimeout(() => {
       leftEye.classList.remove('blink');
       rightEye.classList.remove('blink');
-    }, 120);
+    }, 130);
     blinkLoop();
   }, delay);
 })();
@@ -587,19 +593,16 @@ function pickFemaleVoice() {
   const voices = speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
-  // 1) Try explicit name hints (ordered preference)
   for (const hint of FEMALE_VOICE_HINTS) {
     const v = voices.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
     if (v) return v;
   }
-  // 2) Try any voice whose name or lang hints female
   const nameMatch = voices.find(v =>
     /female|woman|zira|aria|jenny|serena|samantha|victoria|karen|moira|tessa|fiona|susan|allison|ava|eva/i
       .test(v.name)
   );
   if (nameMatch) return nameMatch;
 
-  // 3) Fallback: prefer en-* voices (common female default), then any voice
   return voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) || voices[0];
 }
 
@@ -607,7 +610,6 @@ function refreshFemaleVoice() {
   cachedFemaleVoice = pickFemaleVoice();
 }
 
-// Voices load asynchronously on many browsers
 if ('speechSynthesis' in window) {
   refreshFemaleVoice();
   speechSynthesis.onvoiceschanged = refreshFemaleVoice;
@@ -615,15 +617,12 @@ if ('speechSynthesis' in window) {
 
 /* =========================================================
    NATURAL MOUTH ANIMATION
-   Uses Web Animations API on the lower lip (and inner cavity)
-   to produce varied, organic open/close motion while talking.
    ========================================================= */
 let mouthAnimations = [];
 
 function stopMouthAnimation() {
   mouthAnimations.forEach(a => { try { a.cancel(); } catch(e){} });
   mouthAnimations = [];
-  // Reset to closed
   lowerLip.setAttribute('d', 'M 88 145 Q 100 148 112 145 Q 108 148 100 149 Q 92 148 88 145 Z');
   mouthCavity.setAttribute('ry', '2');
   mouthCavity.setAttribute('rx', '12');
@@ -633,48 +632,39 @@ function stopMouthAnimation() {
 function startMouthAnimation() {
   stopMouthAnimation();
 
-  // Helper: build a lower lip path at a given openness (0..1)
   const lipPath = (open) => {
-    const midY   = 148 + open * 6;         // lower lip bottom moves down
-    const sideY  = 145 + open * 2.5;       // sides move down slightly
-    const width  = 12 + open * 4;          // lips widen slightly
+    const midY   = 148 + open * 6;
+    const width  = 12 + open * 4;
     return `M ${100 - width} ${145 + open * 1.2}
             Q 100 ${midY} ${100 + width} ${145 + open * 1.2}
             Q ${100 + width - 2} ${midY - 0.5} 100 ${midY - 0.5}
             Q ${100 - width + 2} ${midY - 0.5} ${100 - width} ${145 + open * 1.2} Z`;
   };
 
-  // Helper: build the mouth cavity ellipse size at a given openness
   const cavityRx = (open) => 12 + open * 4;
   const cavityRy = (open) => 2  + open * 8;
   const cavityCy = (open) => 146 + open * 2;
 
-  // Generate a sequence of "mouth frames" (openness values) that mimic
-  // natural speech patterns: quick small openings + occasional wider ones.
   const buildSequence = () => {
     const seq = [];
-    const frames = 8 + Math.floor(Math.random() * 6); // 8-13 frames per cycle
+    const frames = 8 + Math.floor(Math.random() * 6);
     for (let i = 0; i < frames; i++) {
-      // Weighted random: mostly mid-open, sometimes tiny, sometimes wide
       const r = Math.random();
       let open;
-      if (r < 0.25)      open = 0.05 + Math.random() * 0.15; // small
-      else if (r < 0.70) open = 0.25 + Math.random() * 0.30; // medium
-      else if (r < 0.92) open = 0.55 + Math.random() * 0.25; // large
-      else               open = 0.85 + Math.random() * 0.15; // extra large
+      if (r < 0.25)      open = 0.05 + Math.random() * 0.15;
+      else if (r < 0.70) open = 0.25 + Math.random() * 0.30;
+      else if (r < 0.92) open = 0.55 + Math.random() * 0.25;
+      else               open = 0.85 + Math.random() * 0.15;
       seq.push(open);
     }
-    // End near-closed so the mouth naturally rests between cycles
     seq.push(0.05);
     return seq;
   };
 
   const animateOneCycle = () => {
     const seq = buildSequence();
-    const totalDuration = 900 + Math.random() * 700; // 0.9-1.6s per cycle
-    const stepDur = totalDuration / seq.length;
+    const totalDuration = 900 + Math.random() * 700;
 
-    // Animate the lower lip path via `d` attribute keyframes
     const lipKeyframes = seq.map(open => ({ d: lipPath(open) }));
     const cavKeyframes = seq.map(open => ({
       rx: cavityRx(open),
@@ -686,9 +676,6 @@ function startMouthAnimation() {
           Q 100 ${148.5 + open * 2} ${107 + open * 1.5} ${147 + open * 1.5}`
     }));
 
-    // Use WAAPI to interpolate discrete keyframes smoothly.
-    // Note: `d` path animation works in browsers that support it;
-    // fall back to attribute stepping otherwise.
     const lipAnim = lowerLip.animate(lipKeyframes, {
       duration: totalDuration,
       easing: 'ease-in-out',
@@ -707,7 +694,6 @@ function startMouthAnimation() {
 
     mouthAnimations.push(lipAnim, cavAnim, hiAnim);
 
-    // Chain the next cycle when this one finishes (if still talking)
     lipAnim.onfinish = () => {
       if (avatar.classList.contains('talking')) {
         animateOneCycle();
@@ -718,9 +704,7 @@ function startMouthAnimation() {
   animateOneCycle();
 }
 
-/* =========================================================
-   SPEECH — with female voice + natural mouth animation
-   ========================================================= */
+/* ---------- SPEECH ---------- */
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) {
     onEnd && onEnd();
@@ -728,12 +712,10 @@ function speak(text, onEnd) {
   }
 
   const u = new SpeechSynthesisUtterance(text);
-  // Female-friendly prosody
-  u.rate  = 1.0;
-  u.pitch = 1.25;   // slightly higher pitch for a softer female tone
+  u.rate   = 1.0;
+  u.pitch  = 1.25;
   u.volume = 1.0;
 
-  // Assign female voice (refresh in case voices loaded after page load)
   if (!cachedFemaleVoice) refreshFemaleVoice();
   if (cachedFemaleVoice) {
     u.voice = cachedFemaleVoice;
