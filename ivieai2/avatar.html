@@ -47,7 +47,6 @@
     line-height: 1.3;
   }
 
-  /* ===== Avatar stage ===== */
   .avatar-stage {
     position: relative;
     width: 200px;
@@ -57,11 +56,6 @@
     filter: drop-shadow(0 10px 30px rgba(126,200,227,0.15));
   }
 
-  /* ★ FIX #1: The head-bob now runs on this wrapper instead of
-     on the SVG's parent #avatar. Animating a plain HTML div via
-     transform lets the browser composite it on the GPU without
-     re-rasterizing the SVG's interior strokes each frame — which
-     is what was causing the upper-lash strokes to shimmer. */
   .avatar-bob {
     position: absolute;
     inset: 0;
@@ -97,13 +91,8 @@
     height: 100%;
     display: block;
     overflow: visible;
-    /* ★ FIX #2: Keep vector strokes crisp under any rotation
-       or subpixel offset the browser applies during animation.
-       This prevents the eyelash strokes from snapping between
-       1px and 2px as the head rotates. */
     shape-rendering: geometricPrecision;
     text-rendering: geometricPrecision;
-    /* Hint to the compositor that this SVG is transformed often. */
     will-change: transform;
     transform: translateZ(0);
     backface-visibility: hidden;
@@ -122,15 +111,9 @@
     pointer-events: none;
   }
 
-  /* ★ FIX #3: Eye blink is now purely a CSS transform toggle with
-     no transition on any property that the head-bob touches.
-     We also isolate it so the parent's transform animation does
-     not interfere with the blink state mid-transition. */
   .eye-group {
     transform-box: fill-box;
     transform-origin: center;
-    /* Only opacity and transform on this element should ever
-       animate. No parent transform inheritance leakage. */
     transition: transform 0.09s ease-in-out;
     will-change: transform;
   }
@@ -138,7 +121,6 @@
     transform: scaleY(0.08);
   }
 
-  /* Ensure stroke edges stay sharp during any parent transforms. */
   .eye-group path,
   .eye-group ellipse,
   .eye-group circle {
@@ -338,7 +320,6 @@
   <div class="conn-badge wait" id="connBadge">⏳ Checking connection...</div>
 
   <div class="avatar-stage">
-    <!-- ★ Head-bob now lives on this HTML wrapper, not on #avatar. -->
     <div class="avatar-bob" id="avatarBob">
       <div class="avatar" id="avatar">
         <svg id="avatarSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
@@ -389,6 +370,8 @@
               <stop offset="0%"   stop-color="#8a5328" stop-opacity="0.75"/>
               <stop offset="100%" stop-color="#8a5328" stop-opacity="0"/>
             </radialGradient>
+
+            <!-- ===== Matching gold gradients for earrings + necklace ===== -->
             <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stop-color="#f9e79f"/>
               <stop offset="35%"  stop-color="#f4d03f"/>
@@ -406,6 +389,20 @@
               <stop offset="50%"  stop-color="#a67816"/>
               <stop offset="100%" stop-color="#7a5a0c"/>
             </linearGradient>
+
+            <!-- ===== Earring-specific gradients (matching the necklace gold) ===== -->
+            <radialGradient id="earringGrad" cx="35%" cy="30%" r="75%">
+              <stop offset="0%"   stop-color="#fef2b8"/>
+              <stop offset="30%"  stop-color="#f4d03f"/>
+              <stop offset="65%"  stop-color="#b9770e"/>
+              <stop offset="100%" stop-color="#7d5a09"/>
+            </radialGradient>
+            <radialGradient id="earringInner" cx="35%" cy="30%" r="70%">
+              <stop offset="0%"   stop-color="#fff8d0"/>
+              <stop offset="45%"  stop-color="#e6bf26"/>
+              <stop offset="100%" stop-color="#8a640a"/>
+            </radialGradient>
+
             <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
               <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
               <feOffset dx="0" dy="1" result="offsetblur"/>
@@ -429,6 +426,7 @@
             </filter>
           </defs>
 
+          <!-- Body -->
           <path d="M 30 240 Q 30 195 65 182 L 135 182 Q 170 195 170 240 Z"
                 fill="url(#clothGrad)" stroke="#2c4468" stroke-width="0.8"/>
           <path d="M 82 182 Q 100 195 118 182 L 122 190 Q 100 203 78 190 Z"
@@ -436,10 +434,12 @@
           <path d="M 78 182 Q 100 194 122 182 L 120 187 Q 100 198 80 187 Z"
                 fill="#2c4468" opacity="0.5"/>
 
+          <!-- Neck -->
           <path d="M 82 155 L 82 185 Q 100 192 118 185 L 118 155 Z"
                 fill="url(#neckGrad)"/>
           <ellipse cx="100" cy="158" rx="22" ry="7" fill="#7a4820" opacity="0.55"/>
 
+          <!-- ===== NECKLACE ===== -->
           <g id="necklaceGroup">
             <path d="M 76 186 Q 82 200 96 204"
                   fill="none" stroke="url(#goldGrad)" stroke-width="2.2"
@@ -481,11 +481,75 @@
             </g>
           </g>
 
+          <!-- ===== EARS (skin) ===== -->
           <ellipse cx="58" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
           <ellipse cx="142" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
           <ellipse cx="58" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
           <ellipse cx="142" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
 
+          <!-- ===== ROUND GOLD EARRINGS (matching the necklace) =====
+               Positioned just below the ear lobes. Medium-sized,
+               with a soft drop-shadow for depth, a bright specular
+               highlight, an inner bevel, and a subtle gold glow. -->
+          <!-- Left earring -->
+          <g id="earringLeft">
+            <!-- Soft drop shadow -->
+            <ellipse cx="58" cy="133.5" rx="4.6" ry="1.4" fill="#3a2408" opacity="0.35"/>
+            <!-- Outer gold disc -->
+            <circle cx="58" cy="131.5" r="4.4"
+                    fill="url(#earringGrad)"
+                    stroke="#7d5a09"
+                    stroke-width="0.5"
+                    filter="url(#goldGlow)"/>
+            <!-- Inner bevel ring -->
+            <circle cx="58" cy="131.5" r="3.1"
+                    fill="none"
+                    stroke="#7d5a09"
+                    stroke-width="0.35"
+                    opacity="0.75"/>
+            <!-- Center dome -->
+            <circle cx="58" cy="131.5" r="2.1" fill="url(#earringInner)"/>
+            <!-- Specular highlight -->
+            <ellipse cx="56.8" cy="129.9" rx="1.3" ry="1"
+                     fill="#fffbe8"
+                     opacity="0.75"
+                     transform="rotate(-25 56.8 129.9)"/>
+            <!-- Lower rim shine -->
+            <path d="M 55 134 Q 58 135.2 61 134"
+                  stroke="#fff8d0"
+                  stroke-width="0.45"
+                  fill="none"
+                  opacity="0.55"
+                  stroke-linecap="round"/>
+          </g>
+
+          <!-- Right earring -->
+          <g id="earringRight">
+            <ellipse cx="142" cy="133.5" rx="4.6" ry="1.4" fill="#3a2408" opacity="0.35"/>
+            <circle cx="142" cy="131.5" r="4.4"
+                    fill="url(#earringGrad)"
+                    stroke="#7d5a09"
+                    stroke-width="0.5"
+                    filter="url(#goldGlow)"/>
+            <circle cx="142" cy="131.5" r="3.1"
+                    fill="none"
+                    stroke="#7d5a09"
+                    stroke-width="0.35"
+                    opacity="0.75"/>
+            <circle cx="142" cy="131.5" r="2.1" fill="url(#earringInner)"/>
+            <ellipse cx="140.8" cy="129.9" rx="1.3" ry="1"
+                     fill="#fffbe8"
+                     opacity="0.75"
+                     transform="rotate(-25 140.8 129.9)"/>
+            <path d="M 139 134 Q 142 135.2 145 134"
+                  stroke="#fff8d0"
+                  stroke-width="0.45"
+                  fill="none"
+                  opacity="0.55"
+                  stroke-linecap="round"/>
+          </g>
+
+          <!-- Face -->
           <path d="M 62 78 Q 58 100 60 120 Q 62 145 80 158 Q 100 165 120 158
                    Q 138 145 140 120 Q 142 100 138 78 Q 130 55 100 52 Q 70 55 62 78 Z"
                 fill="url(#skinGrad)" filter="url(#softShadow)"/>
@@ -495,6 +559,7 @@
           <ellipse id="blushRight" cx="126" cy="128" rx="10" ry="6"
                    fill="url(#blush)" opacity="0.85"/>
 
+          <!-- Hair -->
           <path d="M 55 70 Q 52 40 75 28 Q 100 18 125 28 Q 148 40 145 70 L 148 95
                    Q 145 78 138 72 Q 130 55 100 52 Q 70 55 62 72 Q 55 78 52 95 Z"
                 fill="url(#hairGrad)" filter="url(#hairSoft)"/>
@@ -507,6 +572,7 @@
           <path d="M 62 72 Q 70 58 88 55 Q 100 53 112 55 Q 130 58 138 72 Q 130 62 100 60 Q 70 62 62 72 Z"
                 fill="#1a0f08" opacity="0.55"/>
 
+          <!-- Eyebrows -->
           <g id="browLeft" transform-box="fill-box" transform-origin="center">
             <path d="M 70 92 Q 80 87 92 90" stroke="#2b1b12" stroke-width="2.2"
                   stroke-linecap="round" fill="none" opacity="0.95"/>
@@ -516,6 +582,7 @@
                   stroke-linecap="round" fill="none" opacity="0.95"/>
           </g>
 
+          <!-- Left eye -->
           <g class="eye-group" id="leftEye">
             <ellipse cx="80" cy="108" rx="10" ry="7" fill="#9c6234" opacity="0.55"/>
             <ellipse cx="80" cy="107" rx="9" ry="6.5" fill="url(#eyeWhite)"/>
@@ -530,6 +597,7 @@
                   fill="none" opacity="0.5"/>
           </g>
 
+          <!-- Right eye -->
           <g class="eye-group" id="rightEye">
             <ellipse cx="120" cy="108" rx="10" ry="7" fill="#9c6234" opacity="0.55"/>
             <ellipse cx="120" cy="107" rx="9" ry="6.5" fill="url(#eyeWhite)"/>
@@ -544,6 +612,7 @@
                   fill="none" opacity="0.5"/>
           </g>
 
+          <!-- Nose -->
           <path d="M 100 106 Q 98 120 96 128 Q 100 131 104 128 Q 102 120 100 106 Z"
                 fill="url(#noseShadow)" opacity="0.8"/>
           <ellipse cx="97" cy="129" rx="1.6" ry="1" fill="#5c3314" opacity="0.65"/>
@@ -551,6 +620,7 @@
           <path d="M 99 108 Q 99 120 98 126" stroke="#d9a271" stroke-width="0.8"
                 fill="none" opacity="0.6"/>
 
+          <!-- Mouth -->
           <g id="mouthGroup">
             <ellipse id="mouthCavity" cx="100" cy="146" rx="12" ry="2" fill="#3d1414"/>
             <path id="upperLip"
@@ -620,7 +690,7 @@ const FEMALE_ENGLISH_HINTS = [
 // =======================================
 
 const avatar       = document.getElementById('avatar');
-const avatarBob    = document.getElementById('avatarBob');   // ★ new wrapper
+const avatarBob    = document.getElementById('avatarBob');
 const statusEl     = document.getElementById('status');
 const chatLog      = document.getElementById('chatLog');
 const input        = document.getElementById('userInput');
@@ -1360,7 +1430,6 @@ function speak(text, onEnd) {
   }
 
   u.onstart = () => {
-    // ★ Head-bob is now applied to the wrapper, not the SVG.
     avatarBob.classList.add('talking');
     startMouthAnimation(text, rate);
     startExpressionLoop();
