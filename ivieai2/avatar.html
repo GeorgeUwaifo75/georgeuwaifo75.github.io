@@ -139,9 +139,10 @@
   .conn-badge.bad  { background: rgba(244,67,54,0.25);  color: #ef9a9a; }
   .conn-badge.wait { background: rgba(255,193,7,0.25);  color: #ffe082; }
 
+  /* ===== Chat log ===== */
   .chat-log {
     position: relative;
-    height: 140px;
+    height: 160px;
     min-height: 110px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -152,7 +153,7 @@
     text-align: left;
     font-size: 0.82em;
     -webkit-overflow-scrolling: touch;
-    scroll-behavior: smooth;
+    /* NO scroll-behavior: smooth — we control scroll manually */
   }
   .chat-log::-webkit-scrollbar { width: 6px; }
   .chat-log::-webkit-scrollbar-track { background: transparent; }
@@ -257,7 +258,7 @@
     h1 { font-size: 1em; margin-bottom: 10px; }
     .avatar-stage { width: 170px; height: 204px; margin-bottom: 18px; }
     .status { font-size: 0.7em; bottom: -20px; }
-    .chat-log { height: 120px; font-size: 0.78em; }
+    .chat-log { height: 130px; font-size: 0.78em; }
     .action-bar button { font-size: 0.65em; padding: 9px 4px; }
     button { padding: 11px 14px; font-size: 0.88em; }
     input[type="text"] { padding: 11px 12px; font-size: 0.95em; }
@@ -290,7 +291,6 @@
     #blushLeft, #blushRight, #foreheadHighlight {
       transition: none !important;
     }
-    .chat-log { scroll-behavior: auto; }
     .msg { animation: none; }
   }
 </style>
@@ -363,7 +363,6 @@
             <stop offset="50%"  stop-color="#fff8d0" stop-opacity="0"/>
             <stop offset="100%" stop-color="#fff8d0" stop-opacity="0.6"/>
           </linearGradient>
-          <!-- Pendant: deeper, richer gold so text pops -->
           <linearGradient id="pendantGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stop-color="#c9932a"/>
             <stop offset="50%"  stop-color="#a67816"/>
@@ -392,7 +391,6 @@
           </filter>
         </defs>
 
-        <!-- Body -->
         <path d="M 30 240 Q 30 195 65 182 L 135 182 Q 170 195 170 240 Z"
               fill="url(#clothGrad)" stroke="#2c4468" stroke-width="0.8"/>
         <path d="M 82 182 Q 100 195 118 182 L 122 190 Q 100 203 78 190 Z"
@@ -400,12 +398,10 @@
         <path d="M 78 182 Q 100 194 122 182 L 120 187 Q 100 198 80 187 Z"
               fill="#2c4468" opacity="0.5"/>
 
-        <!-- Neck -->
         <path d="M 82 155 L 82 185 Q 100 192 118 185 L 118 155 Z"
               fill="url(#neckGrad)"/>
         <ellipse cx="100" cy="158" rx="22" ry="7" fill="#7a4820" opacity="0.55"/>
 
-        <!-- ===== NECKLACE ===== -->
         <g id="necklaceGroup">
           <path d="M 76 186 Q 82 200 96 204"
                 fill="none" stroke="url(#goldGrad)" stroke-width="2.2"
@@ -424,27 +420,15 @@
 
           <g id="pendantGroup">
             <ellipse cx="100" cy="211" rx="14" ry="2" fill="#3a2408" opacity="0.45"/>
-
-            <!-- Pendant body: darker gold so bright text contrasts strongly -->
             <rect x="85" y="202.5" width="30" height="15" rx="4"
                   fill="url(#pendantGrad)" stroke="#5c400a" stroke-width="0.8"/>
-
-            <!-- Inner bevel frame -->
             <rect x="87" y="204.5" width="26" height="11" rx="3"
                   fill="none" stroke="#5c400a" stroke-width="0.5" opacity="0.8"/>
-
-            <!-- Top ring connecting pendant to chain -->
             <circle cx="100" cy="202" r="2.4"
                     fill="none" stroke="url(#goldGrad)" stroke-width="1.2"/>
-
-            <!-- Top shine on pendant frame -->
             <path d="M 88 204.5 Q 92 203.5 96 204.5 L 95 205.5 Q 92 205 89 205.5 Z"
                   fill="#fff8d0" opacity="0.55"/>
 
-            <!-- ================================================== -->
-            <!-- nAIja TEXT — single bright cream fill with dark    -->
-            <!-- outline. Highest possible contrast against gold.   -->
-            <!-- ================================================== -->
             <text x="100" y="214"
                   font-family="'Trebuchet MS', 'Segoe UI', Helvetica, Arial, sans-serif"
                   font-size="7"
@@ -459,13 +443,11 @@
           </g>
         </g>
 
-        <!-- Ears -->
         <ellipse cx="58" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
         <ellipse cx="142" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
         <ellipse cx="58" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
         <ellipse cx="142" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
 
-        <!-- Face -->
         <path d="M 62 78 Q 58 100 60 120 Q 62 145 80 158 Q 100 165 120 158
                  Q 138 145 140 120 Q 142 100 138 78 Q 130 55 100 52 Q 70 55 62 78 Z"
               fill="url(#skinGrad)" filter="url(#softShadow)"/>
@@ -475,7 +457,6 @@
         <ellipse id="blushRight" cx="126" cy="128" rx="10" ry="6"
                  fill="url(#blush)" opacity="0.85"/>
 
-        <!-- Hair -->
         <path d="M 55 70 Q 52 40 75 28 Q 100 18 125 28 Q 148 40 145 70 L 148 95
                  Q 145 78 138 72 Q 130 55 100 52 Q 70 55 62 72 Q 55 78 52 95 Z"
               fill="url(#hairGrad)" filter="url(#hairSoft)"/>
@@ -488,7 +469,6 @@
         <path d="M 62 72 Q 70 58 88 55 Q 100 53 112 55 Q 130 58 138 72 Q 130 62 100 60 Q 70 62 62 72 Z"
               fill="#1a0f08" opacity="0.55"/>
 
-        <!-- Eyebrows -->
         <g id="browLeft" transform-box="fill-box" transform-origin="center">
           <path d="M 70 92 Q 80 87 92 90" stroke="#2b1b12" stroke-width="2.2"
                 stroke-linecap="round" fill="none" opacity="0.95"/>
@@ -498,7 +478,6 @@
                 stroke-linecap="round" fill="none" opacity="0.95"/>
         </g>
 
-        <!-- Left eye -->
         <g class="eye-group" id="leftEye">
           <ellipse cx="80" cy="108" rx="10" ry="7" fill="#9c6234" opacity="0.55"/>
           <ellipse cx="80" cy="107" rx="9" ry="6.5" fill="url(#eyeWhite)"/>
@@ -513,7 +492,6 @@
                 fill="none" opacity="0.5"/>
         </g>
 
-        <!-- Right eye -->
         <g class="eye-group" id="rightEye">
           <ellipse cx="120" cy="108" rx="10" ry="7" fill="#9c6234" opacity="0.55"/>
           <ellipse cx="120" cy="107" rx="9" ry="6.5" fill="url(#eyeWhite)"/>
@@ -528,7 +506,6 @@
                 fill="none" opacity="0.5"/>
         </g>
 
-        <!-- Nose -->
         <path d="M 100 106 Q 98 120 96 128 Q 100 131 104 128 Q 102 120 100 106 Z"
               fill="url(#noseShadow)" opacity="0.8"/>
         <ellipse cx="97" cy="129" rx="1.6" ry="1" fill="#5c3314" opacity="0.65"/>
@@ -536,7 +513,6 @@
         <path d="M 99 108 Q 99 120 98 126" stroke="#d9a271" stroke-width="0.8"
               fill="none" opacity="0.6"/>
 
-        <!-- Mouth -->
         <g id="mouthGroup">
           <ellipse id="mouthCavity" cx="100" cy="146" rx="12" ry="2" fill="#3d1414"/>
           <path id="upperLip"
@@ -714,19 +690,140 @@ function stopExpressionLoop() {
 /* ---------- Conversation store ---------- */
 let conversation = [];
 
-/* ---------- Chat auto-scroll ---------- */
-function scrollToBottom(instant = false) {
-  if (instant) {
+/* =========================================================
+   CHAT SCROLL CONTROLLER  (FIXED)
+   -----------------------------------------------------
+   Two important corrections from the previous version:
+
+   1. trackMessageForSpeech() was defined but never called
+      anywhere. send() only called snapBottom(). That's why
+      the log always jumped to the bottom — nothing ever set
+      up progress-driven scrolling.
+
+   2. The tracked element is now set up in speak()'s onstart
+      callback via a global `pendingTrackedMsgEl` variable.
+      That guarantees the scroll begins exactly when audio
+      starts, not a beat before.
+
+   How it works while Ivie speaks a long reply:
+     • A "start scroll" position shows the top of the new
+       message at the top of the panel.
+     • An "end scroll" position shows the bottom of the
+       message at the bottom of the panel.
+     • Every animation frame, the speech progress (0..1) is
+       fed to the scroller, which eases scrollTop smoothly
+       from start to end. Earlier lines glide up, new ones
+       slide in from below, matching the voice.
+   ========================================================= */
+const chatScroller = {
+  activeMsgEl: null,
+  msgTop: 0,
+  msgBottom: 0,
+  progress: 0,
+  userOverride: false,
+  rafId: null,
+
+  /* Instant bottom snap — used when the message is short,
+     when the user sends a message, or for typing indicator. */
+  snapBottom(smooth = false) {
+    this.progress = 1;
+    if (smooth && typeof chatLog.scrollTo === 'function') {
+      try {
+        chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+        return;
+      } catch (e) { /* fall through */ }
+    }
     chatLog.scrollTop = chatLog.scrollHeight;
-    return;
+  },
+
+  /* Begin tracking a specific bot message element as the
+     "message currently being read aloud." */
+  trackMessageForSpeech(msgEl) {
+    this.stopTracking();
+    if (!msgEl) return;
+    this.activeMsgEl = msgEl;
+    this.userOverride = false;
+
+    // Measure positions relative to the chat log's scrollable
+    // content. We must include the current scrollTop so the
+    // numbers are in "content-space," not "viewport-space."
+    const logRect = chatLog.getBoundingClientRect();
+    const msgRect = msgEl.getBoundingClientRect();
+    const scrollTopNow = chatLog.scrollTop;
+
+    const msgTopInContent    = (msgRect.top    - logRect.top) + scrollTopNow;
+    const msgBottomInContent = (msgRect.bottom - logRect.top) + scrollTopNow;
+
+    const panelH   = chatLog.clientHeight;
+    const contentH = chatLog.scrollHeight;
+    const padTop   = 6;
+
+    // Scroll start: top of message near top of panel.
+    // Scroll end:   bottom of message near bottom of panel.
+    const startScroll = Math.max(0, msgTopInContent - padTop);
+    const endScroll   = Math.min(
+      contentH - panelH,
+      Math.max(0, msgBottomInContent - panelH + padTop)
+    );
+
+    // If the whole message already fits in the visible panel,
+    // just snap to the bottom and don't bother with tracking.
+    if (endScroll <= startScroll) {
+      this.snapBottom();
+      this.activeMsgEl = null;
+      return;
+    }
+
+    this.msgTop    = startScroll;
+    this.msgBottom = endScroll;
+
+    // Begin showing the top of the message right away.
+    chatLog.scrollTop = this.msgTop;
+
+    // Kick off the RAF loop that will advance with progress.
+    this._loop();
+  },
+
+  /* Called every frame from the mouth animation engine. */
+  setProgress(p) {
+    this.progress = Math.max(0, Math.min(1, p));
+  },
+
+  stopTracking() {
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.activeMsgEl = null;
+    this.userOverride = false;
+  },
+
+  _loop() {
+    if (!this.activeMsgEl) { this.rafId = null; return; }
+    if (this.userOverride) { this.rafId = null; return; }
+
+    const target = this.msgTop + (this.msgBottom - this.msgTop) * this.progress;
+    const current = chatLog.scrollTop;
+    const diff = target - current;
+
+    if (Math.abs(diff) > 0.4) {
+      chatLog.scrollTop = current + diff * 0.22;
+    } else {
+      chatLog.scrollTop = target;
+    }
+
+    this.rafId = requestAnimationFrame(() => this._loop());
   }
-  chatLog.scrollTop = chatLog.scrollHeight;
-  if (typeof chatLog.scrollTo === 'function') {
-    try {
-      chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
-    } catch (e) { /* ignore */ }
-  }
-}
+};
+
+/* Manual-scroll override: if the user scrolls while speech is
+   active, release the track so we don't fight their gesture. */
+chatLog.addEventListener('wheel', () => {
+  chatScroller.userOverride = true;
+}, { passive: true });
+chatLog.addEventListener('touchmove', () => {
+  chatScroller.userOverride = true;
+}, { passive: true });
 
 /* ---------- Health check ---------- */
 async function checkHealth() {
@@ -753,9 +850,13 @@ checkHealth();
 function addMsg(who, text, cls) {
   const div = document.createElement('div');
   div.className = 'msg ' + cls;
-  div.innerHTML = `<span class="who">${who}:</span><br>${escapeHtml(text)}`;
+  div.innerHTML = `<span class="who">${who}:</span><br><span class="body"></span>`;
+  div.querySelector('.body').textContent = text;
   chatLog.appendChild(div);
-  scrollToBottom();
+  // For user messages and system notices, snap to bottom so
+  // the new line is visible. Bot replies will be tracked by
+  // chatScroller once speaking begins.
+  chatScroller.snapBottom();
   conversation.push({ role: cls === 'user' ? 'user' : 'bot', text: text });
   return div;
 }
@@ -772,7 +873,7 @@ function showTypingIndicator() {
   div.innerHTML = `<span class="who">Ivie:</span><br><span class="dots"></span>`;
   chatLog.appendChild(div);
   typingIndicatorEl = div;
-  scrollToBottom();
+  chatScroller.snapBottom(true);
 }
 function hideTypingIndicator() {
   if (typingIndicatorEl && typingIndicatorEl.parentNode) {
@@ -1172,6 +1273,9 @@ function startMouthAnimation(text, rate) {
     const expectedProgress = Math.min(1, elapsed / mouthState.estimatedDuration);
     mouthState.lastProgress = expectedProgress;
 
+    // ★ FIX: feed speech progress to the chat scroller every frame.
+    chatScroller.setProgress(expectedProgress);
+
     const progress = Math.min(1, expectedProgress * mouthState.rateMult);
 
     if (progress >= 1 && mouthState.estimatedDuration > 0) {
@@ -1225,6 +1329,17 @@ function finishMouthAnimation() {
   mouthRAF = requestAnimationFrame(closeStep);
 }
 
+/* =========================================================
+   PENDING-TRACK MESSAGE
+   -----------------------------------------------------
+   When send() prepares a new bot reply, it stores the DOM
+   element here. The next time speak() fires u.onstart, we
+   hand it to chatScroller.trackMessageForSpeech() so the
+   progress-driven scroll is set up at exactly the moment
+   audio begins.
+   ========================================================= */
+let pendingTrackedMsgEl = null;
+
 /* ---------- SPEECH ---------- */
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) {
@@ -1257,12 +1372,26 @@ function speak(text, onEnd) {
     avatar.classList.add('talking');
     startMouthAnimation(text, rate);
     startExpressionLoop();
+
+    // ★ FIX: start tracking the pending bot message now that
+    // speech has begun. Before this, the log only snapped to
+    // the bottom and never followed the voice line-by-line.
+    if (pendingTrackedMsgEl) {
+      chatScroller.trackMessageForSpeech(pendingTrackedMsgEl);
+      pendingTrackedMsgEl = null;
+    }
   };
 
   const finish = () => {
     avatar.classList.remove('talking');
     finishMouthAnimation();
     stopExpressionLoop();
+
+    // Force-scroll to the very bottom so the entire reply is
+    // fully visible once speech ends.
+    chatScroller.stopTracking();
+    chatScroller.snapBottom();
+
     setTimeout(() => {
       if (mouthRAF) {
         cancelAnimationFrame(mouthRAF);
@@ -1299,8 +1428,12 @@ async function send() {
   }
   hideTypingIndicator();
 
-  addMsg('Ivie', reply, 'bot');
-  scrollToBottom();
+  // Create the bot message. addMsg() will snap to the bottom
+  // once so the user sees the reply appear, then we hand the
+  // element to pendingTrackedMsgEl so speech can take over.
+  const botEl = addMsg('Ivie', reply, 'bot');
+  pendingTrackedMsgEl = botEl;
+
   statusEl.textContent = 'Speaking... 🗣️';
   speak(reply, () => {
     statusEl.textContent = 'Ready to chat';
@@ -1366,6 +1499,8 @@ document.getElementById('newSessionBtn').addEventListener('click', () => {
   avatar.classList.remove('talking');
   stopMouthAnimation();
   stopExpressionLoop();
+  chatScroller.stopTracking();
+  pendingTrackedMsgEl = null;
   hideTypingIndicator();
   conversation = [];
   chatLog.innerHTML = '';
