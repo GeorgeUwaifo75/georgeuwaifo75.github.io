@@ -313,6 +313,26 @@
             <stop offset="0%" stop-color="#c99368" stop-opacity="0.7"/>
             <stop offset="100%" stop-color="#c99368" stop-opacity="0"/>
           </radialGradient>
+          <!-- Gold gradient for necklace -->
+          <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#f9e79f"/>
+            <stop offset="35%" stop-color="#f4d03f"/>
+            <stop offset="55%" stop-color="#d4ac0d"/>
+            <stop offset="80%" stop-color="#b9770e"/>
+            <stop offset="100%" stop-color="#f4d03f"/>
+          </linearGradient>
+          <linearGradient id="goldShine" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"  stop-color="#fff8d0" stop-opacity="0.9"/>
+            <stop offset="50%" stop-color="#fff8d0" stop-opacity="0"/>
+            <stop offset="100%" stop-color="#fff8d0" stop-opacity="0.6"/>
+          </linearGradient>
+          <!-- Pendant gradient -->
+          <radialGradient id="pendantGrad" cx="35%" cy="30%" r="75%">
+            <stop offset="0%"  stop-color="#fff2a8"/>
+            <stop offset="45%" stop-color="#f4d03f"/>
+            <stop offset="85%" stop-color="#b9770e"/>
+            <stop offset="100%" stop-color="#7d5a09"/>
+          </radialGradient>
           <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
             <feOffset dx="0" dy="1" result="offsetblur"/>
@@ -326,6 +346,14 @@
           </filter>
           <filter id="hairSoft">
             <feGaussianBlur stdDeviation="0.4"/>
+          </filter>
+          <!-- Necklace glow -->
+          <filter id="goldGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.8" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
           </filter>
         </defs>
 
@@ -341,6 +369,62 @@
         <path d="M 82 155 L 82 185 Q 100 192 118 185 L 118 155 Z"
               fill="url(#neckGrad)"/>
         <ellipse cx="100" cy="158" rx="22" ry="7" fill="#a8714a" opacity="0.55"/>
+
+        <!-- ===== NECKLACE (behind pendant) ===== -->
+        <g id="necklaceGroup">
+          <!-- Chain: two curves meeting at the pendant -->
+          <path d="M 76 186 Q 82 200 96 204"
+                fill="none" stroke="url(#goldGrad)" stroke-width="2.2"
+                stroke-linecap="round" filter="url(#goldGlow)"/>
+          <path d="M 124 186 Q 118 200 104 204"
+                fill="none" stroke="url(#goldGrad)" stroke-width="2.2"
+                stroke-linecap="round" filter="url(#goldGlow)"/>
+          <!-- Chain shine highlights -->
+          <path d="M 77 188 Q 83 199 95 203"
+                fill="none" stroke="url(#goldShine)" stroke-width="0.7"
+                stroke-linecap="round" opacity="0.9"/>
+          <path d="M 123 188 Q 117 199 105 203"
+                fill="none" stroke="url(#goldShine)" stroke-width="0.7"
+                stroke-linecap="round" opacity="0.9"/>
+          <!-- Small bead connectors -->
+          <circle cx="76" cy="186" r="1.6" fill="url(#goldGrad)"/>
+          <circle cx="124" cy="186" r="1.6" fill="url(#goldGrad)"/>
+
+          <!-- Pendant: rounded rectangle with "NiGirl" -->
+          <g id="pendantGroup">
+            <!-- Pendant shadow -->
+            <ellipse cx="100" cy="211" rx="14" ry="2" fill="#3a2408" opacity="0.4"/>
+            <!-- Pendant body -->
+            <rect x="86" y="203" width="28" height="14" rx="4"
+                  fill="url(#pendantGrad)" stroke="#7d5a09" stroke-width="0.7"/>
+            <!-- Pendant top ring -->
+            <circle cx="100" cy="202.5" r="2.4"
+                    fill="none" stroke="url(#goldGrad)" stroke-width="1.1"/>
+            <!-- Pendant inner bevel -->
+            <rect x="88" y="205" width="24" height="10" rx="3"
+                  fill="none" stroke="#7d5a09" stroke-width="0.4" opacity="0.7"/>
+            <!-- Pendant shine -->
+            <path d="M 88 205 Q 92 204 96 205 L 95 206 Q 92 205.5 89 206 Z"
+                  fill="#fff8d0" opacity="0.7"/>
+            <!-- NiGirl text -->
+            <text x="100" y="213.2"
+                  font-family="Georgia, 'Times New Roman', serif"
+                  font-size="6.2"
+                  font-weight="bold"
+                  text-anchor="middle"
+                  fill="#3a2408"
+                  letter-spacing="0.3">NiGirl</text>
+            <!-- Text highlight -->
+            <text x="100" y="213"
+                  font-family="Georgia, 'Times New Roman', serif"
+                  font-size="6.2"
+                  font-weight="bold"
+                  text-anchor="middle"
+                  fill="#fff2a8"
+                  opacity="0.35"
+                  letter-spacing="0.3">NiGirl</text>
+          </g>
+        </g>
 
         <!-- Ears -->
         <ellipse cx="58" cy="118" rx="6.5" ry="12" fill="#eab894" stroke="#c99368" stroke-width="0.6"/>
@@ -460,11 +544,44 @@
 // ============ CONFIGURATION ============
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
-const FEMALE_VOICE_HINTS = [
-  'Samantha', 'Victoria', 'Karen', 'Moira', 'Tessa', 'Fiona',
+/* =========================================================
+   VOICE SELECTION — Always English, prefer African accent
+   -----------------------------------------------------
+   African-accented English voices exist in several browsers
+   and operating systems. Common names include:
+     • Microsoft   : "Microsoft Aria Online (Natural) - English (Nigeria)"
+                     "Microsoft Ada - English (Nigeria)"
+                     "Microsoft Ezinne - English (Nigeria)"
+                     "Microsoft Chioma - English (Nigeria)"
+                     "Microsoft Zira - English (United States)"  (fallback)
+     • Apple/macOS : "Tessa" (South African), "Karen" (Australian, still African-ish)
+     • Google      : "Google UK English Female", "Google en-GB"
+   We prioritize Nigeria / South Africa / Kenya / Ghana voices first,
+   then general African English, then any English female voice.
+   ========================================================= */
+
+// Highest priority: explicit African English voices
+const AFRICAN_VOICE_HINTS = [
+  // Nigeria
+  'English (Nigeria)', 'en-NG', 'Nigeria',
+  'Microsoft Aria Online', 'Microsoft Ada', 'Microsoft Ezinne',
+  'Microsoft Chioma', 'Microsoft Ngozi', 'Microsoft Amara',
+  // South Africa
+  'English (South Africa)', 'en-ZA', 'South Africa', 'Tessa',
+  // Kenya
+  'English (Kenya)', 'en-KE', 'Kenya',
+  // Ghana
+  'English (Ghana)', 'en-GH', 'Ghana',
+  // Generic African
+  'African', 'Afrikaans'
+];
+
+// Secondary preference: known female English voices (any accent)
+const FEMALE_ENGLISH_HINTS = [
+  'Samantha', 'Victoria', 'Karen', 'Moira', 'Fiona',
   'Google UK English Female', 'Google US English',
   'Microsoft Zira', 'Microsoft Aria', 'Microsoft Jenny',
-  'Microsoft Michelle', 'Microsoft Amber',
+  'Microsoft Michelle', 'Microsoft Amber', 'Microsoft Libby',
   'Female', 'Woman', 'Zira', 'Aria', 'Jenny', 'Serena',
   'Eva', 'Catherine', 'Susan', 'Allison', 'Ava', 'Nicky'
 ];
@@ -479,7 +596,6 @@ const endpoint     = document.getElementById('endpoint');
 const connBadge    = document.getElementById('connBadge');
 const leftEye      = document.getElementById('leftEye');
 const rightEye     = document.getElementById('rightEye');
-// Rename DOM references so they never collide with function locals
 const domMouthCavity  = document.getElementById('mouthCavity');
 const domLowerLip     = document.getElementById('lowerLip');
 const domUpperLip     = document.getElementById('upperLip');
@@ -569,35 +685,71 @@ async function queryModel(message) {
 }
 
 /* =========================================================
-   FEMALE VOICE SELECTION
+   VOICE SELECTION — English only, African accent preferred
    ========================================================= */
-let cachedFemaleVoice = null;
+let cachedVoice = null;
 
-function pickFemaleVoice() {
+function isEnglishVoice(v) {
+  if (!v) return false;
+  const lang = (v.lang || '').toLowerCase();
+  const name = (v.name || '').toLowerCase();
+  return lang.startsWith('en') ||
+         /english|en[-_]/.test(name) ||
+         /(samantha|victoria|karen|moira|fiona|tessa|zira|aria|jenny|serena|ava|susan|allison|nicky)/.test(name);
+}
+
+function pickAfricanEnglishVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
-  for (const hint of FEMALE_VOICE_HINTS) {
-    const v = voices.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
+  // 1) Highest priority: explicit African English voices
+  for (const hint of AFRICAN_VOICE_HINTS) {
+    const v = voices.find(v =>
+      isEnglishVoice(v) &&
+      (v.name.toLowerCase().includes(hint.toLowerCase()) ||
+       (v.lang || '').toLowerCase().includes(hint.toLowerCase()))
+    );
     if (v) return v;
   }
-  const nameMatch = voices.find(v =>
-    /female|woman|zira|aria|jenny|serena|samantha|victoria|karen|moira|tessa|fiona|susan|allison|ava|eva/i
-      .test(v.name)
-  );
-  if (nameMatch) return nameMatch;
 
-  return voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) || voices[0];
+  // 2) Any English voice whose language is African-region (en-NG, en-ZA, en-KE, en-GH, etc.)
+  const africanLangs = ['en-ng', 'en-za', 'en-ke', 'en-gh', 'en-tz', 'en-ug'];
+  const africanMatch = voices.find(v =>
+    africanLangs.some(l => (v.lang || '').toLowerCase().startsWith(l))
+  );
+  if (africanMatch) return africanMatch;
+
+  // 3) Any voice name containing African-region markers
+  const africanName = voices.find(v =>
+    isEnglishVoice(v) &&
+    /nigeria|south africa|kenya|ghana|africa|tessa/i.test(v.name)
+  );
+  if (africanName) return africanName;
+
+  // 4) Fallback: any known female English voice (native English speaker)
+  for (const hint of FEMALE_ENGLISH_HINTS) {
+    const v = voices.find(v =>
+      isEnglishVoice(v) &&
+      v.name.toLowerCase().includes(hint.toLowerCase())
+    );
+    if (v) return v;
+  }
+
+  // 5) Any English voice at all
+  return voices.find(isEnglishVoice) || voices[0];
 }
 
-function refreshFemaleVoice() {
-  cachedFemaleVoice = pickFemaleVoice();
+function refreshVoice() {
+  cachedVoice = pickAfricanEnglishVoice();
+  if (cachedVoice) {
+    console.log('[Ivie] Voice selected:', cachedVoice.name, '(' + cachedVoice.lang + ')');
+  }
 }
 
 if ('speechSynthesis' in window) {
-  refreshFemaleVoice();
-  speechSynthesis.onvoiceschanged = refreshFemaleVoice;
+  refreshVoice();
+  speechSynthesis.onvoiceschanged = refreshVoice;
 }
 
 /* =========================================================
@@ -741,7 +893,7 @@ function textToVisemes(text) {
 }
 
 /* =========================================================
-   MOUTH RENDERER (FIXED — no name shadowing)
+   MOUTH RENDERER
    ========================================================= */
 
 let mouthRAF = null;
@@ -798,7 +950,7 @@ function renderMouth(shape, progress) {
 }
 
 /* =========================================================
-   PLAY VISEME SEQUENCE (FIXED — reliable RAF loop)
+   PLAY VISEME SEQUENCE
    ========================================================= */
 
 function stopMouthAnimation() {
@@ -815,7 +967,6 @@ function startMouthAnimation(text) {
   const visemes = textToVisemes(text);
   if (visemes.length === 0) return;
 
-  // Build a per-frame timeline of mouth shapes
   const fps = 40;
   const frameDur = 1000 / fps;
   const timeline = [];
@@ -853,12 +1004,10 @@ function startMouthAnimation(text) {
     lastTime = now;
     accumulated += dt;
 
-    // Advance as many frames as fit in the elapsed time (with catch-up)
     while (accumulated >= frameDur) {
       accumulated -= frameDur;
       frameIndex++;
       if (frameIndex >= totalFrames) {
-        // Loop the sequence if speech is still ongoing
         frameIndex = 0;
       }
     }
@@ -867,13 +1016,12 @@ function startMouthAnimation(text) {
     mouthRAF = requestAnimationFrame(loop);
   }
 
-  // Show first frame immediately so there's no lag at the start
   renderMouth(timeline[0], 1);
   lastTime = performance.now();
   mouthRAF = requestAnimationFrame(loop);
 }
 
-/* ---------- SPEECH ---------- */
+/* ---------- SPEECH — English only, African accent preferred ---------- */
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) {
     onEnd && onEnd();
@@ -881,16 +1029,29 @@ function speak(text, onEnd) {
   }
 
   const u = new SpeechSynthesisUtterance(text);
-  u.rate   = 1.0;
-  u.pitch  = 1.25;
+
+  // Force English language
+  u.lang = 'en-US';
+
+  // Female-friendly prosody
+  u.rate   = 0.98;   // slightly slower for clear African English cadence
+  u.pitch  = 1.2;    // gentle female timbre
   u.volume = 1.0;
 
-  if (!cachedFemaleVoice) refreshFemaleVoice();
-  if (cachedFemaleVoice) {
-    u.voice = cachedFemaleVoice;
-    u.lang  = cachedFemaleVoice.lang || 'en-US';
+  // Pick best available voice: African English female preferred
+  if (!cachedVoice) refreshVoice();
+  if (cachedVoice && isEnglishVoice(cachedVoice)) {
+    u.voice = cachedVoice;
+    u.lang  = cachedVoice.lang || 'en-US';
   } else {
-    u.lang = 'en-US';
+    // Last-ditch effort: pick any English voice from the list
+    const voices = speechSynthesis.getVoices();
+    const anyEnglish = voices.find(isEnglishVoice);
+    if (anyEnglish) {
+      u.voice = anyEnglish;
+      u.lang  = anyEnglish.lang || 'en-US';
+    }
+    // Otherwise, browser default with lang forced to English
   }
 
   u.onstart = () => {
