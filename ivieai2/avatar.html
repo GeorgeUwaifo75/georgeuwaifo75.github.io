@@ -47,7 +47,6 @@
     line-height: 1.3;
   }
 
-  /* ===== Avatar stage ===== */
   .avatar-stage {
     position: relative;
     width: 200px;
@@ -82,7 +81,6 @@
     pointer-events: none;
   }
 
-  /* ===== Blink — fixed: scale each eye from its own center ===== */
   .eye-group {
     transform-box: fill-box;
     transform-origin: center;
@@ -92,7 +90,6 @@
     transform: scaleY(0.08);
   }
 
-  /* Talking head bob */
   #avatar.talking {
     animation: headbob 1.1s infinite alternate ease-in-out;
   }
@@ -102,7 +99,6 @@
     100% { transform: rotate(1.2deg) translateY(-3px); }
   }
 
-  /* Idle breathing */
   #avatar:not(.talking) {
     animation: breathe 4s infinite ease-in-out;
   }
@@ -121,7 +117,6 @@
     z-index: 2;
   }
 
-  /* ===== Connection badge ===== */
   .conn-badge {
     display: inline-block;
     padding: 4px 12px;
@@ -140,7 +135,6 @@
   .conn-badge.bad  { background: rgba(244,67,54,0.25);  color: #ef9a9a; }
   .conn-badge.wait { background: rgba(255,193,7,0.25);  color: #ffe082; }
 
-  /* ===== Chat area ===== */
   .chat-log {
     position: relative;
     height: 140px;
@@ -189,7 +183,6 @@
   button:hover { background: #a8d8ea; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* ===== Action buttons ===== */
   .action-bar {
     display: flex; gap: 6px;
     margin-bottom: 10px;
@@ -226,7 +219,6 @@
   }
   .hidden-url { display: none; }
 
-  /* ===== Responsive tweaks ===== */
   @media (max-width: 380px) {
     .container { padding: 16px 12px; border-radius: 14px; }
     h1 { font-size: 1em; margin-bottom: 10px; }
@@ -337,7 +329,7 @@
           </filter>
         </defs>
 
-        <!-- Body / Shoulders -->
+        <!-- Body -->
         <path d="M 30 240 Q 30 195 65 182 L 135 182 Q 170 195 170 240 Z"
               fill="url(#clothGrad)" stroke="#2c4468" stroke-width="0.8"/>
         <path d="M 82 182 Q 100 195 118 182 L 122 190 Q 100 203 78 190 Z"
@@ -383,11 +375,6 @@
         <path d="M 108 90 Q 120 87 130 92" stroke="#2b1b12" stroke-width="2.2"
               stroke-linecap="round" fill="none" opacity="0.9"/>
 
-        <!--
-          Eyes: the .eye-group element now has transform-box: fill-box,
-          so scaleY() collapses toward the eye's own vertical center.
-          This prevents the "eyes dropping from the top" effect.
-        -->
         <!-- Left eye -->
         <g class="eye-group" id="leftEye">
           <ellipse cx="80" cy="108" rx="10" ry="7" fill="#d8a67c" opacity="0.5"/>
@@ -428,8 +415,7 @@
 
         <!-- Mouth -->
         <g id="mouthGroup">
-          <ellipse id="mouthCavity" cx="100" cy="146" rx="12" ry="2"
-                   fill="#3d1414"/>
+          <ellipse id="mouthCavity" cx="100" cy="146" rx="12" ry="2" fill="#3d1414"/>
           <path id="upperLip"
                 d="M 87 143 Q 93 141 100 143 Q 107 141 113 143
                    Q 108 145.5 100 146 Q 92 145.5 87 143 Z"
@@ -493,14 +479,13 @@ const endpoint     = document.getElementById('endpoint');
 const connBadge    = document.getElementById('connBadge');
 const leftEye      = document.getElementById('leftEye');
 const rightEye     = document.getElementById('rightEye');
-const mouthCavity  = document.getElementById('mouthCavity');
-const lowerLip     = document.getElementById('lowerLip');
-const lipHighlight = document.getElementById('lipHighlight');
+// Rename DOM references so they never collide with function locals
+const domMouthCavity  = document.getElementById('mouthCavity');
+const domLowerLip     = document.getElementById('lowerLip');
+const domUpperLip     = document.getElementById('upperLip');
+const domLipHighlight = document.getElementById('lipHighlight');
 
-/* ---------- Natural random blink (fixed) ----------
-   Note: .eye-group has `transform-box: fill-box; transform-origin: center;`
-   so scaleY collapses toward each eye's own center — not the SVG top-left.
------------------------------------------------------ */
+/* ---------- Natural random blink ---------- */
 (function blinkLoop() {
   const delay = 2200 + Math.random() * 3500;
   setTimeout(() => {
@@ -616,92 +601,276 @@ if ('speechSynthesis' in window) {
 }
 
 /* =========================================================
-   NATURAL MOUTH ANIMATION
+   PHONEME-AWARE LIP SYNC
    ========================================================= */
-let mouthAnimations = [];
 
-function stopMouthAnimation() {
-  mouthAnimations.forEach(a => { try { a.cancel(); } catch(e){} });
-  mouthAnimations = [];
-  lowerLip.setAttribute('d', 'M 88 145 Q 100 148 112 145 Q 108 148 100 149 Q 92 148 88 145 Z');
-  mouthCavity.setAttribute('ry', '2');
-  mouthCavity.setAttribute('rx', '12');
-  lipHighlight.setAttribute('d', 'M 93 147 Q 100 148.5 107 147');
+const VISEMES = {
+  AA: { open: 0.85, width: 1.05, round: 0.05 },
+  AE: { open: 0.55, width: 1.15, round: 0.05 },
+  AH: { open: 0.45, width: 1.00, round: 0.00 },
+  AO: { open: 0.70, width: 0.90, round: 0.45 },
+  AW: { open: 0.65, width: 0.90, round: 0.35 },
+  AY: { open: 0.55, width: 1.15, round: 0.00 },
+  EH: { open: 0.40, width: 1.10, round: 0.00 },
+  ER: { open: 0.35, width: 0.95, round: 0.20 },
+  EY: { open: 0.45, width: 1.10, round: 0.00 },
+  IH: { open: 0.28, width: 1.08, round: 0.00 },
+  IY: { open: 0.20, width: 1.15, round: 0.00 },
+  OH: { open: 0.65, width: 0.85, round: 0.55 },
+  OW: { open: 0.55, width: 0.85, round: 0.55 },
+  OY: { open: 0.55, width: 0.88, round: 0.40 },
+  UH: { open: 0.30, width: 0.95, round: 0.20 },
+  UW: { open: 0.28, width: 0.80, round: 0.65 },
+  M:  { open: 0.02, width: 0.95, round: 0.00 },
+  B:  { open: 0.05, width: 0.95, round: 0.00 },
+  P:  { open: 0.05, width: 0.95, round: 0.00 },
+  F:  { open: 0.15, width: 1.00, round: 0.00 },
+  V:  { open: 0.18, width: 1.00, round: 0.00 },
+  TH: { open: 0.18, width: 0.95, round: 0.00 },
+  DH: { open: 0.18, width: 0.95, round: 0.00 },
+  S:  { open: 0.15, width: 1.10, round: 0.00 },
+  Z:  { open: 0.15, width: 1.10, round: 0.00 },
+  SH: { open: 0.25, width: 0.80, round: 0.55 },
+  CH: { open: 0.20, width: 0.85, round: 0.40 },
+  JH: { open: 0.22, width: 0.85, round: 0.40 },
+  T:  { open: 0.15, width: 1.05, round: 0.00 },
+  D:  { open: 0.18, width: 1.05, round: 0.00 },
+  N:  { open: 0.15, width: 1.00, round: 0.00 },
+  L:  { open: 0.30, width: 1.05, round: 0.00 },
+  R:  { open: 0.35, width: 0.90, round: 0.30 },
+  W:  { open: 0.20, width: 0.80, round: 0.60 },
+  Y:  { open: 0.22, width: 1.10, round: 0.00 },
+  K:  { open: 0.20, width: 1.05, round: 0.00 },
+  G:  { open: 0.22, width: 1.05, round: 0.00 },
+  HH: { open: 0.35, width: 1.00, round: 0.00 },
+  REST: { open: 0.00, width: 1.00, round: 0.00 }
+};
+
+function textToVisemes(text) {
+  const clean = text.toLowerCase().replace(/[^a-z\s.,!?;:'"-]/g, '');
+  const words = clean.split(/(\s+|[.,!?;:])/).filter(w => w.length > 0);
+  const visemes = [];
+
+  for (const token of words) {
+    if (/^[.,!?;:]+$/.test(token)) {
+      visemes.push({ viseme: 'REST', duration: 220 + Math.random() * 80 });
+      continue;
+    }
+    if (/^\s+$/.test(token)) {
+      visemes.push({ viseme: 'REST', duration: 110 + Math.random() * 50 });
+      continue;
+    }
+
+    const w = token;
+    let i = 0;
+    while (i < w.length) {
+      const c  = w[i];
+      const c2 = w.substr(i, 2);
+      let visemeKey = null;
+      let advance = 1;
+
+      if (c2 === 'th') { visemeKey = 'TH'; advance = 2; }
+      else if (c2 === 'sh') { visemeKey = 'SH'; advance = 2; }
+      else if (c2 === 'ch') { visemeKey = 'CH'; advance = 2; }
+      else if (c2 === 'ph') { visemeKey = 'F';  advance = 2; }
+      else if (c2 === 'wh') { visemeKey = 'W';  advance = 2; }
+      else if (c2 === 'ck') { visemeKey = 'K';  advance = 2; }
+      else if (c2 === 'ng') { visemeKey = 'N';  advance = 2; }
+      else if (c2 === 'oo') { visemeKey = 'UW'; advance = 2; }
+      else if (c2 === 'ee') { visemeKey = 'IY'; advance = 2; }
+      else if (c2 === 'ea') { visemeKey = 'IY'; advance = 2; }
+      else if (c2 === 'ai') { visemeKey = 'EY'; advance = 2; }
+      else if (c2 === 'ay') { visemeKey = 'EY'; advance = 2; }
+      else if (c2 === 'ou') { visemeKey = 'AW'; advance = 2; }
+      else if (c2 === 'ow') { visemeKey = 'OW'; advance = 2; }
+      else if (c2 === 'oi') { visemeKey = 'OY'; advance = 2; }
+      else if (c2 === 'oy') { visemeKey = 'OY'; advance = 2; }
+      else if (c2 === 'au') { visemeKey = 'AO'; advance = 2; }
+      else if (c2 === 'aw') { visemeKey = 'AO'; advance = 2; }
+      else if (c2 === 'er') { visemeKey = 'ER'; advance = 2; }
+      else if (c2 === 'ir') { visemeKey = 'ER'; advance = 2; }
+      else if (c2 === 'ur') { visemeKey = 'ER'; advance = 2; }
+
+      if (!visemeKey) {
+        switch (c) {
+          case 'a': visemeKey = 'AE'; break;
+          case 'e': visemeKey = 'EH'; break;
+          case 'i': visemeKey = 'IH'; break;
+          case 'o': visemeKey = 'OH'; break;
+          case 'u': visemeKey = 'AH'; break;
+          case 'y': visemeKey = 'Y';  break;
+          case 'm': visemeKey = 'M';  break;
+          case 'b': visemeKey = 'B';  break;
+          case 'p': visemeKey = 'P';  break;
+          case 'f': visemeKey = 'F';  break;
+          case 'v': visemeKey = 'V';  break;
+          case 's': visemeKey = 'S';  break;
+          case 'z': visemeKey = 'Z';  break;
+          case 't': visemeKey = 'T';  break;
+          case 'd': visemeKey = 'D';  break;
+          case 'n': visemeKey = 'N';  break;
+          case 'l': visemeKey = 'L';  break;
+          case 'r': visemeKey = 'R';  break;
+          case 'w': visemeKey = 'W';  break;
+          case 'k': visemeKey = 'K';  break;
+          case 'g': visemeKey = 'G';  break;
+          case 'h': visemeKey = 'HH'; break;
+          case 'c': visemeKey = 'K';  break;
+          case 'j': visemeKey = 'JH'; break;
+          case 'x': visemeKey = 'K';  break;
+          case 'q': visemeKey = 'K';  break;
+          default:  visemeKey = 'AH';
+        }
+      }
+
+      const isVowel = /^(AA|AE|AH|AO|AW|AY|EH|ER|EY|IH|IY|OH|OW|OY|UH|UW)$/.test(visemeKey);
+      const isStop  = /^(M|B|P)$/.test(visemeKey);
+      let dur;
+      if (isStop)       dur = 60 + Math.random() * 25;
+      else if (isVowel) dur = 110 + Math.random() * 60;
+      else              dur = 80 + Math.random() * 40;
+
+      visemes.push({ viseme: visemeKey, duration: dur });
+      i += advance;
+    }
+
+    visemes.push({ viseme: 'REST', duration: 65 + Math.random() * 40 });
+  }
+
+  return visemes;
 }
 
-function startMouthAnimation() {
+/* =========================================================
+   MOUTH RENDERER (FIXED — no name shadowing)
+   ========================================================= */
+
+let mouthRAF = null;
+
+function buildMouthPaths(shape, progress) {
+  const open  = Math.max(0, Math.min(1, shape.open)) * progress;
+  const width = shape.width || 1.0;
+  const round = shape.round || 0;
+
+  const upperY = 143 - open * 1.2;
+
+  const lowerTop    = 145 + open * 1.5;
+  const lowerBottom = 148 + open * 7.5;
+
+  const halfWidth = (13 * width) - (round * 2.5);
+
+  const upperLipPath =
+    `M ${100 - halfWidth} ${upperY}
+     Q ${100 - halfWidth * 0.55} ${upperY - 1.6} 100 ${upperY + 0.4}
+     Q ${100 + halfWidth * 0.55} ${upperY - 1.6} ${100 + halfWidth} ${upperY}
+     Q ${100 + halfWidth * 0.55} ${upperY + 2.2} 100 ${upperY + 2.8}
+     Q ${100 - halfWidth * 0.55} ${upperY + 2.2} ${100 - halfWidth} ${upperY} Z`;
+
+  const lowerLipPath =
+    `M ${100 - halfWidth} ${lowerTop}
+     Q 100 ${lowerBottom} ${100 + halfWidth} ${lowerTop}
+     Q ${100 + halfWidth - 1.5} ${lowerTop + 1.2} 100 ${lowerTop + 2.2}
+     Q ${100 - halfWidth + 1.5} ${lowerTop + 1.2} ${100 - halfWidth} ${lowerTop} Z`;
+
+  const cavityRx = halfWidth * 0.85;
+  const cavityRy = open * 8.5 + 0.6;
+  const cavityCy = 146 + open * 2;
+
+  const highlightPath =
+    `M ${100 - halfWidth * 0.5} ${lowerTop + 0.8}
+     Q 100 ${lowerTop + 1.8} ${100 + halfWidth * 0.5} ${lowerTop + 0.8}`;
+
+  return {
+    upper: upperLipPath,
+    lower: lowerLipPath,
+    highlight: highlightPath,
+    cavityRx, cavityRy, cavityCy
+  };
+}
+
+function renderMouth(shape, progress) {
+  const p = buildMouthPaths(shape, progress);
+  domUpperLip.setAttribute('d', p.upper);
+  domLowerLip.setAttribute('d', p.lower);
+  domLipHighlight.setAttribute('d', p.highlight);
+  domMouthCavity.setAttribute('rx', p.cavityRx.toFixed(2));
+  domMouthCavity.setAttribute('ry', p.cavityRy.toFixed(2));
+  domMouthCavity.setAttribute('cy', p.cavityCy.toFixed(2));
+}
+
+/* =========================================================
+   PLAY VISEME SEQUENCE (FIXED — reliable RAF loop)
+   ========================================================= */
+
+function stopMouthAnimation() {
+  if (mouthRAF) {
+    cancelAnimationFrame(mouthRAF);
+    mouthRAF = null;
+  }
+  renderMouth({ open: 0, width: 1, round: 0 }, 1);
+}
+
+function startMouthAnimation(text) {
   stopMouthAnimation();
 
-  const lipPath = (open) => {
-    const midY   = 148 + open * 6;
-    const width  = 12 + open * 4;
-    return `M ${100 - width} ${145 + open * 1.2}
-            Q 100 ${midY} ${100 + width} ${145 + open * 1.2}
-            Q ${100 + width - 2} ${midY - 0.5} 100 ${midY - 0.5}
-            Q ${100 - width + 2} ${midY - 0.5} ${100 - width} ${145 + open * 1.2} Z`;
-  };
+  const visemes = textToVisemes(text);
+  if (visemes.length === 0) return;
 
-  const cavityRx = (open) => 12 + open * 4;
-  const cavityRy = (open) => 2  + open * 8;
-  const cavityCy = (open) => 146 + open * 2;
+  // Build a per-frame timeline of mouth shapes
+  const fps = 40;
+  const frameDur = 1000 / fps;
+  const timeline = [];
 
-  const buildSequence = () => {
-    const seq = [];
-    const frames = 8 + Math.floor(Math.random() * 6);
-    for (let i = 0; i < frames; i++) {
-      const r = Math.random();
-      let open;
-      if (r < 0.25)      open = 0.05 + Math.random() * 0.15;
-      else if (r < 0.70) open = 0.25 + Math.random() * 0.30;
-      else if (r < 0.92) open = 0.55 + Math.random() * 0.25;
-      else               open = 0.85 + Math.random() * 0.15;
-      seq.push(open);
+  for (let i = 0; i < visemes.length; i++) {
+    const v = visemes[i];
+    const shape = VISEMES[v.viseme] || VISEMES.REST;
+    const nextV = visemes[i + 1];
+    const nextShape = nextV ? (VISEMES[nextV.viseme] || VISEMES.REST) : VISEMES.REST;
+
+    const frames = Math.max(1, Math.round(v.duration / frameDur));
+    for (let f = 0; f < frames; f++) {
+      const p = f / frames;
+      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      timeline.push({
+        open:  shape.open  + (nextShape.open  - shape.open)  * ease,
+        width: shape.width + (nextShape.width - shape.width) * ease,
+        round: shape.round + (nextShape.round - shape.round) * ease
+      });
     }
-    seq.push(0.05);
-    return seq;
-  };
+  }
 
-  const animateOneCycle = () => {
-    const seq = buildSequence();
-    const totalDuration = 900 + Math.random() * 700;
+  const totalFrames = timeline.length;
+  let frameIndex = 0;
+  let lastTime = performance.now();
+  let accumulated = 0;
 
-    const lipKeyframes = seq.map(open => ({ d: lipPath(open) }));
-    const cavKeyframes = seq.map(open => ({
-      rx: cavityRx(open),
-      ry: cavityRy(open),
-      cy: cavityCy(open)
-    }));
-    const hiKeyframes = seq.map(open => ({
-      d: `M ${93 - open * 1.5} ${147 + open * 1.5}
-          Q 100 ${148.5 + open * 2} ${107 + open * 1.5} ${147 + open * 1.5}`
-    }));
+  function loop(now) {
+    if (!avatar.classList.contains('talking')) {
+      mouthRAF = null;
+      return;
+    }
 
-    const lipAnim = lowerLip.animate(lipKeyframes, {
-      duration: totalDuration,
-      easing: 'ease-in-out',
-      fill: 'forwards'
-    });
-    const cavAnim = mouthCavity.animate(cavKeyframes, {
-      duration: totalDuration,
-      easing: 'ease-in-out',
-      fill: 'forwards'
-    });
-    const hiAnim = lipHighlight.animate(hiKeyframes, {
-      duration: totalDuration,
-      easing: 'ease-in-out',
-      fill: 'forwards'
-    });
+    const dt = now - lastTime;
+    lastTime = now;
+    accumulated += dt;
 
-    mouthAnimations.push(lipAnim, cavAnim, hiAnim);
-
-    lipAnim.onfinish = () => {
-      if (avatar.classList.contains('talking')) {
-        animateOneCycle();
+    // Advance as many frames as fit in the elapsed time (with catch-up)
+    while (accumulated >= frameDur) {
+      accumulated -= frameDur;
+      frameIndex++;
+      if (frameIndex >= totalFrames) {
+        // Loop the sequence if speech is still ongoing
+        frameIndex = 0;
       }
-    };
-  };
+    }
 
-  animateOneCycle();
+    renderMouth(timeline[frameIndex], 1);
+    mouthRAF = requestAnimationFrame(loop);
+  }
+
+  // Show first frame immediately so there's no lag at the start
+  renderMouth(timeline[0], 1);
+  lastTime = performance.now();
+  mouthRAF = requestAnimationFrame(loop);
 }
 
 /* ---------- SPEECH ---------- */
@@ -726,7 +895,7 @@ function speak(text, onEnd) {
 
   u.onstart = () => {
     avatar.classList.add('talking');
-    startMouthAnimation();
+    startMouthAnimation(text);
   };
 
   const finish = () => {
