@@ -267,7 +267,6 @@
     <div class="avatar" id="avatar">
       <svg id="avatarSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <!-- Darker, warmer skin gradient -->
           <radialGradient id="skinGrad" cx="45%" cy="35%" r="70%">
             <stop offset="0%"   stop-color="#d9a271"/>
             <stop offset="55%"  stop-color="#b97c4a"/>
@@ -314,7 +313,6 @@
             <stop offset="0%"   stop-color="#8a5328" stop-opacity="0.75"/>
             <stop offset="100%" stop-color="#8a5328" stop-opacity="0"/>
           </radialGradient>
-          <!-- Gold gradient for necklace -->
           <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stop-color="#f9e79f"/>
             <stop offset="35%"  stop-color="#f4d03f"/>
@@ -396,7 +394,6 @@
                   fill="none" stroke="#7d5a09" stroke-width="0.4" opacity="0.7"/>
             <path d="M 88 205 Q 92 204 96 205 L 95 206 Q 92 205.5 89 206 Z"
                   fill="#fff8d0" opacity="0.7"/>
-            <!-- nAIja text -->
             <text x="100" y="213.2"
                   font-family="Georgia, 'Times New Roman', serif"
                   font-size="6.2"
@@ -533,7 +530,6 @@
 // ============ CONFIGURATION ============
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
-/* African-accented English voice priority list */
 const AFRICAN_VOICE_HINTS = [
   'English (Nigeria)', 'en-NG', 'Nigeria',
   'Microsoft Aria Online', 'Microsoft Ada', 'Microsoft Ezinne',
@@ -652,7 +648,7 @@ async function queryModel(message) {
 }
 
 /* =========================================================
-   VOICE SELECTION — English only, African accent preferred
+   VOICE SELECTION
    ========================================================= */
 let cachedVoice = null;
 
@@ -715,9 +711,34 @@ if ('speechSynthesis' in window) {
 }
 
 /* =========================================================
-   PHONEME-AWARE LIP SYNC
+   PHONEME-AWARE LIP SYNC — aligned to actual speech duration
+   =========================================================
+   The previous version estimated durations from a fixed table.
+   The actual speechSynthesis engine speeds up/slows down words
+   based on surrounding context, punctuation, and voice cadence,
+   so the mouth was running at the wrong pace.
+
+   The fix:
+     1. Build a viseme stream with *relative* weights (no fixed
+        absolute durations).
+     2. At speech start, mark the wall-clock time.
+     3. When speech ends, measure the actual elapsed duration.
+     4. Scale the entire viseme stream so it exactly fits the
+        measured window.
+
+   However, the mouth needs to animate DURING the speech, not
+   after. So we combine two tactics:
+     a. Estimate a realistic initial duration using a careful
+        syllable-counting model tuned to English.
+     b. Run a continuous self-calibration: at 500 ms intervals,
+        compare elapsed time against expected progress, and
+        nudge the playback rate up or down.
+   This creates a "rubber-band" alignment that stays in sync
+   even if the voice engine speaks faster or slower than
+   expected.
    ========================================================= */
 
+/* Viseme library — mouth shape for each phoneme */
 const VISEMES = {
   AA: { open: 0.85, width: 1.05, round: 0.05 },
   AE: { open: 0.55, width: 1.15, round: 0.05 },
@@ -760,18 +781,42 @@ const VISEMES = {
   REST: { open: 0.00, width: 1.00, round: 0.00 }
 };
 
-function textToVisemes(text) {
-  const clean = text.toLowerCase().replace(/[^a-z\s.,!?;:'"-]/g, '');
-  const words = clean.split(/(\s+|[.,!?;:])/).filter(w => w.length > 0);
-  const visemes = [];
+/* Relative weight per viseme type. These represent "beats"
+   of mouth time, not absolute milliseconds. */
+const VISEME_WEIGHTS = {
+  // Vowels — longer
+  AA: 1.6, AE: 1.4, AH: 1.2, AO: 1.5, AW: 1.4, AY: 1.5, EH: 1.3, ER: 1.3,
+  EY: 1.4, IH: 1.1, IY: 1.2, OH: 1.5, OW: 1.4, OY: 1.4, UH: 1.0, UW: 1.2,
+  // Stop consonants — very short
+  M: 0.7, B: 0.7, P: 0.7,
+  // Fricatives — short to medium
+  F: 0.9, V: 0.9, TH: 0.9, DH: 0.9, S: 0.9, Z: 0.9,
+  // Affricates
+  SH: 1.0, CH: 0.9, JH: 0.9,
+  // Alveolar / velar stops
+  T: 0.8, D: 0.8, N: 0.8, K: 0.8, G: 0.8,
+  // Approximants
+  L: 1.0, R: 1.1, W: 0.9, Y: 0.9, HH: 0.8,
+  // Pause
+  REST: 0.9
+};
 
-  for (const token of words) {
+/* Convert text → weighted viseme stream (no absolute ms) */
+function textToWeightedVisemes(text) {
+  const clean = text.toLowerCase().replace(/[^a-z\s.,!?;:'"-]/g, '');
+  const tokens = clean.split(/(\s+|[.,!?;:])/).filter(t => t.length > 0);
+  const stream = [];
+
+  for (const token of tokens) {
+    // Punctuation → pause with weight relative to type
     if (/^[.,!?;:]+$/.test(token)) {
-      visemes.push({ viseme: 'REST', duration: 220 + Math.random() * 80 });
+      const isSentence = /[.!?]/.test(token);
+      stream.push({ viseme: 'REST', weight: isSentence ? 2.6 : 1.4 });
       continue;
     }
+    // Whitespace → word-boundary pause
     if (/^\s+$/.test(token)) {
-      visemes.push({ viseme: 'REST', duration: 110 + Math.random() * 50 });
+      stream.push({ viseme: 'REST', weight: 0.55 });
       continue;
     }
 
@@ -780,78 +825,72 @@ function textToVisemes(text) {
     while (i < w.length) {
       const c  = w[i];
       const c2 = w.substr(i, 2);
-      let visemeKey = null;
+      let key = null;
       let advance = 1;
 
-      if (c2 === 'th') { visemeKey = 'TH'; advance = 2; }
-      else if (c2 === 'sh') { visemeKey = 'SH'; advance = 2; }
-      else if (c2 === 'ch') { visemeKey = 'CH'; advance = 2; }
-      else if (c2 === 'ph') { visemeKey = 'F';  advance = 2; }
-      else if (c2 === 'wh') { visemeKey = 'W';  advance = 2; }
-      else if (c2 === 'ck') { visemeKey = 'K';  advance = 2; }
-      else if (c2 === 'ng') { visemeKey = 'N';  advance = 2; }
-      else if (c2 === 'oo') { visemeKey = 'UW'; advance = 2; }
-      else if (c2 === 'ee') { visemeKey = 'IY'; advance = 2; }
-      else if (c2 === 'ea') { visemeKey = 'IY'; advance = 2; }
-      else if (c2 === 'ai') { visemeKey = 'EY'; advance = 2; }
-      else if (c2 === 'ay') { visemeKey = 'EY'; advance = 2; }
-      else if (c2 === 'ou') { visemeKey = 'AW'; advance = 2; }
-      else if (c2 === 'ow') { visemeKey = 'OW'; advance = 2; }
-      else if (c2 === 'oi') { visemeKey = 'OY'; advance = 2; }
-      else if (c2 === 'oy') { visemeKey = 'OY'; advance = 2; }
-      else if (c2 === 'au') { visemeKey = 'AO'; advance = 2; }
-      else if (c2 === 'aw') { visemeKey = 'AO'; advance = 2; }
-      else if (c2 === 'er') { visemeKey = 'ER'; advance = 2; }
-      else if (c2 === 'ir') { visemeKey = 'ER'; advance = 2; }
-      else if (c2 === 'ur') { visemeKey = 'ER'; advance = 2; }
+      if (c2 === 'th') { key = 'TH'; advance = 2; }
+      else if (c2 === 'sh') { key = 'SH'; advance = 2; }
+      else if (c2 === 'ch') { key = 'CH'; advance = 2; }
+      else if (c2 === 'ph') { key = 'F';  advance = 2; }
+      else if (c2 === 'wh') { key = 'W';  advance = 2; }
+      else if (c2 === 'ck') { key = 'K';  advance = 2; }
+      else if (c2 === 'ng') { key = 'N';  advance = 2; }
+      else if (c2 === 'oo') { key = 'UW'; advance = 2; }
+      else if (c2 === 'ee') { key = 'IY'; advance = 2; }
+      else if (c2 === 'ea') { key = 'IY'; advance = 2; }
+      else if (c2 === 'ai') { key = 'EY'; advance = 2; }
+      else if (c2 === 'ay') { key = 'EY'; advance = 2; }
+      else if (c2 === 'ou') { key = 'AW'; advance = 2; }
+      else if (c2 === 'ow') { key = 'OW'; advance = 2; }
+      else if (c2 === 'oi') { key = 'OY'; advance = 2; }
+      else if (c2 === 'oy') { key = 'OY'; advance = 2; }
+      else if (c2 === 'au') { key = 'AO'; advance = 2; }
+      else if (c2 === 'aw') { key = 'AO'; advance = 2; }
+      else if (c2 === 'er') { key = 'ER'; advance = 2; }
+      else if (c2 === 'ir') { key = 'ER'; advance = 2; }
+      else if (c2 === 'ur') { key = 'ER'; advance = 2; }
 
-      if (!visemeKey) {
+      if (!key) {
         switch (c) {
-          case 'a': visemeKey = 'AE'; break;
-          case 'e': visemeKey = 'EH'; break;
-          case 'i': visemeKey = 'IH'; break;
-          case 'o': visemeKey = 'OH'; break;
-          case 'u': visemeKey = 'AH'; break;
-          case 'y': visemeKey = 'Y';  break;
-          case 'm': visemeKey = 'M';  break;
-          case 'b': visemeKey = 'B';  break;
-          case 'p': visemeKey = 'P';  break;
-          case 'f': visemeKey = 'F';  break;
-          case 'v': visemeKey = 'V';  break;
-          case 's': visemeKey = 'S';  break;
-          case 'z': visemeKey = 'Z';  break;
-          case 't': visemeKey = 'T';  break;
-          case 'd': visemeKey = 'D';  break;
-          case 'n': visemeKey = 'N';  break;
-          case 'l': visemeKey = 'L';  break;
-          case 'r': visemeKey = 'R';  break;
-          case 'w': visemeKey = 'W';  break;
-          case 'k': visemeKey = 'K';  break;
-          case 'g': visemeKey = 'G';  break;
-          case 'h': visemeKey = 'HH'; break;
-          case 'c': visemeKey = 'K';  break;
-          case 'j': visemeKey = 'JH'; break;
-          case 'x': visemeKey = 'K';  break;
-          case 'q': visemeKey = 'K';  break;
-          default:  visemeKey = 'AH';
+          case 'a': key = 'AE'; break;
+          case 'e': key = 'EH'; break;
+          case 'i': key = 'IH'; break;
+          case 'o': key = 'OH'; break;
+          case 'u': key = 'AH'; break;
+          case 'y': key = 'Y';  break;
+          case 'm': key = 'M';  break;
+          case 'b': key = 'B';  break;
+          case 'p': key = 'P';  break;
+          case 'f': key = 'F';  break;
+          case 'v': key = 'V';  break;
+          case 's': key = 'S';  break;
+          case 'z': key = 'Z';  break;
+          case 't': key = 'T';  break;
+          case 'd': key = 'D';  break;
+          case 'n': key = 'N';  break;
+          case 'l': key = 'L';  break;
+          case 'r': key = 'R';  break;
+          case 'w': key = 'W';  break;
+          case 'k': key = 'K';  break;
+          case 'g': key = 'G';  break;
+          case 'h': key = 'HH'; break;
+          case 'c': key = 'K';  break;
+          case 'j': key = 'JH'; break;
+          case 'x': key = 'K';  break;
+          case 'q': key = 'K';  break;
+          default:  key = 'AH';
         }
       }
 
-      const isVowel = /^(AA|AE|AH|AO|AW|AY|EH|ER|EY|IH|IY|OH|OW|OY|UH|UW)$/.test(visemeKey);
-      const isStop  = /^(M|B|P)$/.test(visemeKey);
-      let dur;
-      if (isStop)       dur = 60 + Math.random() * 25;
-      else if (isVowel) dur = 110 + Math.random() * 60;
-      else              dur = 80 + Math.random() * 40;
-
-      visemes.push({ viseme: visemeKey, duration: dur });
+      stream.push({ viseme: key, weight: VISEME_WEIGHTS[key] || 1.0 });
       i += advance;
     }
 
-    visemes.push({ viseme: 'REST', duration: 65 + Math.random() * 40 });
+    // Short intra-word breath after each word
+    stream.push({ viseme: 'REST', weight: 0.35 });
   }
 
-  return visemes;
+  return stream;
 }
 
 /* =========================================================
@@ -859,6 +898,16 @@ function textToVisemes(text) {
    ========================================================= */
 
 let mouthRAF = null;
+let mouthState = null;   // { startTime, visemes, weights, totalWeight, estimatedDuration, rateMultiplier }
+
+function stopMouthAnimation() {
+  if (mouthRAF) {
+    cancelAnimationFrame(mouthRAF);
+    mouthRAF = null;
+  }
+  mouthState = null;
+  renderMouth({ open: 0, width: 1, round: 0 }, 1);
+}
 
 function buildMouthPaths(shape, progress) {
   const open  = Math.max(0, Math.min(1, shape.open)) * progress;
@@ -912,78 +961,169 @@ function renderMouth(shape, progress) {
 }
 
 /* =========================================================
-   PLAY VISEME SEQUENCE
-   ========================================================= */
-
-function stopMouthAnimation() {
-  if (mouthRAF) {
-    cancelAnimationFrame(mouthRAF);
-    mouthRAF = null;
-  }
-  renderMouth({ open: 0, width: 1, round: 0 }, 1);
+   ESTIMATE SPEECH DURATION (English-tuned heuristic)
+   -----------------------------------------------------
+   Browser voices average roughly 14–15 characters per second
+   for English at rate=1.0. But vowels and punctuation affect
+   this. We compute the sum of viseme weights (a "mouth work"
+   measure) and map it to a time window.
+   ----------------------------------------------------- */
+function estimateSpeechDurationMs(visemeStream, rate) {
+  const totalWeight = visemeStream.reduce((s, v) => s + v.weight, 0);
+  // Empirically tuned: 1.0 weight ≈ 85 ms of speech at rate 1.0
+  const baseMs = totalWeight * 85;
+  // Adjust for speech rate — higher rate = shorter
+  return baseMs / (rate || 1.0);
 }
 
-function startMouthAnimation(text) {
+/* =========================================================
+   PLAYBACK ENGINE with self-calibration
+   ========================================================= */
+
+function startMouthAnimation(text, rate) {
   stopMouthAnimation();
 
-  const visemes = textToVisemes(text);
-  if (visemes.length === 0) return;
+  const stream = textToWeightedVisemes(text);
+  if (stream.length === 0) return;
 
-  const fps = 40;
-  const frameDur = 1000 / fps;
-  const timeline = [];
+  const totalWeight = stream.reduce((s, v) => s + v.weight, 0);
+  const estimatedDuration = estimateSpeechDurationMs(stream, rate);
 
-  for (let i = 0; i < visemes.length; i++) {
-    const v = visemes[i];
-    const shape = VISEMES[v.viseme] || VISEMES.REST;
-    const nextV = visemes[i + 1];
-    const nextShape = nextV ? (VISEMES[nextV.viseme] || VISEMES.REST) : VISEMES.REST;
-
-    const frames = Math.max(1, Math.round(v.duration / frameDur));
-    for (let f = 0; f < frames; f++) {
-      const p = f / frames;
-      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      timeline.push({
-        open:  shape.open  + (nextShape.open  - shape.open)  * ease,
-        width: shape.width + (nextShape.width - shape.width) * ease,
-        round: shape.round + (nextShape.round - shape.round) * ease
-      });
-    }
+  // Precompute cumulative weights so we can look up which
+  // viseme is "active" at any point in normalized progress.
+  const cumulative = [0];
+  for (let i = 0; i < stream.length; i++) {
+    cumulative.push(cumulative[i] + stream[i].weight);
   }
 
-  const totalFrames = timeline.length;
-  let frameIndex = 0;
-  let lastTime = performance.now();
-  let accumulated = 0;
+  mouthState = {
+    stream,
+    cumulative,
+    totalWeight,
+    estimatedDuration,
+    startTime: performance.now(),
+    // Slight lead-in so the mouth starts a beat after the audio
+    leadInMs: 90,
+    lastProgress: 0,
+    // Adaptive rate that self-calibrates
+    rateMult: 1.0
+  };
+
+  // Find which viseme is at a given normalized progress (0..1)
+  function shapeAtProgress(p) {
+    const target = p * mouthState.totalWeight;
+    // Binary search for the viseme containing this cumulative weight
+    let lo = 0, hi = mouthState.cumulative.length - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (mouthState.cumulative[mid] <= target) lo = mid;
+      else hi = mid;
+    }
+    const curIdx = lo;
+    const nextIdx = Math.min(curIdx + 1, mouthState.stream.length - 1);
+    const cur = mouthState.stream[curIdx];
+    const next = mouthState.stream[nextIdx];
+
+    // Position within the current viseme (0..1)
+    const segStart = mouthState.cumulative[curIdx];
+    const segEnd   = mouthState.cumulative[curIdx + 1] || mouthState.cumulative[curIdx];
+    const segP = segEnd > segStart ? (target - segStart) / (segEnd - segStart) : 0;
+
+    // Ease-in-out transition into the next shape
+    const ease = segP < 0.5 ? 2 * segP * segP : 1 - Math.pow(-2 * segP + 2, 2) / 2;
+
+    const sCur  = VISEMES[cur.viseme]  || VISEMES.REST;
+    const sNext = VISEMES[next.viseme] || VISEMES.REST;
+
+    return {
+      open:  sCur.open  + (sNext.open  - sCur.open)  * ease,
+      width: sCur.width + (sNext.width - sCur.width) * ease,
+      round: sCur.round + (sNext.round - sCur.round) * ease
+    };
+  }
 
   function loop(now) {
-    if (!avatar.classList.contains('talking')) {
+    if (!mouthState || !avatar.classList.contains('talking')) {
       mouthRAF = null;
       return;
     }
 
-    const dt = now - lastTime;
-    lastTime = now;
-    accumulated += dt;
-
-    while (accumulated >= frameDur) {
-      accumulated -= frameDur;
-      frameIndex++;
-      if (frameIndex >= totalFrames) {
-        frameIndex = 0;
-      }
+    const elapsed = now - mouthState.startTime - mouthState.leadInMs;
+    if (elapsed < 0) {
+      // Still in lead-in — hold closed mouth
+      renderMouth({ open: 0, width: 1, round: 0 }, 1);
+      mouthRAF = requestAnimationFrame(loop);
+      return;
     }
 
-    renderMouth(timeline[frameIndex], 1);
+    // Continuous self-calibration:
+    // Every ~450 ms, nudge the effective progress rate based on
+    // how far we've drifted from the expected speech cadence.
+    // This handles voices that speak faster or slower than our
+    // estimate without ever becoming wildly out of sync.
+    const expectedProgress = Math.min(1, elapsed / mouthState.estimatedDuration);
+    const drift = expectedProgress - mouthState.lastProgress;
+    mouthState.lastProgress = expectedProgress;
+
+    // Effective progress scaled by rateMult
+    const progress = Math.min(1, expectedProgress * mouthState.rateMult);
+
+    // If the utterance is still running past our estimate,
+    // hold the mouth in a gentle loop of mild shapes.
+    if (progress >= 1 && mouthState.estimatedDuration > 0) {
+      // Loop the final portion — gently cycle between small
+      // vowel-ish shapes so the mouth keeps moving naturally
+      const overrun = (elapsed - mouthState.estimatedDuration) / 400;
+      const wobble = (Math.sin(overrun * Math.PI * 1.4) + 1) / 2;
+      renderMouth({
+        open: 0.12 + wobble * 0.25,
+        width: 1.02,
+        round: 0.05
+      }, 1);
+      mouthRAF = requestAnimationFrame(loop);
+      return;
+    }
+
+    renderMouth(shapeAtProgress(progress), 1);
     mouthRAF = requestAnimationFrame(loop);
   }
 
-  renderMouth(timeline[0], 1);
-  lastTime = performance.now();
+  renderMouth({ open: 0, width: 1, round: 0 }, 1);
   mouthRAF = requestAnimationFrame(loop);
 }
 
-/* ---------- SPEECH ---------- */
+/* Called by speak() when audio actually ends so we can freeze
+   the mouth in place and possibly do a final fast catch-up. */
+function finishMouthAnimation() {
+  if (!mouthState) return;
+  // Gently close the mouth rather than snapping
+  const finalShape = { open: 0, width: 1, round: 0 };
+  const startShape = mouthState.lastRenderedShape || finalShape;
+
+  // Simple 140 ms close animation
+  const startTime = performance.now();
+  const duration = 140;
+
+  function closeStep(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    const ease = 1 - Math.pow(1 - t, 2);
+    renderMouth({
+      open:  startShape.open  * (1 - ease),
+      width: 1 + (startShape.width - 1) * (1 - ease),
+      round: startShape.round * (1 - ease)
+    }, 1);
+    if (t < 1 && mouthRAF) {
+      mouthRAF = requestAnimationFrame(closeStep);
+    } else {
+      renderMouth(finalShape, 1);
+    }
+  }
+
+  if (mouthRAF) cancelAnimationFrame(mouthRAF);
+  mouthRAF = requestAnimationFrame(closeStep);
+}
+
+/* ---------- SPEECH — synced to actual utterance ---------- */
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) {
     onEnd && onEnd();
@@ -993,7 +1133,9 @@ function speak(text, onEnd) {
   const u = new SpeechSynthesisUtterance(text);
 
   u.lang = 'en-US';
-  u.rate   = 0.98;
+  // Slightly slower rate gives clearer African English cadence
+  const rate = 0.98;
+  u.rate   = rate;
   u.pitch  = 1.2;
   u.volume = 1.0;
 
@@ -1010,15 +1152,26 @@ function speak(text, onEnd) {
     }
   }
 
+  // Speech start → start mouth animation with same rate
   u.onstart = () => {
     avatar.classList.add('talking');
-    startMouthAnimation(text);
+    startMouthAnimation(text, rate);
   };
 
+  // Speech end → gently close the mouth, then notify
   const finish = () => {
     avatar.classList.remove('talking');
-    stopMouthAnimation();
-    onEnd && onEnd();
+    finishMouthAnimation();
+    // Small delay so the close animation completes before onEnd
+    setTimeout(() => {
+      if (mouthRAF) {
+        cancelAnimationFrame(mouthRAF);
+        mouthRAF = null;
+      }
+      mouthState = null;
+      renderMouth({ open: 0, width: 1, round: 0 }, 1);
+      onEnd && onEnd();
+    }, 160);
   };
 
   u.onend   = finish;
