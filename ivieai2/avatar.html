@@ -127,9 +127,11 @@
     shape-rendering: geometricPrecision;
   }
 
-  #browLeft, #browRight { transition: transform 0.3s ease-out; }
+  #browLeft, #browRight { transition: transform 0.5s ease-out; }
   #blushLeft, #blushRight { transition: opacity 0.6s ease; }
   #foreheadHighlight { transition: opacity 0.5s ease; }
+
+  #mouthGroup { transition: none; }
 
   .status {
     position: absolute;
@@ -370,8 +372,6 @@
               <stop offset="0%"   stop-color="#8a5328" stop-opacity="0.75"/>
               <stop offset="100%" stop-color="#8a5328" stop-opacity="0"/>
             </radialGradient>
-
-            <!-- ===== Matching gold gradients for earrings + necklace ===== -->
             <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stop-color="#f9e79f"/>
               <stop offset="35%"  stop-color="#f4d03f"/>
@@ -389,8 +389,6 @@
               <stop offset="50%"  stop-color="#a67816"/>
               <stop offset="100%" stop-color="#7a5a0c"/>
             </linearGradient>
-
-            <!-- ===== Earring-specific gradients (matching the necklace gold) ===== -->
             <radialGradient id="earringGrad" cx="35%" cy="30%" r="75%">
               <stop offset="0%"   stop-color="#fef2b8"/>
               <stop offset="30%"  stop-color="#f4d03f"/>
@@ -402,7 +400,11 @@
               <stop offset="45%"  stop-color="#e6bf26"/>
               <stop offset="100%" stop-color="#8a640a"/>
             </radialGradient>
-
+            <radialGradient id="tearGrad" cx="40%" cy="30%" r="70%">
+              <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
+              <stop offset="60%"  stop-color="#bfe6ff" stop-opacity="0.85"/>
+              <stop offset="100%" stop-color="#7ec8e3" stop-opacity="0.7"/>
+            </radialGradient>
             <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
               <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
               <feOffset dx="0" dy="1" result="offsetblur"/>
@@ -439,7 +441,7 @@
                 fill="url(#neckGrad)"/>
           <ellipse cx="100" cy="158" rx="22" ry="7" fill="#7a4820" opacity="0.55"/>
 
-          <!-- ===== NECKLACE ===== -->
+          <!-- NECKLACE -->
           <g id="necklaceGroup">
             <path d="M 76 186 Q 82 200 96 204"
                   fill="none" stroke="url(#goldGrad)" stroke-width="2.2"
@@ -481,72 +483,43 @@
             </g>
           </g>
 
-          <!-- ===== EARS (skin) ===== -->
+          <!-- Ears -->
           <ellipse cx="58" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
           <ellipse cx="142" cy="118" rx="6.5" ry="12" fill="#b97c4a" stroke="#8a5328" stroke-width="0.6"/>
           <ellipse cx="58" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
           <ellipse cx="142" cy="118" rx="3" ry="6" fill="#8a5328" opacity="0.65"/>
 
-          <!-- ===== ROUND GOLD EARRINGS (matching the necklace) =====
-               Positioned just below the ear lobes. Medium-sized,
-               with a soft drop-shadow for depth, a bright specular
-               highlight, an inner bevel, and a subtle gold glow. -->
-          <!-- Left earring -->
+          <!-- EARRINGS -->
           <g id="earringLeft">
-            <!-- Soft drop shadow -->
             <ellipse cx="58" cy="133.5" rx="4.6" ry="1.4" fill="#3a2408" opacity="0.35"/>
-            <!-- Outer gold disc -->
             <circle cx="58" cy="131.5" r="4.4"
-                    fill="url(#earringGrad)"
-                    stroke="#7d5a09"
-                    stroke-width="0.5"
+                    fill="url(#earringGrad)" stroke="#7d5a09" stroke-width="0.5"
                     filter="url(#goldGlow)"/>
-            <!-- Inner bevel ring -->
             <circle cx="58" cy="131.5" r="3.1"
-                    fill="none"
-                    stroke="#7d5a09"
-                    stroke-width="0.35"
-                    opacity="0.75"/>
-            <!-- Center dome -->
+                    fill="none" stroke="#7d5a09" stroke-width="0.35" opacity="0.75"/>
             <circle cx="58" cy="131.5" r="2.1" fill="url(#earringInner)"/>
-            <!-- Specular highlight -->
             <ellipse cx="56.8" cy="129.9" rx="1.3" ry="1"
-                     fill="#fffbe8"
-                     opacity="0.75"
+                     fill="#fffbe8" opacity="0.75"
                      transform="rotate(-25 56.8 129.9)"/>
-            <!-- Lower rim shine -->
             <path d="M 55 134 Q 58 135.2 61 134"
-                  stroke="#fff8d0"
-                  stroke-width="0.45"
-                  fill="none"
-                  opacity="0.55"
-                  stroke-linecap="round"/>
+                  stroke="#fff8d0" stroke-width="0.45" fill="none"
+                  opacity="0.55" stroke-linecap="round"/>
           </g>
 
-          <!-- Right earring -->
           <g id="earringRight">
             <ellipse cx="142" cy="133.5" rx="4.6" ry="1.4" fill="#3a2408" opacity="0.35"/>
             <circle cx="142" cy="131.5" r="4.4"
-                    fill="url(#earringGrad)"
-                    stroke="#7d5a09"
-                    stroke-width="0.5"
+                    fill="url(#earringGrad)" stroke="#7d5a09" stroke-width="0.5"
                     filter="url(#goldGlow)"/>
             <circle cx="142" cy="131.5" r="3.1"
-                    fill="none"
-                    stroke="#7d5a09"
-                    stroke-width="0.35"
-                    opacity="0.75"/>
+                    fill="none" stroke="#7d5a09" stroke-width="0.35" opacity="0.75"/>
             <circle cx="142" cy="131.5" r="2.1" fill="url(#earringInner)"/>
             <ellipse cx="140.8" cy="129.9" rx="1.3" ry="1"
-                     fill="#fffbe8"
-                     opacity="0.75"
+                     fill="#fffbe8" opacity="0.75"
                      transform="rotate(-25 140.8 129.9)"/>
             <path d="M 139 134 Q 142 135.2 145 134"
-                  stroke="#fff8d0"
-                  stroke-width="0.45"
-                  fill="none"
-                  opacity="0.55"
-                  stroke-linecap="round"/>
+                  stroke="#fff8d0" stroke-width="0.45" fill="none"
+                  opacity="0.55" stroke-linecap="round"/>
           </g>
 
           <!-- Face -->
@@ -612,6 +585,12 @@
                   fill="none" opacity="0.5"/>
           </g>
 
+          <!-- Tear -->
+          <g id="tear" opacity="0">
+            <ellipse cx="74" cy="118" rx="1.4" ry="2.4" fill="url(#tearGrad)"/>
+            <ellipse cx="73.6" cy="117" rx="0.45" ry="0.7" fill="#ffffff" opacity="0.9"/>
+          </g>
+
           <!-- Nose -->
           <path d="M 100 106 Q 98 120 96 128 Q 100 131 104 128 Q 102 120 100 106 Z"
                 fill="url(#noseShadow)" opacity="0.8"/>
@@ -669,6 +648,12 @@
 // ============ CONFIGURATION ============
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
+/* ---------- Idle timing configuration ---------- */
+const IDLE_SAD_DELAY_MS   = 90 * 1000;   // 90 s → trigger sad face
+const IDLE_TEAR_DELAY_MS  = 90 * 1000;   // +90 s → trigger sad + tear
+const IDLE_MOOD_DURATION_MS = 4 * 1000;  // each expression held for ~4 s
+const IDLE_TICK_MS        = 500;         // how often we evaluate the timer
+
 const AFRICAN_VOICE_HINTS = [
   'English (Nigeria)', 'en-NG', 'Nigeria',
   'Microsoft Aria Online', 'Microsoft Ada', 'Microsoft Ezinne',
@@ -708,6 +693,7 @@ const browRight         = document.getElementById('browRight');
 const blushLeft         = document.getElementById('blushLeft');
 const blushRight        = document.getElementById('blushRight');
 const foreheadHighlight = document.getElementById('foreheadHighlight');
+const tearEl            = document.getElementById('tear');
 
 /* ---------- Natural random blink ---------- */
 (function blinkLoop() {
@@ -724,7 +710,7 @@ const foreheadHighlight = document.getElementById('foreheadHighlight');
 })();
 
 /* =========================================================
-   FACIAL EXPRESSION ENGINE
+   FACIAL EXPRESSION ENGINE (used during speech)
    ========================================================= */
 let expressionTimer = null;
 let expressionActive = false;
@@ -795,6 +781,151 @@ function stopExpressionLoop() {
     expressionTimer = null;
   }
   applyExpression(1);
+}
+
+/* =========================================================
+   IDLE BEHAVIOUR ENGINE  ★ TEMPORARY EXPRESSION VERSION
+   -----------------------------------------------------
+   Every 90 s of continuous idleness triggers a brief
+   expression that lasts ~4 s and then reverts to the
+   neutral mood. The cycle continues every 90 s thereafter.
+
+   Timeline (from each restart of the idle timer):
+      0 –  90s : neutral
+      at  90s  : sad face for ~4 s  → neutral
+      at 180s  : sad + tear for ~4s → neutral
+      at 270s  : sad face for ~4 s  → neutral
+      at 360s  : sad + tear for ~4s → neutral
+      ... (alternates every 90s)
+   ========================================================= */
+
+let idleTimer = null;
+let idleStartTime = 0;
+let idleActive = false;
+let currentIdleState = null;      // null | 'sad' | 'tear'
+let idleMilestoneCount = 0;       // how many 90s milestones have fired
+let idleMoodTimeout = null;       // the timeout that reverts a mood
+
+/* Return how long (ms) the avatar has been idle right now. */
+function getIdleElapsedMs() {
+  if (!idleStartTime) return 0;
+  return performance.now() - idleStartTime;
+}
+
+/* Apply the "sad face" expression. `withTear` toggles the tear. */
+function applySadFace(withTear) {
+  browLeft.style.transform  = 'translateY(1.2px) rotate(-14deg)';
+  browRight.style.transform = 'translateY(1.2px) rotate(14deg)';
+  blushLeft.style.opacity   = '0.5';
+  blushRight.style.opacity  = '0.5';
+  foreheadHighlight.style.opacity = '0.25';
+  setSadMouth(true);
+  avatarBob.style.transition = 'transform 1.2s ease-in-out';
+  avatarBob.style.transform  = 'rotate(-1.5deg) translateY(2px)';
+  tearEl.style.transition = 'opacity 1.2s ease-in-out';
+  tearEl.style.opacity = withTear ? '0.9' : '0';
+}
+
+/* Restore neutral idle appearance. */
+function resetIdleAppearance() {
+  applyExpression(1);
+  tearEl.style.opacity = '0';
+  setSadMouth(false);
+  avatarBob.style.transition = 'transform 1s ease-in-out';
+  avatarBob.style.transform  = '';
+}
+
+/* Fire a brief expression for IDLE_MOOD_DURATION_MS then revert. */
+function triggerIdleMood(withTear) {
+  // Cancel any pending revert so we don't overlap.
+  if (idleMoodTimeout) { clearTimeout(idleMoodTimeout); idleMoodTimeout = null; }
+
+  currentIdleState = withTear ? 'tear' : 'sad';
+  applySadFace(withTear);
+
+  idleMoodTimeout = setTimeout(() => {
+    idleMoodTimeout = null;
+    currentIdleState = null;
+    // Revert to neutral. The idle timeline keeps advancing
+    // in the background so the next milestone still fires.
+    resetIdleAppearance();
+  }, IDLE_MOOD_DURATION_MS);
+}
+
+/* Recompute what (if anything) the idle mood should be right now. */
+function evaluateIdleState() {
+  if (!idleActive) return;
+  if (avatarBob.classList.contains('talking')) return;
+
+  const elapsed = getIdleElapsedMs();
+  const milestone = Math.floor(elapsed / IDLE_SAD_DELAY_MS);   // 0,1,2,3,...
+
+  // Fire a new mood only when we cross a fresh 90 s milestone.
+  if (milestone > idleMilestoneCount && milestone > 0) {
+    idleMilestoneCount = milestone;
+
+    // Alternate: odd milestones → sad, even milestones → sad + tear
+    const withTear = (milestone % 2 === 0);
+    triggerIdleMood(withTear);
+  }
+}
+
+/* Idle loop ticker. */
+function idleTick() {
+  if (!idleActive) return;
+  if (!avatarBob.classList.contains('talking')) {
+    evaluateIdleState();
+  }
+  idleTimer = setTimeout(idleTick, IDLE_TICK_MS);
+}
+
+/* Start (or restart) the idle timer from zero. */
+function startIdleLoop() {
+  stopIdleLoop();
+  idleActive = true;
+  idleStartTime = performance.now();
+  idleMilestoneCount = 0;
+  currentIdleState = null;
+  idleTimer = setTimeout(idleTick, IDLE_TICK_MS);
+}
+
+/* Stop the idle loop and reset all visuals to neutral. */
+function stopIdleLoop() {
+  idleActive = false;
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  if (idleMoodTimeout) { clearTimeout(idleMoodTimeout); idleMoodTimeout = null; }
+  idleStartTime = 0;
+  idleMilestoneCount = 0;
+  currentIdleState = null;
+  resetIdleAppearance();
+}
+
+/* ---------- Mouth helpers ---------- */
+
+function setSadMouth(on) {
+  if (on) {
+    domUpperLip.setAttribute('d',
+      `M 87 143 Q 93 141.5 100 143 Q 107 141.5 113 143
+       Q 109 147 100 147 Q 91 147 87 143 Z`);
+    domLowerLip.setAttribute('d',
+      `M 87 145 Q 100 147 113 145
+       Q 108 152 100 151 Q 92 152 87 145 Z`);
+    domLipHighlight.setAttribute('d', 'M 93 149 Q 100 150 107 149');
+    domMouthCavity.setAttribute('rx', '10');
+    domMouthCavity.setAttribute('ry', '1.4');
+    domMouthCavity.setAttribute('cy', '146.5');
+  } else {
+    domUpperLip.setAttribute('d',
+      `M 87 143 Q 93 141 100 143 Q 107 141 113 143
+       Q 108 145.5 100 146 Q 92 145.5 87 143 Z`);
+    domLowerLip.setAttribute('d',
+      `M 88 145 Q 100 148 112 145
+       Q 108 148 100 149 Q 92 148 88 145 Z`);
+    domLipHighlight.setAttribute('d', 'M 93 147 Q 100 148.5 107 147');
+    domMouthCavity.setAttribute('rx', '12');
+    domMouthCavity.setAttribute('ry', '2');
+    domMouthCavity.setAttribute('cy', '146');
+  }
 }
 
 /* ---------- Conversation store ---------- */
@@ -1408,6 +1539,9 @@ function speak(text, onEnd) {
     return;
   }
 
+  // Reset idle timer completely before speaking.
+  stopIdleLoop();
+
   const u = new SpeechSynthesisUtterance(text);
 
   u.lang = 'en-US';
@@ -1456,6 +1590,9 @@ function speak(text, onEnd) {
       mouthState = null;
       renderMouth({ open: 0, width: 1, round: 0 }, 1);
       onEnd && onEnd();
+
+      // Restart idle timer from zero.
+      startIdleLoop();
     }, 160);
   };
 
@@ -1552,6 +1689,7 @@ document.getElementById('newSessionBtn').addEventListener('click', () => {
   avatarBob.classList.remove('talking');
   stopMouthAnimation();
   stopExpressionLoop();
+  stopIdleLoop();
   chatScroller.stopTracking();
   pendingTrackedMsgEl = null;
   hideTypingIndicator();
@@ -1560,9 +1698,20 @@ document.getElementById('newSessionBtn').addEventListener('click', () => {
   input.value = '';
   sendBtn.disabled = false;
   statusEl.textContent = 'New session started ✨';
-  setTimeout(() => { statusEl.textContent = 'Ready to chat'; }, 1800);
+  setTimeout(() => {
+    statusEl.textContent = 'Ready to chat';
+    // Fresh idle timer.
+    startIdleLoop();
+  }, 1800);
   checkHealth();
   input.focus();
+});
+
+/* =========================================================
+   BOOT: start the idle timer on page load
+   ========================================================= */
+window.addEventListener('load', () => {
+  startIdleLoop();
 });
 </script>
 </body>
