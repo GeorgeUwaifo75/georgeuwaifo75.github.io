@@ -655,31 +655,12 @@ const IDLE_MOOD_DURATION_MS = 4 * 1000;
 const IDLE_TICK_MS          = 500;
 
 /* =========================================================
-   ★ MOUTH SYNC TIMING  — critical tuning
-   -----------------------------------------------------
-   Two problems addressed here:
-
-   (A) MOUTH LEADS THE SOUND at the start.
-       `speechSynthesis.onstart` fires when the engine begins
-       preparing the utterance — typically 80–200 ms before the
-       first audible phoneme. We now wait AUDIO_ONSET_DELAY_MS
-       after onstart before starting the mouth animation, which
-       matches the average onset latency across common voices.
-
-   (B) MOUTH CONTINUES AFTER THE SOUND stops.
-       The animated timeline was based on a word-count estimate
-       that runs longer than the actual audio. We now:
-         • Use a tighter per-weight constant (SPEECH_MS_PER_WEIGHT)
-           so the estimate tracks the audio window more closely.
-         • Cut the mouth off the instant `onend` fires rather than
-           waiting out the whole estimated timeline.
-         • Apply a short closing ease on `onend` so it ends smoothly.
+   ★ MOUTH SYNC TIMING
    ========================================================= */
-
 const AUDIO_ONSET_DELAY_MS   = 120;  // wait after onstart for the voice to become audible
-const SPEECH_MS_PER_WEIGHT   = 75;   // tighter than 85 — matches audio better
+const SPEECH_MS_PER_WEIGHT   = 75;   // pace constant
 const MOUTH_ATTACK_MS        = 90;   // gentle ramp at the very start
-const MOUTH_RELEASE_MS       = 130;  // gentle close on stop
+const MOUTH_RELEASE_MS       = 180;  // smooth close on stop
 
 /* Voice priority lists ------------------------------------ */
 const NIGERIAN_VOICE_HINTS = [
@@ -1386,6 +1367,7 @@ function textToWeightedVisemes(text) {
 let mouthRAF = null;
 let mouthState = null;
 let mouthStartDelayTimer = null;
+let mouthIsClosing = false;   // ★ freeze flag — prevents new frames once closing begins
 
 function stopMouthAnimation() {
   if (mouthRAF) {
@@ -1397,6 +1379,7 @@ function stopMouthAnimation() {
     mouthStartDelayTimer = null;
   }
   mouthState = null;
+  mouthIsClosing = false;
   renderMouth({ open: 0, width: 1, round: 0 }, 1);
 }
 
@@ -1453,13 +1436,6 @@ function renderMouth(shape, progress) {
 
 /* =========================================================
    SPEECH DURATION ESTIMATOR
-   -----------------------------------------------------
-   Used to pace the viseme stream *within* the audio window.
-   We no longer rely on this to decide when the mouth stops —
-   onend does that. A tighter per-weight constant
-   (SPEECH_MS_PER_WEIGHT) keeps the estimate closer to the
-   real audio duration, so the viseme stream ends roughly on
-   time with the voice.
    ========================================================= */
 function estimateSpeechDurationMs(visemeStream, rate) {
   const totalWeight = visemeStream.reduce((s, v) => s + v.weight, 0);
@@ -1470,22 +1446,22 @@ function estimateSpeechDurationMs(visemeStream, rate) {
 /* =========================================================
    PLAYBACK ENGINE  ★ REVISED
    -----------------------------------------------------
-   Synchronisation model:
+   Fixes the "lip flap at the end of speech":
 
-     1. `speak()` fires the utterance. On `onstart`, we don't
-        begin animating yet — we schedule the mouth to begin
-        after AUDIO_ONSET_DELAY_MS. This matches the delay
-        between the browser's onstart event and the first
-        audible phoneme.
+     • mouthIsClosing is set to true the instant finish is
+       called. Any RAF frame that was already queued finds
+       this flag set and returns immediately, so no stray
+       viseme can be rendered between the last spoken word
+       and the start of the closing animation.
 
-     2. Once running, the mouth follows a viseme timeline
-        paced by estimateSpeechDurationMs, with a gentle
-        attack envelope at the very beginning.
+     • The close begins from a *frozen snapshot* of the
+       current mouth shape, not from a live value that could
+       still be updated by a racing frame.
 
-     3. On `onend`, the mouth is stopped immediately —
-        cancelled and closed over MOUTH_RELEASE_MS.
-        This prevents the trailing overrun that used to make
-        the mouth keep moving after the voice had finished.
+     • If the current openness is already very small, the
+       close is skipped entirely and the mouth snaps to
+       rest — because a 180 ms fade from "barely open" to
+       closed reads as a twitch, not a motion.
    ========================================================= */
 
 function startMouthAnimation(text, rate) {
@@ -1502,12 +1478,13 @@ function startMouthAnimation(text, rate) {
     cumulative.push(cumulative[i] + stream[i].weight);
   }
 
+  mouthIsClosing = false;
+
   mouthState = {
     stream,
     cumulative,
     totalWeight,
     estimatedDuration,
-    // Pinned on the first RAF frame that actually runs.
     startTime: null,
     lastProgress: 0,
     rateMult: 1.0,
@@ -1544,12 +1521,16 @@ function startMouthAnimation(text, rate) {
   }
 
   function loop(now) {
+    // ★ If closing has begun, abandon any queued frames.
+    if (mouthIsClosing) {
+      mouthRAF = null;
+      return;
+    }
     if (!mouthState || !avatarBob.classList.contains('talking')) {
       mouthRAF = null;
       return;
     }
 
-    // Pin the animation clock to the first frame that runs.
     if (mouthState.startTime === null) {
       mouthState.startTime = now;
     }
@@ -1560,7 +1541,6 @@ function startMouthAnimation(text, rate) {
 
     chatScroller.setProgress(expectedProgress);
 
-    // Gentle attack envelope at the very start.
     const attack = Math.min(1, elapsed / MOUTH_ATTACK_MS);
     const progress = Math.min(1, expectedProgress * mouthState.rateMult);
 
@@ -1571,7 +1551,6 @@ function startMouthAnimation(text, rate) {
     mouthRAF = requestAnimationFrame(loop);
   }
 
-  // Hold the mouth closed until the audio onset delay elapses.
   mouthStartDelayTimer = setTimeout(() => {
     mouthStartDelayTimer = null;
     if (!mouthState) return;
@@ -1580,8 +1559,7 @@ function startMouthAnimation(text, rate) {
 }
 
 function finishMouthAnimation() {
-  // Called from onend / onerror / cancel. Stop the driving
-  // loop and ease the mouth closed over MOUTH_RELEASE_MS.
+  // Cancel the onset-delay timer and any driving RAF.
   if (mouthStartDelayTimer) {
     clearTimeout(mouthStartDelayTimer);
     mouthStartDelayTimer = null;
@@ -1590,27 +1568,56 @@ function finishMouthAnimation() {
     cancelAnimationFrame(mouthRAF);
     mouthRAF = null;
   }
-  if (!mouthState) return;
+
+  // ★ Set the freeze flag so any RAF frame that slips through
+  // between now and the first close step cannot redraw the
+  // mouth in an intermediate viseme.
+  mouthIsClosing = true;
+
+  if (!mouthState) {
+    renderMouth({ open: 0, width: 1, round: 0 }, 1);
+    mouthIsClosing = false;
+    return;
+  }
+
+  // Snapshot the exact shape currently on screen.
+  const snapshot = mouthState.lastRenderedShape
+    ? { ...mouthState.lastRenderedShape }
+    : { open: 0, width: 1, round: 0 };
+
+  // If the mouth is already effectively closed, just snap to
+  // rest — a short fade from near-zero would look like a twitch.
+  if (snapshot.open < 0.03) {
+    renderMouth({ open: 0, width: 1, round: 0 }, 1);
+    mouthState = null;
+    mouthIsClosing = false;
+    return;
+  }
 
   const finalShape = { open: 0, width: 1, round: 0 };
-  const startShape = mouthState.lastRenderedShape || finalShape;
-
   const startTime = performance.now();
+  const startOpen  = snapshot.open;
+  const startWidth = snapshot.width;
+  const startRound = snapshot.round;
 
   function closeStep(now) {
     const t = Math.min(1, (now - startTime) / MOUTH_RELEASE_MS);
-    const ease = 1 - Math.pow(1 - t, 2);
+    // Cubic ease-out gives a natural "mouth relaxing to rest" curve.
+    const ease = 1 - Math.pow(1 - t, 3);
+
     renderMouth({
-      open:  startShape.open  * (1 - ease),
-      width: 1 + (startShape.width - 1) * (1 - ease),
-      round: startShape.round * (1 - ease)
+      open:  startOpen  * (1 - ease),
+      width: startWidth + (1 - startWidth) * ease,
+      round: startRound * (1 - ease)
     }, 1);
+
     if (t < 1) {
       mouthRAF = requestAnimationFrame(closeStep);
     } else {
       renderMouth(finalShape, 1);
       mouthRAF = null;
       mouthState = null;
+      mouthIsClosing = false;
     }
   }
 
@@ -1652,13 +1659,8 @@ function speak(text, onEnd) {
     }
   }
 
-  let mouthStarted = false;
-
   u.onstart = () => {
     avatarBob.classList.add('talking');
-    // Start the expression loop and chat-scroll tracking right
-    // away so they lead the voice slightly — that's natural —
-    // but the mouth waits for the audio.
     startExpressionLoop();
 
     if (pendingTrackedMsgEl) {
@@ -1666,15 +1668,11 @@ function speak(text, onEnd) {
       pendingTrackedMsgEl = null;
     }
 
-    // Mouth begins after AUDIO_ONSET_DELAY_MS.
     startMouthAnimation(text, rate);
-    mouthStarted = true;
   };
 
   const finish = () => {
     avatarBob.classList.remove('talking');
-    // Stop the mouth the moment the voice stops — no trailing
-    // movement past the end of the audio.
     finishMouthAnimation();
     stopExpressionLoop();
 
