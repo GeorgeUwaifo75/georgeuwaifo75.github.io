@@ -649,21 +649,55 @@
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
 /* ---------- Idle timing configuration ---------- */
-const IDLE_SAD_DELAY_MS     = 90 * 1000;   // 90 s → trigger sad face
-const IDLE_TEAR_DELAY_MS    = 90 * 1000;   // +90 s → trigger sad + tear
-const IDLE_MOOD_DURATION_MS = 4 * 1000;    // each expression held for ~4 s
-const IDLE_TICK_MS          = 500;         // how often we evaluate the timer
+const IDLE_SAD_DELAY_MS     = 90 * 1000;
+const IDLE_TEAR_DELAY_MS    = 90 * 1000;
+const IDLE_MOOD_DURATION_MS = 4 * 1000;
+const IDLE_TICK_MS          = 500;
 
+/* =========================================================
+   VOICE PRIORITY LADDER  ★ REVISED
+   -----------------------------------------------------
+   Requirements, in order:
+
+     1. MUST be a FEMALE voice.
+     2. MUST be an AFRICAN English voice.
+     3. Nigerian gets top priority within that group.
+     4. If no African female voice exists, fall back to any
+        female English voice, then to any English voice, and
+        finally to the system default.
+
+   Female voices are identified both by common female name
+   markers and by female-specific Nigerian/African names.
+   African voices are identified via language tags (en-NG,
+   en-ZA, en-KE, en-GH, en-TZ, en-UG) and via name hints.
+   ========================================================= */
+
+/* Nigerian English voice hints — priority tier 1. */
+const NIGERIAN_VOICE_HINTS = [
+  'en-NG', 'English (Nigeria)', 'Nigeria',
+  'Microsoft Ezinne', 'Microsoft Ada', 'Microsoft Ngozi',
+  'Microsoft Chioma', 'Microsoft Amara', 'Microsoft Aria Online'
+];
+
+/* Other African English voice hints — priority tier 2. */
 const AFRICAN_VOICE_HINTS = [
-  'English (Nigeria)', 'en-NG', 'Nigeria',
-  'Microsoft Aria Online', 'Microsoft Ada', 'Microsoft Ezinne',
-  'Microsoft Chioma', 'Microsoft Ngozi', 'Microsoft Amara',
   'English (South Africa)', 'en-ZA', 'South Africa', 'Tessa',
   'English (Kenya)', 'en-KE', 'Kenya',
   'English (Ghana)', 'en-GH', 'Ghana',
+  'English (Tanzania)', 'en-TZ',
+  'English (Uganda)', 'en-UG',
   'African', 'Afrikaans'
 ];
 
+/* African language tag prefixes used for a broader fallback. */
+const AFRICAN_LANG_PREFIXES = [
+  'en-ng', 'en-za', 'en-ke', 'en-gh', 'en-tz', 'en-ug', 'en-zw', 'en-zm'
+];
+
+/* Female-name markers (combined English + African female names). */
+const FEMALE_NAME_MARKERS = /\b(female|woman|ezinne|ada|ngozi|chioma|amara|aria|zira|jenny|serena|ava|samantha|victoria|karen|moira|fiona|tessa|susan|allison|nicky|libby|michelle|amber|catherine|eva)\b/i;
+
+/* Known female English voices for the fallback tier. */
 const FEMALE_ENGLISH_HINTS = [
   'Samantha', 'Victoria', 'Karen', 'Moira', 'Fiona',
   'Google UK English Female', 'Google US English',
@@ -904,9 +938,7 @@ function setSadMouth(on) {
 
 /* =========================================================
    CONVERSATION STORE
-   -----------------------------------------------------
-   Each entry has the shape:
-       { trigger: "<user question>", reply: "<llm reply>" }
+   Each entry: { trigger: "<user question>", reply: "<llm reply>" }
    ========================================================= */
 let conversation = [];
 
@@ -1092,61 +1124,129 @@ async function queryModel(message) {
 }
 
 /* =========================================================
-   VOICE SELECTION
+   VOICE SELECTION  ★ REVISED
+   -----------------------------------------------------
+   Priority ladder, from highest to lowest:
+
+     1. Female African English — Nigerian first
+     2. Female African English — any other African country
+     3. Any African English voice (last African fallback)
+     4. Female English voice (non-African)
+     5. Any English voice
+     6. System default
+
+   The overarching rule: only push past African voices if
+   the platform truly offers no female African option.
    ========================================================= */
 let cachedVoice = null;
 
+/* Basic English test — used to filter out non-English voices. */
 function isEnglishVoice(v) {
   if (!v) return false;
   const lang = (v.lang || '').toLowerCase();
   const name = (v.name || '').toLowerCase();
   return lang.startsWith('en') ||
          /english|en[-_]/.test(name) ||
-         /(samantha|victoria|karen|moira|fiona|tessa|zira|aria|jenny|serena|ava|susan|allison|nicky)/.test(name);
+         /(samantha|victoria|karen|moira|fiona|tessa|zira|aria|jenny|serena|ava|susan|allison|nicky|ezinne|ada|ngozi|chioma|amara)/.test(name);
 }
 
-function pickAfricanEnglishVoice() {
+/* Nigerian voice test — en-NG, "nigeria", or Nigerian names. */
+function isNigerianVoice(v) {
+  if (!v) return false;
+  const lang = (v.lang || '').toLowerCase();
+  const name = (v.name || '').toLowerCase();
+  if (lang.startsWith('en-ng')) return true;
+  if (lang.includes('nigeria')) return true;
+  if (/nigeria|ezinne|ngozi|chioma|amara|\bada\b/i.test(name)) return true;
+  return false;
+}
+
+/* Any African English voice — Nigeria, South Africa, Kenya, Ghana,
+   Tanzania, Uganda, Zimbabwe, Zambia, or names tagged "African". */
+function isAfricanVoice(v) {
+  if (!v) return false;
+  const lang = (v.lang || '').toLowerCase();
+  const name = (v.name || '').toLowerCase();
+
+  if (AFRICAN_LANG_PREFIXES.some(prefix => lang.startsWith(prefix))) return true;
+  if (AFRICAN_VOICE_HINTS.some(hint =>
+        name.includes(hint.toLowerCase()) ||
+        lang.includes(hint.toLowerCase()))) return true;
+  if (/african|afrikaans/i.test(name)) return true;
+
+  return false;
+}
+
+/* Female voice test — matches female-name markers. */
+function isFemaleVoice(v) {
+  if (!v) return false;
+  return FEMALE_NAME_MARKERS.test(v.name || '');
+}
+
+function pickFemaleAfricanVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
-  for (const hint of AFRICAN_VOICE_HINTS) {
-    const v = voices.find(v =>
-      isEnglishVoice(v) &&
-      (v.name.toLowerCase().includes(hint.toLowerCase()) ||
-       (v.lang || '').toLowerCase().includes(hint.toLowerCase()))
-    );
-    if (v) return v;
+  // Work only with English voices when possible, so a system
+  // locale in another language cannot hijack the selection.
+  const englishOnly = voices.filter(isEnglishVoice);
+  const pool = englishOnly.length > 0 ? englishOnly : voices;
+
+  /* Tier 1 — female African voice, Nigerian first */
+  const femaleAfricanNigerian = pool.find(v =>
+    isAfricanVoice(v) && isFemaleVoice(v) && isNigerianVoice(v)
+  );
+  if (femaleAfricanNigerian) {
+    console.log('[Ivie] Voice: Female African (Nigerian) →',
+                femaleAfricanNigerian.name, '(' + femaleAfricanNigerian.lang + ')');
+    return femaleAfricanNigerian;
   }
 
-  const africanLangs = ['en-ng', 'en-za', 'en-ke', 'en-gh', 'en-tz', 'en-ug'];
-  const africanMatch = voices.find(v =>
-    africanLangs.some(l => (v.lang || '').toLowerCase().startsWith(l))
+  /* Tier 2 — female African voice, any other African country */
+  const femaleAfricanOther = pool.find(v =>
+    isAfricanVoice(v) && isFemaleVoice(v)
   );
-  if (africanMatch) return africanMatch;
+  if (femaleAfricanOther) {
+    console.log('[Ivie] Voice: Female African (other) →',
+                femaleAfricanOther.name, '(' + femaleAfricanOther.lang + ')');
+    return femaleAfricanOther;
+  }
 
-  const africanName = voices.find(v =>
-    isEnglishVoice(v) &&
-    /nigeria|south africa|kenya|ghana|africa|tessa/i.test(v.name)
-  );
-  if (africanName) return africanName;
+  /* Tier 3 — any African voice at all (last African fallback) */
+  const anyAfrican = pool.find(v => isAfricanVoice(v));
+  if (anyAfrican) {
+    console.log('[Ivie] Voice: African (any gender) →',
+                anyAfrican.name, '(' + anyAfrican.lang + ')');
+    return anyAfrican;
+  }
 
+  /* Tier 4 — named female English voices (non-African) */
   for (const hint of FEMALE_ENGLISH_HINTS) {
-    const v = voices.find(v =>
-      isEnglishVoice(v) &&
-      v.name.toLowerCase().includes(hint.toLowerCase())
-    );
-    if (v) return v;
+    const v = pool.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
+    if (v) {
+      console.log('[Ivie] Voice: Female English (fallback) →',
+                  v.name, '(' + v.lang + ')');
+      return v;
+    }
   }
 
-  return voices.find(isEnglishVoice) || voices[0];
+  /* Tier 5 — any English voice */
+  const anyEnglish = pool.find(isEnglishVoice);
+  if (anyEnglish) {
+    console.log('[Ivie] Voice: English (fallback) →',
+                anyEnglish.name, '(' + anyEnglish.lang + ')');
+    return anyEnglish;
+  }
+
+  /* Tier 6 — system default */
+  console.log('[Ivie] Voice: system default →',
+              voices[0].name, '(' + voices[0].lang + ')');
+  return voices[0];
 }
 
 function refreshVoice() {
-  cachedVoice = pickAfricanEnglishVoice();
-  if (cachedVoice) {
-    console.log('[Ivie] Voice selected:', cachedVoice.name, '(' + cachedVoice.lang + ')');
-  }
+  cachedVoice = pickFemaleAfricanVoice();
 }
 
 if ('speechSynthesis' in window) {
@@ -1597,7 +1697,6 @@ async function send() {
   }
   hideTypingIndicator();
 
-  // ★ Store the exchange as a trigger/reply pair.
   conversation.push({ trigger: text, reply: reply });
 
   const botEl = addMsg('Ivie', reply, 'bot');
@@ -1638,7 +1737,6 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
     setTimeout(() => statusEl.textContent = 'Ready to chat', 2000);
     return;
   }
-  // ★ Export as an array of { trigger, reply } objects.
   downloadFile(
     JSON.stringify(conversation, null, 2),
     `ivie_chat_${getTimestamp()}.json`,
