@@ -903,10 +903,10 @@ function setSadMouth(on) {
 }
 
 /* =========================================================
-   CONVERSATION STORE — now storing trigger/response pairs
+   CONVERSATION STORE
    -----------------------------------------------------
    Each entry has the shape:
-       { trigger: "<user question>", response: "<llm reply>" }
+       { trigger: "<user question>", reply: "<llm reply>" }
    ========================================================= */
 let conversation = [];
 
@@ -1597,8 +1597,8 @@ async function send() {
   }
   hideTypingIndicator();
 
-  // ★ Store the exchange as a trigger/response pair.
-  conversation.push({ trigger: text, response: reply });
+  // ★ Store the exchange as a trigger/reply pair.
+  conversation.push({ trigger: text, reply: reply });
 
   const botEl = addMsg('Ivie', reply, 'bot');
   pendingTrackedMsgEl = botEl;
@@ -1638,7 +1638,7 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
     setTimeout(() => statusEl.textContent = 'Ready to chat', 2000);
     return;
   }
-  // ★ Export as a bare array of { trigger, response } objects.
+  // ★ Export as an array of { trigger, reply } objects.
   downloadFile(
     JSON.stringify(conversation, null, 2),
     `ivie_chat_${getTimestamp()}.json`,
@@ -1656,7 +1656,7 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
   txt += `========================================\n\n`;
   for (const pair of conversation) {
     txt += `[You]\n${pair.trigger}\n\n`;
-    txt += `[Ivie]\n${pair.response}\n\n`;
+    txt += `[Ivie]\n${pair.reply}\n\n`;
   }
   downloadFile(txt, `ivie_chat_${getTimestamp()}.txt`, 'text/plain');
 });
