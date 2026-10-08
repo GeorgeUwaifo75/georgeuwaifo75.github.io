@@ -649,10 +649,10 @@
 const SPACE_URL = "https://GeorgeUwaifo-IvieAI.hf.space";
 
 /* ---------- Idle timing configuration ---------- */
-const IDLE_SAD_DELAY_MS   = 90 * 1000;   // 90 s → trigger sad face
-const IDLE_TEAR_DELAY_MS  = 90 * 1000;   // +90 s → trigger sad + tear
-const IDLE_MOOD_DURATION_MS = 4 * 1000;  // each expression held for ~4 s
-const IDLE_TICK_MS        = 500;         // how often we evaluate the timer
+const IDLE_SAD_DELAY_MS     = 90 * 1000;   // 90 s → trigger sad face
+const IDLE_TEAR_DELAY_MS    = 90 * 1000;   // +90 s → trigger sad + tear
+const IDLE_MOOD_DURATION_MS = 4 * 1000;    // each expression held for ~4 s
+const IDLE_TICK_MS          = 500;         // how often we evaluate the timer
 
 const AFRICAN_VOICE_HINTS = [
   'English (Nigeria)', 'en-NG', 'Nigeria',
@@ -784,35 +784,21 @@ function stopExpressionLoop() {
 }
 
 /* =========================================================
-   IDLE BEHAVIOUR ENGINE  ★ TEMPORARY EXPRESSION VERSION
-   -----------------------------------------------------
-   Every 90 s of continuous idleness triggers a brief
-   expression that lasts ~4 s and then reverts to the
-   neutral mood. The cycle continues every 90 s thereafter.
-
-   Timeline (from each restart of the idle timer):
-      0 –  90s : neutral
-      at  90s  : sad face for ~4 s  → neutral
-      at 180s  : sad + tear for ~4s → neutral
-      at 270s  : sad face for ~4 s  → neutral
-      at 360s  : sad + tear for ~4s → neutral
-      ... (alternates every 90s)
+   IDLE BEHAVIOUR ENGINE
    ========================================================= */
 
 let idleTimer = null;
 let idleStartTime = 0;
 let idleActive = false;
-let currentIdleState = null;      // null | 'sad' | 'tear'
-let idleMilestoneCount = 0;       // how many 90s milestones have fired
-let idleMoodTimeout = null;       // the timeout that reverts a mood
+let currentIdleState = null;
+let idleMilestoneCount = 0;
+let idleMoodTimeout = null;
 
-/* Return how long (ms) the avatar has been idle right now. */
 function getIdleElapsedMs() {
   if (!idleStartTime) return 0;
   return performance.now() - idleStartTime;
 }
 
-/* Apply the "sad face" expression. `withTear` toggles the tear. */
 function applySadFace(withTear) {
   browLeft.style.transform  = 'translateY(1.2px) rotate(-14deg)';
   browRight.style.transform = 'translateY(1.2px) rotate(14deg)';
@@ -826,7 +812,6 @@ function applySadFace(withTear) {
   tearEl.style.opacity = withTear ? '0.9' : '0';
 }
 
-/* Restore neutral idle appearance. */
 function resetIdleAppearance() {
   applyExpression(1);
   tearEl.style.opacity = '0';
@@ -835,9 +820,7 @@ function resetIdleAppearance() {
   avatarBob.style.transform  = '';
 }
 
-/* Fire a brief expression for IDLE_MOOD_DURATION_MS then revert. */
 function triggerIdleMood(withTear) {
-  // Cancel any pending revert so we don't overlap.
   if (idleMoodTimeout) { clearTimeout(idleMoodTimeout); idleMoodTimeout = null; }
 
   currentIdleState = withTear ? 'tear' : 'sad';
@@ -846,31 +829,24 @@ function triggerIdleMood(withTear) {
   idleMoodTimeout = setTimeout(() => {
     idleMoodTimeout = null;
     currentIdleState = null;
-    // Revert to neutral. The idle timeline keeps advancing
-    // in the background so the next milestone still fires.
     resetIdleAppearance();
   }, IDLE_MOOD_DURATION_MS);
 }
 
-/* Recompute what (if anything) the idle mood should be right now. */
 function evaluateIdleState() {
   if (!idleActive) return;
   if (avatarBob.classList.contains('talking')) return;
 
   const elapsed = getIdleElapsedMs();
-  const milestone = Math.floor(elapsed / IDLE_SAD_DELAY_MS);   // 0,1,2,3,...
+  const milestone = Math.floor(elapsed / IDLE_SAD_DELAY_MS);
 
-  // Fire a new mood only when we cross a fresh 90 s milestone.
   if (milestone > idleMilestoneCount && milestone > 0) {
     idleMilestoneCount = milestone;
-
-    // Alternate: odd milestones → sad, even milestones → sad + tear
     const withTear = (milestone % 2 === 0);
     triggerIdleMood(withTear);
   }
 }
 
-/* Idle loop ticker. */
 function idleTick() {
   if (!idleActive) return;
   if (!avatarBob.classList.contains('talking')) {
@@ -879,7 +855,6 @@ function idleTick() {
   idleTimer = setTimeout(idleTick, IDLE_TICK_MS);
 }
 
-/* Start (or restart) the idle timer from zero. */
 function startIdleLoop() {
   stopIdleLoop();
   idleActive = true;
@@ -889,7 +864,6 @@ function startIdleLoop() {
   idleTimer = setTimeout(idleTick, IDLE_TICK_MS);
 }
 
-/* Stop the idle loop and reset all visuals to neutral. */
 function stopIdleLoop() {
   idleActive = false;
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
@@ -928,7 +902,12 @@ function setSadMouth(on) {
   }
 }
 
-/* ---------- Conversation store ---------- */
+/* =========================================================
+   CONVERSATION STORE — now storing trigger/response pairs
+   -----------------------------------------------------
+   Each entry has the shape:
+       { trigger: "<user question>", response: "<llm reply>" }
+   ========================================================= */
 let conversation = [];
 
 /* =========================================================
@@ -1056,7 +1035,6 @@ function addMsg(who, text, cls) {
   div.querySelector('.body').textContent = text;
   chatLog.appendChild(div);
   chatScroller.snapBottom();
-  conversation.push({ role: cls === 'user' ? 'user' : 'bot', text: text });
   return div;
 }
 function escapeHtml(s) {
@@ -1539,7 +1517,6 @@ function speak(text, onEnd) {
     return;
   }
 
-  // Reset idle timer completely before speaking.
   stopIdleLoop();
 
   const u = new SpeechSynthesisUtterance(text);
@@ -1591,7 +1568,6 @@ function speak(text, onEnd) {
       renderMouth({ open: 0, width: 1, round: 0 }, 1);
       onEnd && onEnd();
 
-      // Restart idle timer from zero.
       startIdleLoop();
     }, 160);
   };
@@ -1620,6 +1596,9 @@ async function send() {
     reply = '⚠️ ' + err.message;
   }
   hideTypingIndicator();
+
+  // ★ Store the exchange as a trigger/response pair.
+  conversation.push({ trigger: text, response: reply });
 
   const botEl = addMsg('Ivie', reply, 'bot');
   pendingTrackedMsgEl = botEl;
@@ -1659,13 +1638,12 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
     setTimeout(() => statusEl.textContent = 'Ready to chat', 2000);
     return;
   }
-  const exportData = {
-    exportedAt: new Date().toISOString(),
-    messageCount: conversation.length,
-    messages: conversation
-  };
-  downloadFile(JSON.stringify(exportData, null, 2),
-    `ivie_chat_${getTimestamp()}.json`, 'application/json');
+  // ★ Export as a bare array of { trigger, response } objects.
+  downloadFile(
+    JSON.stringify(conversation, null, 2),
+    `ivie_chat_${getTimestamp()}.json`,
+    'application/json'
+  );
 });
 
 document.getElementById('exportTxtBtn').addEventListener('click', () => {
@@ -1676,9 +1654,9 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
   }
   let txt = `Ivie AI Chat Export — ${new Date().toLocaleString()}\n`;
   txt += `========================================\n\n`;
-  for (const msg of conversation) {
-    const label = msg.role === 'user' ? 'You' : 'Ivie';
-    txt += `[${label}]\n${msg.text}\n\n`;
+  for (const pair of conversation) {
+    txt += `[You]\n${pair.trigger}\n\n`;
+    txt += `[Ivie]\n${pair.response}\n\n`;
   }
   downloadFile(txt, `ivie_chat_${getTimestamp()}.txt`, 'text/plain');
 });
@@ -1700,7 +1678,6 @@ document.getElementById('newSessionBtn').addEventListener('click', () => {
   statusEl.textContent = 'New session started ✨';
   setTimeout(() => {
     statusEl.textContent = 'Ready to chat';
-    // Fresh idle timer.
     startIdleLoop();
   }, 1800);
   checkHealth();
