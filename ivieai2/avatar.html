@@ -654,36 +654,38 @@ const IDLE_TEAR_DELAY_MS    = 90 * 1000;
 const IDLE_MOOD_DURATION_MS = 4 * 1000;
 const IDLE_TICK_MS          = 500;
 
-/* =========================================================
-   ★ MOUTH SYNC TIMING
-   ========================================================= */
-const AUDIO_ONSET_DELAY_MS   = 120;  // wait after onstart for the voice to become audible
-const SPEECH_MS_PER_WEIGHT   = 75;   // pace constant
-const MOUTH_ATTACK_MS        = 90;   // gentle ramp at the very start
-const MOUTH_RELEASE_MS       = 180;  // smooth close on stop
+/* ---------- Mouth sync timing ---------- */
+const AUDIO_ONSET_DELAY_MS   = 120;
+const SPEECH_MS_PER_WEIGHT   = 75;
+const MOUTH_ATTACK_MS        = 90;
+const MOUTH_RELEASE_MS       = 180;
 
-/* Voice priority lists ------------------------------------ */
+/* =========================================================
+   VOICE PRIORITY LISTS  ★ REVERTED
+   -----------------------------------------------------
+   This is the female-African-priority ladder that was in
+   place before today's stricter "female African mandatory"
+   change. Nigerian voices still take top priority, followed
+   by other African English voices, then general female
+   English voices, then any English voice.
+   ========================================================= */
+
+/* Tier 1 — Nigerian English voices (female preferred by name hint) */
 const NIGERIAN_VOICE_HINTS = [
   'en-NG', 'English (Nigeria)', 'Nigeria',
   'Microsoft Ezinne', 'Microsoft Ada', 'Microsoft Ngozi',
   'Microsoft Chioma', 'Microsoft Amara', 'Microsoft Aria Online'
 ];
 
+/* Tier 2 — other African English voices */
 const AFRICAN_VOICE_HINTS = [
   'English (South Africa)', 'en-ZA', 'South Africa', 'Tessa',
   'English (Kenya)', 'en-KE', 'Kenya',
   'English (Ghana)', 'en-GH', 'Ghana',
-  'English (Tanzania)', 'en-TZ',
-  'English (Uganda)', 'en-UG',
   'African', 'Afrikaans'
 ];
 
-const AFRICAN_LANG_PREFIXES = [
-  'en-ng', 'en-za', 'en-ke', 'en-gh', 'en-tz', 'en-ug', 'en-zw', 'en-zm'
-];
-
-const FEMALE_NAME_MARKERS = /\b(female|woman|ezinne|ada|ngozi|chioma|amara|aria|zira|jenny|serena|ava|samantha|victoria|karen|moira|fiona|tessa|susan|allison|nicky|libby|michelle|amber|catherine|eva)\b/i;
-
+/* Tier 3 — known female English voices */
 const FEMALE_ENGLISH_HINTS = [
   'Samantha', 'Victoria', 'Karen', 'Moira', 'Fiona',
   'Google UK English Female', 'Google US English',
@@ -1110,7 +1112,18 @@ async function queryModel(message) {
 }
 
 /* =========================================================
-   VOICE SELECTION
+   VOICE SELECTION  ★ REVERTED
+   -----------------------------------------------------
+   Priority order (highest first):
+
+     1. Nigerian English voice (any gender, but female
+        preferred if a female Nigerian voice exists)
+     2. Other African English voice
+     3. Known female English voice (any locale)
+     4. Any English voice
+     5. System default
+
+   This is the original female-African-priority ladder.
    ========================================================= */
 let cachedVoice = null;
 
@@ -1123,86 +1136,70 @@ function isEnglishVoice(v) {
          /(samantha|victoria|karen|moira|fiona|tessa|zira|aria|jenny|serena|ava|susan|allison|nicky|ezinne|ada|ngozi|chioma|amara)/.test(name);
 }
 
-function isNigerianVoice(v) {
-  if (!v) return false;
-  const lang = (v.lang || '').toLowerCase();
-  const name = (v.name || '').toLowerCase();
-  if (lang.startsWith('en-ng')) return true;
-  if (lang.includes('nigeria')) return true;
-  if (/nigeria|ezinne|ngozi|chioma|amara|\bada\b/i.test(name)) return true;
-  return false;
-}
-
-function isAfricanVoice(v) {
-  if (!v) return false;
-  const lang = (v.lang || '').toLowerCase();
-  const name = (v.name || '').toLowerCase();
-
-  if (AFRICAN_LANG_PREFIXES.some(prefix => lang.startsWith(prefix))) return true;
-  if (AFRICAN_VOICE_HINTS.some(hint =>
-        name.includes(hint.toLowerCase()) ||
-        lang.includes(hint.toLowerCase()))) return true;
-  if (/african|afrikaans/i.test(name)) return true;
-
-  return false;
-}
-
-function isFemaleVoice(v) {
-  if (!v) return false;
-  return FEMALE_NAME_MARKERS.test(v.name || '');
-}
-
 function pickFemaleAfricanVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
+  // Restrict to English voices when any exist.
   const englishOnly = voices.filter(isEnglishVoice);
   const pool = englishOnly.length > 0 ? englishOnly : voices;
 
-  const femaleAfricanNigerian = pool.find(v =>
-    isAfricanVoice(v) && isFemaleVoice(v) && isNigerianVoice(v)
+  /* Tier 1 — Nigerian English, female preferred */
+  const nigerianFemale = pool.find(v =>
+    NIGERIAN_VOICE_HINTS.some(hint =>
+      v.name.toLowerCase().includes(hint.toLowerCase()) ||
+      (v.lang || '').toLowerCase().includes(hint.toLowerCase())
+    ) &&
+    /(female|woman|ezinne|ada|ngozi|chioma|amara|aria)/i.test(v.name)
   );
-  if (femaleAfricanNigerian) {
-    console.log('[Ivie] Voice: Female African (Nigerian) →',
-                femaleAfricanNigerian.name, '(' + femaleAfricanNigerian.lang + ')');
-    return femaleAfricanNigerian;
+  if (nigerianFemale) {
+    console.log('[Ivie] Voice: Nigerian female →', nigerianFemale.name, '(' + nigerianFemale.lang + ')');
+    return nigerianFemale;
   }
 
-  const femaleAfricanOther = pool.find(v =>
-    isAfricanVoice(v) && isFemaleVoice(v)
+  // Nigerian English, any gender
+  const nigerianAny = pool.find(v =>
+    NIGERIAN_VOICE_HINTS.some(hint =>
+      v.name.toLowerCase().includes(hint.toLowerCase()) ||
+      (v.lang || '').toLowerCase().includes(hint.toLowerCase())
+    )
   );
-  if (femaleAfricanOther) {
-    console.log('[Ivie] Voice: Female African (other) →',
-                femaleAfricanOther.name, '(' + femaleAfricanOther.lang + ')');
-    return femaleAfricanOther;
+  if (nigerianAny) {
+    console.log('[Ivie] Voice: Nigerian →', nigerianAny.name, '(' + nigerianAny.lang + ')');
+    return nigerianAny;
   }
 
-  const anyAfrican = pool.find(v => isAfricanVoice(v));
-  if (anyAfrican) {
-    console.log('[Ivie] Voice: African (any gender) →',
-                anyAfrican.name, '(' + anyAfrican.lang + ')');
-    return anyAfrican;
+  /* Tier 2 — other African English voices (Tessa, Kenyan, Ghanaian, etc.) */
+  const africanVoice = pool.find(v =>
+    AFRICAN_VOICE_HINTS.some(hint =>
+      v.name.toLowerCase().includes(hint.toLowerCase()) ||
+      (v.lang || '').toLowerCase().includes(hint.toLowerCase())
+    )
+  );
+  if (africanVoice) {
+    console.log('[Ivie] Voice: African →', africanVoice.name, '(' + africanVoice.lang + ')');
+    return africanVoice;
   }
 
+  /* Tier 3 — known female English voices */
   for (const hint of FEMALE_ENGLISH_HINTS) {
     const v = pool.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
     if (v) {
-      console.log('[Ivie] Voice: Female English (fallback) →',
-                  v.name, '(' + v.lang + ')');
+      console.log('[Ivie] Voice: female English →', v.name, '(' + v.lang + ')');
       return v;
     }
   }
 
+  /* Tier 4 — any English voice */
   const anyEnglish = pool.find(isEnglishVoice);
   if (anyEnglish) {
-    console.log('[Ivie] Voice: English (fallback) →',
-                anyEnglish.name, '(' + anyEnglish.lang + ')');
+    console.log('[Ivie] Voice: fallback English →', anyEnglish.name, '(' + anyEnglish.lang + ')');
     return anyEnglish;
   }
 
-  console.log('[Ivie] Voice: system default →',
-              voices[0].name, '(' + voices[0].lang + ')');
+  /* Tier 5 — system default */
+  console.log('[Ivie] Voice: system default →', voices[0].name, '(' + voices[0].lang + ')');
   return voices[0];
 }
 
@@ -1367,7 +1364,7 @@ function textToWeightedVisemes(text) {
 let mouthRAF = null;
 let mouthState = null;
 let mouthStartDelayTimer = null;
-let mouthIsClosing = false;   // ★ freeze flag — prevents new frames once closing begins
+let mouthIsClosing = false;
 
 function stopMouthAnimation() {
   if (mouthRAF) {
@@ -1444,24 +1441,7 @@ function estimateSpeechDurationMs(visemeStream, rate) {
 }
 
 /* =========================================================
-   PLAYBACK ENGINE  ★ REVISED
-   -----------------------------------------------------
-   Fixes the "lip flap at the end of speech":
-
-     • mouthIsClosing is set to true the instant finish is
-       called. Any RAF frame that was already queued finds
-       this flag set and returns immediately, so no stray
-       viseme can be rendered between the last spoken word
-       and the start of the closing animation.
-
-     • The close begins from a *frozen snapshot* of the
-       current mouth shape, not from a live value that could
-       still be updated by a racing frame.
-
-     • If the current openness is already very small, the
-       close is skipped entirely and the mouth snaps to
-       rest — because a 180 ms fade from "barely open" to
-       closed reads as a twitch, not a motion.
+   PLAYBACK ENGINE
    ========================================================= */
 
 function startMouthAnimation(text, rate) {
@@ -1521,7 +1501,6 @@ function startMouthAnimation(text, rate) {
   }
 
   function loop(now) {
-    // ★ If closing has begun, abandon any queued frames.
     if (mouthIsClosing) {
       mouthRAF = null;
       return;
@@ -1559,7 +1538,6 @@ function startMouthAnimation(text, rate) {
 }
 
 function finishMouthAnimation() {
-  // Cancel the onset-delay timer and any driving RAF.
   if (mouthStartDelayTimer) {
     clearTimeout(mouthStartDelayTimer);
     mouthStartDelayTimer = null;
@@ -1569,9 +1547,6 @@ function finishMouthAnimation() {
     mouthRAF = null;
   }
 
-  // ★ Set the freeze flag so any RAF frame that slips through
-  // between now and the first close step cannot redraw the
-  // mouth in an intermediate viseme.
   mouthIsClosing = true;
 
   if (!mouthState) {
@@ -1580,13 +1555,10 @@ function finishMouthAnimation() {
     return;
   }
 
-  // Snapshot the exact shape currently on screen.
   const snapshot = mouthState.lastRenderedShape
     ? { ...mouthState.lastRenderedShape }
     : { open: 0, width: 1, round: 0 };
 
-  // If the mouth is already effectively closed, just snap to
-  // rest — a short fade from near-zero would look like a twitch.
   if (snapshot.open < 0.03) {
     renderMouth({ open: 0, width: 1, round: 0 }, 1);
     mouthState = null;
@@ -1602,7 +1574,6 @@ function finishMouthAnimation() {
 
   function closeStep(now) {
     const t = Math.min(1, (now - startTime) / MOUTH_RELEASE_MS);
-    // Cubic ease-out gives a natural "mouth relaxing to rest" curve.
     const ease = 1 - Math.pow(1 - t, 3);
 
     renderMouth({
