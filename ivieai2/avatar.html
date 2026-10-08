@@ -655,31 +655,39 @@ const IDLE_MOOD_DURATION_MS = 4 * 1000;
 const IDLE_TICK_MS          = 500;
 
 /* =========================================================
-   VOICE PRIORITY LADDER  ★ REVISED
+   ★ MOUTH SYNC TIMING  — critical tuning
    -----------------------------------------------------
-   Requirements, in order:
+   Two problems addressed here:
 
-     1. MUST be a FEMALE voice.
-     2. MUST be an AFRICAN English voice.
-     3. Nigerian gets top priority within that group.
-     4. If no African female voice exists, fall back to any
-        female English voice, then to any English voice, and
-        finally to the system default.
+   (A) MOUTH LEADS THE SOUND at the start.
+       `speechSynthesis.onstart` fires when the engine begins
+       preparing the utterance — typically 80–200 ms before the
+       first audible phoneme. We now wait AUDIO_ONSET_DELAY_MS
+       after onstart before starting the mouth animation, which
+       matches the average onset latency across common voices.
 
-   Female voices are identified both by common female name
-   markers and by female-specific Nigerian/African names.
-   African voices are identified via language tags (en-NG,
-   en-ZA, en-KE, en-GH, en-TZ, en-UG) and via name hints.
+   (B) MOUTH CONTINUES AFTER THE SOUND stops.
+       The animated timeline was based on a word-count estimate
+       that runs longer than the actual audio. We now:
+         • Use a tighter per-weight constant (SPEECH_MS_PER_WEIGHT)
+           so the estimate tracks the audio window more closely.
+         • Cut the mouth off the instant `onend` fires rather than
+           waiting out the whole estimated timeline.
+         • Apply a short closing ease on `onend` so it ends smoothly.
    ========================================================= */
 
-/* Nigerian English voice hints — priority tier 1. */
+const AUDIO_ONSET_DELAY_MS   = 120;  // wait after onstart for the voice to become audible
+const SPEECH_MS_PER_WEIGHT   = 75;   // tighter than 85 — matches audio better
+const MOUTH_ATTACK_MS        = 90;   // gentle ramp at the very start
+const MOUTH_RELEASE_MS       = 130;  // gentle close on stop
+
+/* Voice priority lists ------------------------------------ */
 const NIGERIAN_VOICE_HINTS = [
   'en-NG', 'English (Nigeria)', 'Nigeria',
   'Microsoft Ezinne', 'Microsoft Ada', 'Microsoft Ngozi',
   'Microsoft Chioma', 'Microsoft Amara', 'Microsoft Aria Online'
 ];
 
-/* Other African English voice hints — priority tier 2. */
 const AFRICAN_VOICE_HINTS = [
   'English (South Africa)', 'en-ZA', 'South Africa', 'Tessa',
   'English (Kenya)', 'en-KE', 'Kenya',
@@ -689,15 +697,12 @@ const AFRICAN_VOICE_HINTS = [
   'African', 'Afrikaans'
 ];
 
-/* African language tag prefixes used for a broader fallback. */
 const AFRICAN_LANG_PREFIXES = [
   'en-ng', 'en-za', 'en-ke', 'en-gh', 'en-tz', 'en-ug', 'en-zw', 'en-zm'
 ];
 
-/* Female-name markers (combined English + African female names). */
 const FEMALE_NAME_MARKERS = /\b(female|woman|ezinne|ada|ngozi|chioma|amara|aria|zira|jenny|serena|ava|samantha|victoria|karen|moira|fiona|tessa|susan|allison|nicky|libby|michelle|amber|catherine|eva)\b/i;
 
-/* Known female English voices for the fallback tier. */
 const FEMALE_ENGLISH_HINTS = [
   'Samantha', 'Victoria', 'Karen', 'Moira', 'Fiona',
   'Google UK English Female', 'Google US English',
@@ -1124,23 +1129,10 @@ async function queryModel(message) {
 }
 
 /* =========================================================
-   VOICE SELECTION  ★ REVISED
-   -----------------------------------------------------
-   Priority ladder, from highest to lowest:
-
-     1. Female African English — Nigerian first
-     2. Female African English — any other African country
-     3. Any African English voice (last African fallback)
-     4. Female English voice (non-African)
-     5. Any English voice
-     6. System default
-
-   The overarching rule: only push past African voices if
-   the platform truly offers no female African option.
+   VOICE SELECTION
    ========================================================= */
 let cachedVoice = null;
 
-/* Basic English test — used to filter out non-English voices. */
 function isEnglishVoice(v) {
   if (!v) return false;
   const lang = (v.lang || '').toLowerCase();
@@ -1150,7 +1142,6 @@ function isEnglishVoice(v) {
          /(samantha|victoria|karen|moira|fiona|tessa|zira|aria|jenny|serena|ava|susan|allison|nicky|ezinne|ada|ngozi|chioma|amara)/.test(name);
 }
 
-/* Nigerian voice test — en-NG, "nigeria", or Nigerian names. */
 function isNigerianVoice(v) {
   if (!v) return false;
   const lang = (v.lang || '').toLowerCase();
@@ -1161,8 +1152,6 @@ function isNigerianVoice(v) {
   return false;
 }
 
-/* Any African English voice — Nigeria, South Africa, Kenya, Ghana,
-   Tanzania, Uganda, Zimbabwe, Zambia, or names tagged "African". */
 function isAfricanVoice(v) {
   if (!v) return false;
   const lang = (v.lang || '').toLowerCase();
@@ -1177,7 +1166,6 @@ function isAfricanVoice(v) {
   return false;
 }
 
-/* Female voice test — matches female-name markers. */
 function isFemaleVoice(v) {
   if (!v) return false;
   return FEMALE_NAME_MARKERS.test(v.name || '');
@@ -1188,12 +1176,9 @@ function pickFemaleAfricanVoice() {
   const voices = speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
-  // Work only with English voices when possible, so a system
-  // locale in another language cannot hijack the selection.
   const englishOnly = voices.filter(isEnglishVoice);
   const pool = englishOnly.length > 0 ? englishOnly : voices;
 
-  /* Tier 1 — female African voice, Nigerian first */
   const femaleAfricanNigerian = pool.find(v =>
     isAfricanVoice(v) && isFemaleVoice(v) && isNigerianVoice(v)
   );
@@ -1203,7 +1188,6 @@ function pickFemaleAfricanVoice() {
     return femaleAfricanNigerian;
   }
 
-  /* Tier 2 — female African voice, any other African country */
   const femaleAfricanOther = pool.find(v =>
     isAfricanVoice(v) && isFemaleVoice(v)
   );
@@ -1213,7 +1197,6 @@ function pickFemaleAfricanVoice() {
     return femaleAfricanOther;
   }
 
-  /* Tier 3 — any African voice at all (last African fallback) */
   const anyAfrican = pool.find(v => isAfricanVoice(v));
   if (anyAfrican) {
     console.log('[Ivie] Voice: African (any gender) →',
@@ -1221,7 +1204,6 @@ function pickFemaleAfricanVoice() {
     return anyAfrican;
   }
 
-  /* Tier 4 — named female English voices (non-African) */
   for (const hint of FEMALE_ENGLISH_HINTS) {
     const v = pool.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
     if (v) {
@@ -1231,7 +1213,6 @@ function pickFemaleAfricanVoice() {
     }
   }
 
-  /* Tier 5 — any English voice */
   const anyEnglish = pool.find(isEnglishVoice);
   if (anyEnglish) {
     console.log('[Ivie] Voice: English (fallback) →',
@@ -1239,7 +1220,6 @@ function pickFemaleAfricanVoice() {
     return anyEnglish;
   }
 
-  /* Tier 6 — system default */
   console.log('[Ivie] Voice: system default →',
               voices[0].name, '(' + voices[0].lang + ')');
   return voices[0];
@@ -1405,11 +1385,16 @@ function textToWeightedVisemes(text) {
 
 let mouthRAF = null;
 let mouthState = null;
+let mouthStartDelayTimer = null;
 
 function stopMouthAnimation() {
   if (mouthRAF) {
     cancelAnimationFrame(mouthRAF);
     mouthRAF = null;
+  }
+  if (mouthStartDelayTimer) {
+    clearTimeout(mouthStartDelayTimer);
+    mouthStartDelayTimer = null;
   }
   mouthState = null;
   renderMouth({ open: 0, width: 1, round: 0 }, 1);
@@ -1468,15 +1453,39 @@ function renderMouth(shape, progress) {
 
 /* =========================================================
    SPEECH DURATION ESTIMATOR
+   -----------------------------------------------------
+   Used to pace the viseme stream *within* the audio window.
+   We no longer rely on this to decide when the mouth stops —
+   onend does that. A tighter per-weight constant
+   (SPEECH_MS_PER_WEIGHT) keeps the estimate closer to the
+   real audio duration, so the viseme stream ends roughly on
+   time with the voice.
    ========================================================= */
 function estimateSpeechDurationMs(visemeStream, rate) {
   const totalWeight = visemeStream.reduce((s, v) => s + v.weight, 0);
-  const baseMs = totalWeight * 85;
+  const baseMs = totalWeight * SPEECH_MS_PER_WEIGHT;
   return baseMs / (rate || 1.0);
 }
 
 /* =========================================================
-   PLAYBACK ENGINE
+   PLAYBACK ENGINE  ★ REVISED
+   -----------------------------------------------------
+   Synchronisation model:
+
+     1. `speak()` fires the utterance. On `onstart`, we don't
+        begin animating yet — we schedule the mouth to begin
+        after AUDIO_ONSET_DELAY_MS. This matches the delay
+        between the browser's onstart event and the first
+        audible phoneme.
+
+     2. Once running, the mouth follows a viseme timeline
+        paced by estimateSpeechDurationMs, with a gentle
+        attack envelope at the very beginning.
+
+     3. On `onend`, the mouth is stopped immediately —
+        cancelled and closed over MOUTH_RELEASE_MS.
+        This prevents the trailing overrun that used to make
+        the mouth keep moving after the voice had finished.
    ========================================================= */
 
 function startMouthAnimation(text, rate) {
@@ -1498,8 +1507,8 @@ function startMouthAnimation(text, rate) {
     cumulative,
     totalWeight,
     estimatedDuration,
-    startTime: performance.now(),
-    leadInMs: 90,
+    // Pinned on the first RAF frame that actually runs.
+    startTime: null,
     lastProgress: 0,
     rateMult: 1.0,
     lastRenderedShape: { open: 0, width: 1, round: 0 }
@@ -1540,68 +1549,71 @@ function startMouthAnimation(text, rate) {
       return;
     }
 
-    const elapsed = now - mouthState.startTime - mouthState.leadInMs;
-    if (elapsed < 0) {
-      renderMouth({ open: 0, width: 1, round: 0 }, 1);
-      mouthRAF = requestAnimationFrame(loop);
-      return;
+    // Pin the animation clock to the first frame that runs.
+    if (mouthState.startTime === null) {
+      mouthState.startTime = now;
     }
 
+    const elapsed = now - mouthState.startTime;
     const expectedProgress = Math.min(1, elapsed / mouthState.estimatedDuration);
     mouthState.lastProgress = expectedProgress;
 
     chatScroller.setProgress(expectedProgress);
 
+    // Gentle attack envelope at the very start.
+    const attack = Math.min(1, elapsed / MOUTH_ATTACK_MS);
     const progress = Math.min(1, expectedProgress * mouthState.rateMult);
 
-    if (progress >= 1 && mouthState.estimatedDuration > 0) {
-      const overrun = (elapsed - mouthState.estimatedDuration) / 400;
-      const wobble = (Math.sin(overrun * Math.PI * 1.4) + 1) / 2;
-      const shape = {
-        open: 0.12 + wobble * 0.25,
-        width: 1.02,
-        round: 0.05
-      };
-      mouthState.lastRenderedShape = shape;
-      renderMouth(shape, 1);
-      mouthRAF = requestAnimationFrame(loop);
-      return;
-    }
-
     const shape = shapeAtProgress(progress);
+    shape.open *= attack;
     mouthState.lastRenderedShape = shape;
     renderMouth(shape, 1);
     mouthRAF = requestAnimationFrame(loop);
   }
 
-  renderMouth({ open: 0, width: 1, round: 0 }, 1);
-  mouthRAF = requestAnimationFrame(loop);
+  // Hold the mouth closed until the audio onset delay elapses.
+  mouthStartDelayTimer = setTimeout(() => {
+    mouthStartDelayTimer = null;
+    if (!mouthState) return;
+    mouthRAF = requestAnimationFrame(loop);
+  }, AUDIO_ONSET_DELAY_MS);
 }
 
 function finishMouthAnimation() {
+  // Called from onend / onerror / cancel. Stop the driving
+  // loop and ease the mouth closed over MOUTH_RELEASE_MS.
+  if (mouthStartDelayTimer) {
+    clearTimeout(mouthStartDelayTimer);
+    mouthStartDelayTimer = null;
+  }
+  if (mouthRAF) {
+    cancelAnimationFrame(mouthRAF);
+    mouthRAF = null;
+  }
   if (!mouthState) return;
+
   const finalShape = { open: 0, width: 1, round: 0 };
   const startShape = mouthState.lastRenderedShape || finalShape;
 
   const startTime = performance.now();
-  const duration = 140;
 
   function closeStep(now) {
-    const t = Math.min(1, (now - startTime) / duration);
+    const t = Math.min(1, (now - startTime) / MOUTH_RELEASE_MS);
     const ease = 1 - Math.pow(1 - t, 2);
     renderMouth({
       open:  startShape.open  * (1 - ease),
       width: 1 + (startShape.width - 1) * (1 - ease),
       round: startShape.round * (1 - ease)
     }, 1);
-    if (t < 1 && mouthRAF) {
+    if (t < 1) {
       mouthRAF = requestAnimationFrame(closeStep);
     } else {
       renderMouth(finalShape, 1);
+      mouthRAF = null;
+      mouthState = null;
     }
   }
 
-  if (mouthRAF) cancelAnimationFrame(mouthRAF);
   mouthRAF = requestAnimationFrame(closeStep);
 }
 
@@ -1640,19 +1652,29 @@ function speak(text, onEnd) {
     }
   }
 
+  let mouthStarted = false;
+
   u.onstart = () => {
     avatarBob.classList.add('talking');
-    startMouthAnimation(text, rate);
+    // Start the expression loop and chat-scroll tracking right
+    // away so they lead the voice slightly — that's natural —
+    // but the mouth waits for the audio.
     startExpressionLoop();
 
     if (pendingTrackedMsgEl) {
       chatScroller.trackMessageForSpeech(pendingTrackedMsgEl);
       pendingTrackedMsgEl = null;
     }
+
+    // Mouth begins after AUDIO_ONSET_DELAY_MS.
+    startMouthAnimation(text, rate);
+    mouthStarted = true;
   };
 
   const finish = () => {
     avatarBob.classList.remove('talking');
+    // Stop the mouth the moment the voice stops — no trailing
+    // movement past the end of the audio.
     finishMouthAnimation();
     stopExpressionLoop();
 
@@ -1660,16 +1682,9 @@ function speak(text, onEnd) {
     chatScroller.snapBottom();
 
     setTimeout(() => {
-      if (mouthRAF) {
-        cancelAnimationFrame(mouthRAF);
-        mouthRAF = null;
-      }
-      mouthState = null;
-      renderMouth({ open: 0, width: 1, round: 0 }, 1);
       onEnd && onEnd();
-
       startIdleLoop();
-    }, 160);
+    }, 60);
   };
 
   u.onend   = finish;
