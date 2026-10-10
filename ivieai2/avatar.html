@@ -1401,8 +1401,13 @@ function prepareSpokenText(raw) {
   t = t.replace(/[`*_~#>|]+/g, ' ');
   t = t.replace(/^\s*[-•]\s+/gm, '');
   try { t = t.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' '); } catch (e) { /* old browser */ }
-  t = t.replace(/([^.!?:;,\s])[ \t]*\n+[ \t]*/g, '$1, ');
   t = t.replace(/\s*\n+\s*/g, ' ');
+  // Pause ONLY at sentence ends: remove every other pause-inducing mark
+  t = t.replace(/\.{2,}|…/g, '.');                 // "..." -> a single full stop
+  t = t.replace(/(\d),(?=\d)/g, '$1');            // 1,000 -> 1000
+  t = t.replace(/\s*[—–]\s*|\s+-\s+/g, ' ');       // dashes
+  t = t.replace(/[,;:()\[\]{}"“”]/g, ' ');         // commas, semicolons, colons, brackets, quotes
+  t = t.replace(/\s+([.!?])/g, '$1');              // no gap before a full stop
   t = t.replace(/[ \t]{2,}/g, ' ').trim();
   return t;
 }
@@ -1478,7 +1483,7 @@ function buildChunkTimeline(text) {
     words.push({ charStart: m.index, start, end });
 
     const isLast = re.lastIndex >= text.length;
-    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.4 : 2.6);
+    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.4 : 2.0);
     else if (/[,;:]+["')\]]*$/.test(raw))  push('REST', 1.4);
     else                                    push('REST', 0.9);
   }
