@@ -662,7 +662,7 @@ const SPEECH_MS_PER_WEIGHT   = 75;    // first-ever guess; self-calibrates after
 const MOUTH_ATTACK_MS        = 70;
 const MOUTH_RELEASE_MS       = 180;
 const MOUTH_SMOOTH_MS        = 30;    // visual low-pass so shape changes never "pop"
-const MAX_CHUNK_CHARS        = 200;   // each utterance ≈ one sentence → drift can never build up
+const MAX_CHUNK_CHARS        = 240;   // only used for online voices (they stall on long speech)   // each utterance ≈ one sentence → drift can never build up
 
 /* =========================================================
    ★ VOICE PRIORITY LISTS  — WESTERN AFRICAN FOCUS
@@ -1483,9 +1483,9 @@ function buildChunkTimeline(text) {
     words.push({ charStart: m.index, start, end });
 
     const isLast = re.lastIndex >= text.length;
-    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.4 : 2.0);
+    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.3 : 1.1);
     else if (/[,;:]+["')\]]*$/.test(raw))  push('REST', 1.4);
-    else                                    push('REST', 0.9);
+    else                                    push('REST', 0.6);
   }
 
   const cumulative = [0];
@@ -1776,15 +1776,6 @@ function speak(text, onEnd) {
 
   const myToken = ++speakToken;
   const spoken = prepareSpokenText(text);
-  const chunkTexts = splitIntoChunks(spoken);
-
-  if (chunkTexts.length === 0) {
-    pendingTrackedMsgEl = null;
-    chatScroller.snapBottom();
-    onEnd && onEnd();
-    startIdleLoop();
-    return;
-  }
 
   const rate = 0.98;
 
@@ -1794,6 +1785,19 @@ function speak(text, onEnd) {
     chosenVoice = cachedVoice;
   } else {
     chosenVoice = speechSynthesis.getVoices().find(isEnglishVoice) || null;
+  }
+
+  // Local voices read the whole reply as ONE utterance → no gaps between sentences at all.
+  // Online voices need splitting (they cut off long speech), so they get large chunks.
+  const isLocal = !!(chosenVoice && chosenVoice.localService === true);
+  const chunkTexts = splitIntoChunks(spoken, isLocal ? 1000000 : MAX_CHUNK_CHARS);
+
+  if (chunkTexts.length === 0) {
+    pendingTrackedMsgEl = null;
+    chatScroller.snapBottom();
+    onEnd && onEnd();
+    startIdleLoop();
+    return;
   }
 
   speechSynthesis.cancel();
