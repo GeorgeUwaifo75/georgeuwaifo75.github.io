@@ -662,7 +662,7 @@ const SPEECH_MS_PER_WEIGHT   = 75;    // first-ever guess; self-calibrates after
 const MOUTH_ATTACK_MS        = 70;
 const MOUTH_RELEASE_MS       = 180;
 const MOUTH_SMOOTH_MS        = 30;    // visual low-pass so shape changes never "pop"
-const MAX_CHUNK_CHARS        = 170;   // each utterance ≈ one sentence → drift can never build up
+const MAX_CHUNK_CHARS        = 200;   // each utterance ≈ one sentence → drift can never build up
 
 /* =========================================================
    ★ VOICE PRIORITY LISTS  — WESTERN AFRICAN FOCUS
@@ -1401,7 +1401,7 @@ function prepareSpokenText(raw) {
   t = t.replace(/[`*_~#>|]+/g, ' ');
   t = t.replace(/^\s*[-•]\s+/gm, '');
   try { t = t.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' '); } catch (e) { /* old browser */ }
-  t = t.replace(/([^.!?:;,\s])[ \t]*\n+[ \t]*/g, '$1. ');
+  t = t.replace(/([^.!?:;,\s])[ \t]*\n+[ \t]*/g, '$1, ');
   t = t.replace(/\s*\n+\s*/g, ' ');
   t = t.replace(/[ \t]{2,}/g, ' ').trim();
   return t;
@@ -1418,7 +1418,7 @@ function splitIntoChunks(text, maxLen = MAX_CHUNK_CHARS) {
     if (!s) continue;
     while (s.length > maxLen) {
       let cut = Math.max(s.lastIndexOf(', ', maxLen), s.lastIndexOf('; ', maxLen), s.lastIndexOf(': ', maxLen));
-      if (cut < maxLen * 0.4) cut = s.lastIndexOf(' ', maxLen);
+      if (cut < maxLen * 0.6) cut = s.lastIndexOf(' ', maxLen);
       if (cut <= 0) cut = maxLen;
       out.push(s.slice(0, cut + 1).trim());
       s = s.slice(cut + 1).trim();
@@ -1428,7 +1428,7 @@ function splitIntoChunks(text, maxLen = MAX_CHUNK_CHARS) {
   const merged = [];
   for (const c of out) {
     const last = merged[merged.length - 1];
-    if (last && (last.length < 24 || c.length < 12) && last.length + c.length + 1 <= maxLen) {
+    if (last && last.length + c.length + 1 <= maxLen) {
       merged[merged.length - 1] = last + ' ' + c;
     } else merged.push(c);
   }
@@ -1859,6 +1859,15 @@ function speak(text, onEnd) {
   });
 
   liveUtterances.forEach(u => speechSynthesis.speak(u));
+
+  // Online voices in Chrome can stall after ~15s; a periodic nudge keeps them flowing
+  if (chosenVoice && chosenVoice.localService === false) {
+    const keepAlive = setInterval(() => {
+      if (done || myToken !== speakToken || !speechSynthesis.speaking) { clearInterval(keepAlive); return; }
+      speechSynthesis.pause();
+      speechSynthesis.resume();
+    }, 10000);
+  }
 }
 
 /* ---------- Send ---------- */
