@@ -657,10 +657,12 @@ const IDLE_TICK_MS          = 500;
 /* =========================================================
    ★ MOUTH SYNC TIMING
    ========================================================= */
-const AUDIO_ONSET_DELAY_MS   = 120;
-const SPEECH_MS_PER_WEIGHT   = 75;
-const MOUTH_ATTACK_MS        = 90;
+const AUDIO_ONSET_DELAY_MS   = 60;    // gap between utterance 'start' and audible sound
+const SPEECH_MS_PER_WEIGHT   = 75;    // first-ever guess; self-calibrates after the first sentence
+const MOUTH_ATTACK_MS        = 70;
 const MOUTH_RELEASE_MS       = 180;
+const MOUTH_SMOOTH_MS        = 30;    // visual low-pass so shape changes never "pop"
+const MAX_CHUNK_CHARS        = 170;   // each utterance ≈ one sentence → drift can never build up
 
 /* =========================================================
    ★ VOICE PRIORITY LISTS  — WESTERN AFRICAN FOCUS
@@ -1388,116 +1390,107 @@ const VISEME_WEIGHTS = {
   REST: 0.9
 };
 
-function textToWeightedVisemes(text) {
-  const clean = text.toLowerCase().replace(/[^a-z\s.,!?;:'"-]/g, '');
-  const tokens = clean.split(/(\s+|[.,!?;:])/).filter(t => t.length > 0);
+/* ---------- Spoken-text preparation ----------
+   The SAME cleaned string is (a) sent to the TTS engine and
+   (b) used to build the mouth timeline, so they cannot disagree
+   about what is being said (markdown, emoji, URLs, etc.). */
+function prepareSpokenText(raw) {
+  let t = String(raw || '');
+  t = t.replace(/```[\s\S]*?```/g, ' code block. ');
+  t = t.replace(/https?:\/\/\S+/g, ' link ');
+  t = t.replace(/[`*_~#>|]+/g, ' ');
+  t = t.replace(/^\s*[-•]\s+/gm, '');
+  try { t = t.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' '); } catch (e) { /* old browser */ }
+  t = t.replace(/([^.!?:;,\s])[ \t]*\n+[ \t]*/g, '$1. ');
+  t = t.replace(/\s*\n+\s*/g, ' ');
+  t = t.replace(/[ \t]{2,}/g, ' ').trim();
+  return t;
+}
+
+/* Split into sentence-sized chunks. Each chunk becomes its own
+   utterance, which (1) keeps Chrome from cutting off long speech
+   and (2) re-anchors the mouth to the real audio every sentence. */
+function splitIntoChunks(text, maxLen = MAX_CHUNK_CHARS) {
+  const sentences = text.match(/[\s\S]+?(?:[.!?]+["')\]]*(?=\s|$)|$)\s*/g) || [text];
+  const out = [];
+  for (let s of sentences) {
+    s = s.trim();
+    if (!s) continue;
+    while (s.length > maxLen) {
+      let cut = Math.max(s.lastIndexOf(', ', maxLen), s.lastIndexOf('; ', maxLen), s.lastIndexOf(': ', maxLen));
+      if (cut < maxLen * 0.4) cut = s.lastIndexOf(' ', maxLen);
+      if (cut <= 0) cut = maxLen;
+      out.push(s.slice(0, cut + 1).trim());
+      s = s.slice(cut + 1).trim();
+    }
+    if (s) out.push(s);
+  }
+  const merged = [];
+  for (const c of out) {
+    const last = merged[merged.length - 1];
+    if (last && (last.length < 24 || c.length < 12) && last.length + c.length + 1 <= maxLen) {
+      merged[merged.length - 1] = last + ' ' + c;
+    } else merged.push(c);
+  }
+  return merged;
+}
+
+const DIGRAPHS = { th:'TH', sh:'SH', ch:'CH', ph:'F', wh:'W', ck:'K', ng:'N', oo:'UW', ee:'IY', ea:'IY',
+  ai:'EY', ay:'EY', ou:'AW', ow:'OW', oi:'OY', oy:'OY', au:'AO', aw:'AO', er:'ER', ir:'ER', ur:'ER' };
+const LETTER_VISEME = { a:'AE', e:'EH', i:'IH', o:'OH', u:'AH', y:'Y', m:'M', b:'B', p:'P', f:'F', v:'V',
+  s:'S', z:'Z', t:'T', d:'D', n:'N', l:'L', r:'R', w:'W', k:'K', g:'G', h:'HH', c:'K', j:'JH', x:'K', q:'K' };
+
+function wordToVisemeKeys(w) {
+  w = w.toLowerCase();
+  // silent trailing "e" (make, time, hope) – not voiced
+  if (w.length > 3 && /[^aeiouy]e$/.test(w)) w = w.slice(0, -1);
+  const keys = [];
+  let i = 0;
+  while (i < w.length) {
+    const c = w[i];
+    if (/[0-9]/.test(c)) { keys.push('T', 'IY'); i++; continue; }   // a digit ≈ one short syllable
+    const c2 = w.substr(i, 2);
+    if (DIGRAPHS[c2]) { keys.push(DIGRAPHS[c2]); i += 2; continue; }
+    if (i > 0 && w[i - 1] === c) { i++; continue; }                  // double letters = one sound
+    keys.push(LETTER_VISEME[c] || 'AH');
+    i++;
+  }
+  return keys;
+}
+
+/* Builds the timeline for ONE chunk, remembering where every word
+   starts (in characters and in "weight" units) so TTS word-boundary
+   events can be mapped straight onto the mouth timeline. */
+function buildChunkTimeline(text) {
   const stream = [];
+  const words = [];
+  let cum = 0;
+  const push = (v, w) => { stream.push({ viseme: v, weight: w }); cum += w; };
 
-  for (const token of tokens) {
-    if (/^[.,!?;:]+$/.test(token)) {
-      const isSentence = /[.!?]/.test(token);
-      stream.push({ viseme: 'REST', weight: isSentence ? 2.6 : 1.4 });
-      continue;
-    }
-    if (/^\s+$/.test(token)) {
-      stream.push({ viseme: 'REST', weight: 0.55 });
-      continue;
-    }
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[0];
+    const core = raw.replace(/[^A-Za-z0-9]/g, '');
+    const start = cum;
+    for (const k of wordToVisemeKeys(core)) push(k, VISEME_WEIGHTS[k] || 1.0);
+    const end = cum;
+    words.push({ charStart: m.index, start, end });
 
-    const w = token;
-    let i = 0;
-    while (i < w.length) {
-      const c  = w[i];
-      const c2 = w.substr(i, 2);
-      let key = null;
-      let advance = 1;
-
-      if (c2 === 'th') { key = 'TH'; advance = 2; }
-      else if (c2 === 'sh') { key = 'SH'; advance = 2; }
-      else if (c2 === 'ch') { key = 'CH'; advance = 2; }
-      else if (c2 === 'ph') { key = 'F';  advance = 2; }
-      else if (c2 === 'wh') { key = 'W';  advance = 2; }
-      else if (c2 === 'ck') { key = 'K';  advance = 2; }
-      else if (c2 === 'ng') { key = 'N';  advance = 2; }
-      else if (c2 === 'oo') { key = 'UW'; advance = 2; }
-      else if (c2 === 'ee') { key = 'IY'; advance = 2; }
-      else if (c2 === 'ea') { key = 'IY'; advance = 2; }
-      else if (c2 === 'ai') { key = 'EY'; advance = 2; }
-      else if (c2 === 'ay') { key = 'EY'; advance = 2; }
-      else if (c2 === 'ou') { key = 'AW'; advance = 2; }
-      else if (c2 === 'ow') { key = 'OW'; advance = 2; }
-      else if (c2 === 'oi') { key = 'OY'; advance = 2; }
-      else if (c2 === 'oy') { key = 'OY'; advance = 2; }
-      else if (c2 === 'au') { key = 'AO'; advance = 2; }
-      else if (c2 === 'aw') { key = 'AO'; advance = 2; }
-      else if (c2 === 'er') { key = 'ER'; advance = 2; }
-      else if (c2 === 'ir') { key = 'ER'; advance = 2; }
-      else if (c2 === 'ur') { key = 'ER'; advance = 2; }
-
-      if (!key) {
-        switch (c) {
-          case 'a': key = 'AE'; break;
-          case 'e': key = 'EH'; break;
-          case 'i': key = 'IH'; break;
-          case 'o': key = 'OH'; break;
-          case 'u': key = 'AH'; break;
-          case 'y': key = 'Y';  break;
-          case 'm': key = 'M';  break;
-          case 'b': key = 'B';  break;
-          case 'p': key = 'P';  break;
-          case 'f': key = 'F';  break;
-          case 'v': key = 'V';  break;
-          case 's': key = 'S';  break;
-          case 'z': key = 'Z';  break;
-          case 't': key = 'T';  break;
-          case 'd': key = 'D';  break;
-          case 'n': key = 'N';  break;
-          case 'l': key = 'L';  break;
-          case 'r': key = 'R';  break;
-          case 'w': key = 'W';  break;
-          case 'k': key = 'K';  break;
-          case 'g': key = 'G';  break;
-          case 'h': key = 'HH'; break;
-          case 'c': key = 'K';  break;
-          case 'j': key = 'JH'; break;
-          case 'x': key = 'K';  break;
-          case 'q': key = 'K';  break;
-          default:  key = 'AH';
-        }
-      }
-
-      stream.push({ viseme: key, weight: VISEME_WEIGHTS[key] || 1.0 });
-      i += advance;
-    }
-
-    stream.push({ viseme: 'REST', weight: 0.35 });
+    const isLast = re.lastIndex >= text.length;
+    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.4 : 2.6);
+    else if (/[,;:]+["')\]]*$/.test(raw))  push('REST', 1.4);
+    else                                    push('REST', 0.9);
   }
 
-  return stream;
+  const cumulative = [0];
+  for (let i = 0; i < stream.length; i++) cumulative.push(cumulative[i] + stream[i].weight);
+  return { stream, words, cumulative, total: cum || 1 };
 }
 
 /* =========================================================
    MOUTH RENDERER
    ========================================================= */
-
-let mouthRAF = null;
-let mouthState = null;
-let mouthStartDelayTimer = null;
-let mouthIsClosing = false;
-
-function stopMouthAnimation() {
-  if (mouthRAF) {
-    cancelAnimationFrame(mouthRAF);
-    mouthRAF = null;
-  }
-  if (mouthStartDelayTimer) {
-    clearTimeout(mouthStartDelayTimer);
-    mouthStartDelayTimer = null;
-  }
-  mouthState = null;
-  mouthIsClosing = false;
-  renderMouth({ open: 0, width: 1, round: 0 }, 1);
-}
 
 function buildMouthPaths(shape, progress) {
   const open  = Math.max(0, Math.min(1, shape.open)) * progress;
@@ -1551,168 +1544,213 @@ function renderMouth(shape, progress) {
 }
 
 /* =========================================================
-   SPEECH DURATION ESTIMATOR
+   LIP-SYNC ENGINE  (audio-locked)
+   ---------------------------------------------------------
+   How it stays in sync with the voice:
+   1. Speech is split into sentence-sized utterances, each with
+      its own mouth timeline → drift cannot accumulate.
+   2. Every TTS "word" boundary event snaps the mouth to the
+      exact word being spoken (hard sync, when the voice
+      supports it – most desktop/Edge/Safari voices do).
+   3. Between boundaries the mouth advances at a speed that is
+      continuously measured from the real audio, so it also
+      follows fast/slow voices and long/short sentences.
+   4. If a voice sends NO boundary events (some network voices),
+      the speed is calibrated from how long each finished
+      sentence actually took, and remembered per voice.
+   5. The mouth never runs past the end of a sentence before the
+      audio finishes, and never keeps moving after it ends.
    ========================================================= */
-function estimateSpeechDurationMs(visemeStream, rate) {
-  const totalWeight = visemeStream.reduce((s, v) => s + v.weight, 0);
-  const baseMs = totalWeight * SPEECH_MS_PER_WEIGHT;
-  return baseMs / (rate || 1.0);
-}
+const lipSync = {
+  raf: null,
+  active: false,
+  finishing: false,
+  chunks: [],
+  offsets: [],
+  grandTotal: 1,
+  cur: null,
+  curIdx: -1,
+  msPerWeight: SPEECH_MS_PER_WEIGHT,
+  calKey: '',
+  lastFrame: 0,
+  shape: { open: 0, width: 1, round: 0 },
 
-/* =========================================================
-   PLAYBACK ENGINE
-   ========================================================= */
+  begin(chunkTexts, rate, voiceName) {
+    this.stop();
+    this.chunks = chunkTexts.map(buildChunkTimeline);
+    this.offsets = [];
+    let acc = 0;
+    for (const c of this.chunks) { this.offsets.push(acc); acc += c.total; }
+    this.grandTotal = acc || 1;
 
-function startMouthAnimation(text, rate) {
-  stopMouthAnimation();
+    this.calKey = 'ivieLip:' + (voiceName || 'default') + ':' + rate;
+    this.msPerWeight = SPEECH_MS_PER_WEIGHT / (rate || 1);
+    try {
+      const saved = parseFloat(localStorage.getItem(this.calKey));
+      if (saved > 20 && saved < 300) this.msPerWeight = saved;
+    } catch (e) { /* storage unavailable */ }
 
-  const stream = textToWeightedVisemes(text);
-  if (stream.length === 0) return;
+    this.cur = null;
+    this.curIdx = -1;
+    this.finishing = false;
+    this.active = true;
+    this.lastFrame = performance.now();
+    this.raf = requestAnimationFrame(t => this._loop(t));
+  },
 
-  const totalWeight = stream.reduce((s, v) => s + v.weight, 0);
-  const estimatedDuration = estimateSpeechDurationMs(stream, rate);
+  startChunk(i) {
+    if (!this.active || !this.chunks[i]) return;
+    const now = performance.now();
+    this.curIdx = i;
+    this.cur = {
+      tl: this.chunks[i],
+      speaking: true,
+      startT: now,
+      activeFrom: now + AUDIO_ONSET_DELAY_MS,
+      playhead: 0,
+      speed: 1 / this.msPerWeight,       // weight units per ms
+      wordIdx: -1,
+      lastBIdx: -1,
+      lastBT: 0,
+      boundarySeen: false
+    };
+  },
 
-  const cumulative = [0];
-  for (let i = 0; i < stream.length; i++) {
-    cumulative.push(cumulative[i] + stream[i].weight);
-  }
+  boundary(i, charIndex, name) {
+    const c = this.cur;
+    if (!this.active || !c || i !== this.curIdx) return;
+    if (name && name !== 'word') return;
 
-  mouthIsClosing = false;
+    const now = performance.now();
+    const words = c.tl.words;
+    let lo = 0, hi = words.length - 1, k = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (words[mid].charStart <= charIndex) { k = mid; lo = mid + 1; } else hi = mid - 1;
+    }
 
-  mouthState = {
-    stream,
-    cumulative,
-    totalWeight,
-    estimatedDuration,
-    startTime: null,
-    lastProgress: 0,
-    rateMult: 1.0,
-    lastRenderedShape: { open: 0, width: 1, round: 0 }
-  };
+    c.boundarySeen = true;
+    if (now < c.activeFrom) c.activeFrom = now;   // sound is clearly already playing
 
-  function shapeAtProgress(p) {
-    const target = p * mouthState.totalWeight;
-    let lo = 0, hi = mouthState.cumulative.length - 1;
+    // measure real speaking speed between boundaries
+    if (c.lastBIdx >= 0 && k > c.lastBIdx) {
+      const dt = now - c.lastBT;
+      const dw = words[k].start - words[c.lastBIdx].start;
+      if (dt > 40 && dw > 0) {
+        const base = 1 / this.msPerWeight;
+        const measured = Math.max(base * 0.4, Math.min(base * 2.5, dw / dt));
+        c.speed = c.speed * 0.6 + measured * 0.4;
+      }
+    }
+    c.lastBIdx = k;
+    c.lastBT = now;
+    c.wordIdx = k;
+    c.playhead = words[k].start;                  // hard sync to the spoken word
+  },
+
+  endChunk(i) {
+    const c = this.cur;
+    if (!c || i !== this.curIdx) return;
+    const now = performance.now();
+    const dur = now - c.activeFrom;
+    // self-calibrate: how long did a unit of mouth-weight really take?
+    if (dur > 400 && c.tl.total > 4) {
+      const measured = Math.max(30, Math.min(250, dur / c.tl.total));
+      this.msPerWeight = this.msPerWeight * 0.5 + measured * 0.5;
+      try { localStorage.setItem(this.calKey, this.msPerWeight.toFixed(2)); } catch (e) { /* ignore */ }
+    }
+    c.speaking = false;
+    chatScroller.setProgress((this.offsets[i] + c.tl.total) / this.grandTotal);
+  },
+
+  _shapeAt(tl, p) {
+    const cum = tl.cumulative;
+    const target = Math.max(0, Math.min(tl.total, p));
+    let lo = 0, hi = cum.length - 1;
     while (lo < hi - 1) {
       const mid = (lo + hi) >> 1;
-      if (mouthState.cumulative[mid] <= target) lo = mid;
-      else hi = mid;
+      if (cum[mid] <= target) lo = mid; else hi = mid;
     }
     const curIdx = lo;
-    const nextIdx = Math.min(curIdx + 1, mouthState.stream.length - 1);
-    const cur = mouthState.stream[curIdx];
-    const next = mouthState.stream[nextIdx];
-
-    const segStart = mouthState.cumulative[curIdx];
-    const segEnd   = mouthState.cumulative[curIdx + 1] || mouthState.cumulative[curIdx];
+    const nextIdx = Math.min(curIdx + 1, tl.stream.length - 1);
+    const segStart = cum[curIdx];
+    const segEnd = cum[curIdx + 1] || segStart;
     const segP = segEnd > segStart ? (target - segStart) / (segEnd - segStart) : 0;
-
     const ease = segP < 0.5 ? 2 * segP * segP : 1 - Math.pow(-2 * segP + 2, 2) / 2;
-
-    const sCur  = VISEMES[cur.viseme]  || VISEMES.REST;
-    const sNext = VISEMES[next.viseme] || VISEMES.REST;
-
+    const a = VISEMES[tl.stream[curIdx].viseme] || VISEMES.REST;
+    const b = VISEMES[tl.stream[nextIdx].viseme] || VISEMES.REST;
     return {
-      open:  sCur.open  + (sNext.open  - sCur.open)  * ease,
-      width: sCur.width + (sNext.width - sCur.width) * ease,
-      round: sCur.round + (sNext.round - sCur.round) * ease
+      open:  a.open  + (b.open  - a.open)  * ease,
+      width: a.width + (b.width - a.width) * ease,
+      round: a.round + (b.round - a.round) * ease
     };
-  }
+  },
 
-  function loop(now) {
-    if (mouthIsClosing) {
-      mouthRAF = null;
+  _loop(now) {
+    if (!this.active) { this.raf = null; return; }
+    const dt = Math.min(64, Math.max(1, now - this.lastFrame));
+    this.lastFrame = now;
+
+    const c = this.cur;
+    let target = { open: 0, width: 1, round: 0 };
+    let tau = MOUTH_RELEASE_MS / 3;
+
+    if (c && c.speaking && now >= c.activeFrom) {
+      c.playhead += c.speed * dt;
+
+      // never run ahead of the audio:
+      let limit = c.tl.total * 0.985;
+      if (c.wordIdx >= 0) {
+        const w = c.tl.words[c.wordIdx];
+        const nextStart = c.wordIdx + 1 < c.tl.words.length ? c.tl.words[c.wordIdx + 1].start : c.tl.total;
+        limit = Math.min(limit, w.end + 0.4 * (nextStart - w.end));
+      }
+      if (c.playhead > limit) c.playhead = limit;
+
+      target = this._shapeAt(c.tl, c.playhead);
+      target.open *= Math.min(1, (now - c.activeFrom) / MOUTH_ATTACK_MS);
+      tau = MOUTH_SMOOTH_MS;
+
+      chatScroller.setProgress((this.offsets[this.curIdx] + c.playhead) / this.grandTotal);
+    }
+
+    const k = 1 - Math.exp(-dt / tau);
+    this.shape.open  += (target.open  - this.shape.open)  * k;
+    this.shape.width += (target.width - this.shape.width) * k;
+    this.shape.round += (target.round - this.shape.round) * k;
+    renderMouth(this.shape, 1);
+
+    if (this.finishing && this.shape.open < 0.01 && !(c && c.speaking)) {
+      this.active = false;
+      this.raf = null;
+      this.shape = { open: 0, width: 1, round: 0 };
+      renderMouth(this.shape, 1);
+      this.cur = null;
       return;
     }
-    if (!mouthState || !avatarBob.classList.contains('talking')) {
-      mouthRAF = null;
-      return;
-    }
+    this.raf = requestAnimationFrame(t => this._loop(t));
+  },
 
-    if (mouthState.startTime === null) {
-      mouthState.startTime = now;
-    }
+  finish() {                       // let the mouth close gracefully
+    if (!this.active) { this.stop(); return; }
+    if (this.cur) this.cur.speaking = false;
+    this.finishing = true;
+  },
 
-    const elapsed = now - mouthState.startTime;
-    const expectedProgress = Math.min(1, elapsed / mouthState.estimatedDuration);
-    mouthState.lastProgress = expectedProgress;
-
-    chatScroller.setProgress(expectedProgress);
-
-    const attack = Math.min(1, elapsed / MOUTH_ATTACK_MS);
-    const progress = Math.min(1, expectedProgress * mouthState.rateMult);
-
-    const shape = shapeAtProgress(progress);
-    shape.open *= attack;
-    mouthState.lastRenderedShape = shape;
-    renderMouth(shape, 1);
-    mouthRAF = requestAnimationFrame(loop);
+  stop() {                         // hard stop
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = null;
+    this.active = false;
+    this.finishing = false;
+    this.cur = null;
+    this.curIdx = -1;
+    this.shape = { open: 0, width: 1, round: 0 };
+    renderMouth(this.shape, 1);
   }
+};
 
-  mouthStartDelayTimer = setTimeout(() => {
-    mouthStartDelayTimer = null;
-    if (!mouthState) return;
-    mouthRAF = requestAnimationFrame(loop);
-  }, AUDIO_ONSET_DELAY_MS);
-}
-
-function finishMouthAnimation() {
-  if (mouthStartDelayTimer) {
-    clearTimeout(mouthStartDelayTimer);
-    mouthStartDelayTimer = null;
-  }
-  if (mouthRAF) {
-    cancelAnimationFrame(mouthRAF);
-    mouthRAF = null;
-  }
-
-  mouthIsClosing = true;
-
-  if (!mouthState) {
-    renderMouth({ open: 0, width: 1, round: 0 }, 1);
-    mouthIsClosing = false;
-    return;
-  }
-
-  const snapshot = mouthState.lastRenderedShape
-    ? { ...mouthState.lastRenderedShape }
-    : { open: 0, width: 1, round: 0 };
-
-  if (snapshot.open < 0.03) {
-    renderMouth({ open: 0, width: 1, round: 0 }, 1);
-    mouthState = null;
-    mouthIsClosing = false;
-    return;
-  }
-
-  const finalShape = { open: 0, width: 1, round: 0 };
-  const startTime = performance.now();
-  const startOpen  = snapshot.open;
-  const startWidth = snapshot.width;
-  const startRound = snapshot.round;
-
-  function closeStep(now) {
-    const t = Math.min(1, (now - startTime) / MOUTH_RELEASE_MS);
-    const ease = 1 - Math.pow(1 - t, 3);
-
-    renderMouth({
-      open:  startOpen  * (1 - ease),
-      width: startWidth + (1 - startWidth) * ease,
-      round: startRound * (1 - ease)
-    }, 1);
-
-    if (t < 1) {
-      mouthRAF = requestAnimationFrame(closeStep);
-    } else {
-      renderMouth(finalShape, 1);
-      mouthRAF = null;
-      mouthState = null;
-      mouthIsClosing = false;
-    }
-  }
-
-  mouthRAF = requestAnimationFrame(closeStep);
-}
+function stopMouthAnimation()   { lipSync.stop(); }
+function finishMouthAnimation() { lipSync.finish(); }
 
 /* =========================================================
    PENDING TRACKED MESSAGE
@@ -1720,6 +1758,9 @@ function finishMouthAnimation() {
 let pendingTrackedMsgEl = null;
 
 /* ---------- SPEECH ---------- */
+let speakToken = 0;            // invalidates callbacks from cancelled speech
+let liveUtterances = [];       // keeps references (Chrome GC bug can drop onend events)
+
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) {
     onEnd && onEnd();
@@ -1728,46 +1769,45 @@ function speak(text, onEnd) {
 
   stopIdleLoop();
 
-  const u = new SpeechSynthesisUtterance(text);
+  const myToken = ++speakToken;
+  const spoken = prepareSpokenText(text);
+  const chunkTexts = splitIntoChunks(spoken);
 
-  u.lang = 'en-US';
-  const rate = 0.98;
-  u.rate   = rate;
-  u.pitch  = 1.2;
-  u.volume = 1.0;
-
-  if (!cachedVoice) refreshVoice();
-  if (cachedVoice && isEnglishVoice(cachedVoice)) {
-    u.voice = cachedVoice;
-    u.lang  = cachedVoice.lang || 'en-US';
-  } else {
-    const voices = speechSynthesis.getVoices();
-    const anyEnglish = voices.find(isEnglishVoice);
-    if (anyEnglish) {
-      u.voice = anyEnglish;
-      u.lang  = anyEnglish.lang || 'en-US';
-    }
+  if (chunkTexts.length === 0) {
+    pendingTrackedMsgEl = null;
+    chatScroller.snapBottom();
+    onEnd && onEnd();
+    startIdleLoop();
+    return;
   }
 
-  u.onstart = () => {
-    avatarBob.classList.add('talking');
-    startExpressionLoop();
+  const rate = 0.98;
 
-    if (pendingTrackedMsgEl) {
-      chatScroller.trackMessageForSpeech(pendingTrackedMsgEl);
-      pendingTrackedMsgEl = null;
-    }
+  if (!cachedVoice) refreshVoice();
+  let chosenVoice = null;
+  if (cachedVoice && isEnglishVoice(cachedVoice)) {
+    chosenVoice = cachedVoice;
+  } else {
+    chosenVoice = speechSynthesis.getVoices().find(isEnglishVoice) || null;
+  }
 
-    startMouthAnimation(text, rate);
-  };
+  speechSynthesis.cancel();
+  lipSync.begin(chunkTexts, rate, chosenVoice ? chosenVoice.name : 'default');
 
-  const finish = () => {
+  let started = false;
+  let done = false;
+  const lastIdx = chunkTexts.length - 1;
+
+  const finishAll = () => {
+    if (done) return;
+    done = true;
     avatarBob.classList.remove('talking');
     finishMouthAnimation();
     stopExpressionLoop();
 
     chatScroller.stopTracking();
     chatScroller.snapBottom();
+    liveUtterances = [];
 
     setTimeout(() => {
       onEnd && onEnd();
@@ -1775,11 +1815,50 @@ function speak(text, onEnd) {
     }, 60);
   };
 
-  u.onend   = finish;
-  u.onerror = finish;
+  liveUtterances = chunkTexts.map((chunkText, i) => {
+    const u = new SpeechSynthesisUtterance(chunkText);
+    u.lang   = chosenVoice ? (chosenVoice.lang || 'en-US') : 'en-US';
+    u.rate   = rate;
+    u.pitch  = 1.2;
+    u.volume = 1.0;
+    if (chosenVoice) u.voice = chosenVoice;
 
-  speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+    u.onstart = () => {
+      if (myToken !== speakToken) return;
+      if (!started) {
+        started = true;
+        avatarBob.classList.add('talking');
+        startExpressionLoop();
+        if (pendingTrackedMsgEl) {
+          chatScroller.trackMessageForSpeech(pendingTrackedMsgEl);
+          pendingTrackedMsgEl = null;
+        }
+      }
+      lipSync.startChunk(i);
+    };
+
+    // Real word-by-word timing straight from the speech engine
+    u.onboundary = (e) => {
+      if (myToken !== speakToken) return;
+      lipSync.boundary(i, e.charIndex, e.name);
+    };
+
+    u.onend = () => {
+      if (myToken !== speakToken) return;
+      lipSync.endChunk(i);
+      if (i === lastIdx) finishAll();
+    };
+
+    u.onerror = () => {
+      if (myToken !== speakToken) return;
+      lipSync.endChunk(i);
+      if (i === lastIdx) finishAll();
+    };
+
+    return u;
+  });
+
+  liveUtterances.forEach(u => speechSynthesis.speak(u));
 }
 
 /* ---------- Send ---------- */
@@ -1864,6 +1943,8 @@ document.getElementById('exportTxtBtn').addEventListener('click', () => {
 
 /* ---------- New Session ---------- */
 document.getElementById('newSessionBtn').addEventListener('click', () => {
+  speakToken++;
+  liveUtterances = [];
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   avatarBob.classList.remove('talking');
   stopMouthAnimation();
