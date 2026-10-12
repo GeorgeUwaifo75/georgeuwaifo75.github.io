@@ -657,9 +657,11 @@ const IDLE_TICK_MS          = 500;
 /* =========================================================
    ★ MOUTH SYNC TIMING
    ========================================================= */
-const AUDIO_ONSET_DELAY_MS   = 60;    // gap between utterance 'start' and audible sound
+const AUDIO_ONSET_LOCAL_MS   = 120;   // fallback: 'start' event -> audible sound, installed voices
+const AUDIO_ONSET_ONLINE_MS  = 300;   // fallback: same, online voices (they buffer before playing)
+const MOUTH_LEAD_MS          = 40;    // mouth moves a hair BEFORE the sound, as real lips do
 const SPEECH_MS_PER_WEIGHT   = 75;    // first-ever guess; self-calibrates after the first sentence
-const MOUTH_ATTACK_MS        = 70;
+const MOUTH_ATTACK_MS        = 40;
 const MOUTH_RELEASE_MS       = 180;
 const MOUTH_SMOOTH_MS        = 30;    // visual low-pass so shape changes never "pop"
 const MAX_CHUNK_CHARS        = 240;   // only used for online voices (they stall on long speech)   // each utterance ≈ one sentence → drift can never build up
@@ -1401,13 +1403,22 @@ function prepareSpokenText(raw) {
   t = t.replace(/[`*_~#>|]+/g, ' ');
   t = t.replace(/^\s*[-•]\s+/gm, '');
   try { t = t.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' '); } catch (e) { /* old browser */ }
+
+  // Line breaks become natural, SHORT pauses: paragraph -> full stop, line -> comma
+  t = t.replace(/([^.!?:;,\s])[ \t]*\n[ \t]*\n+[ \t]*/g, '$1. ');
+  t = t.replace(/([^.!?:;,\s])[ \t]*\n[ \t]*/g, '$1, ');
   t = t.replace(/\s*\n+\s*/g, ' ');
-  // Pause ONLY at sentence ends: remove every other pause-inducing mark
-  t = t.replace(/\.{2,}|…/g, '.');                 // "..." -> a single full stop
-  t = t.replace(/(\d),(?=\d)/g, '$1');            // 1,000 -> 1000
-  t = t.replace(/\s*[—–]\s*|\s+-\s+/g, ' ');       // dashes
-  t = t.replace(/[,;:()\[\]{}"“”]/g, ' ');         // commas, semicolons, colons, brackets, quotes
-  t = t.replace(/\s+([.!?])/g, '$1');              // no gap before a full stop
+
+  t = t.replace(/\.{2,}|…/g, '.');                    // "..." -> one full stop
+  t = t.replace(/(\d),(?=\d)/g, '$1');               // 1,000 -> 1000
+  t = t.replace(/\s*[—–]\s*|\s+-\s+/g, ', ');        // dashes -> a comma breath
+  t = t.replace(/\s*[()\[\]{}]\s*/g, ', ');          // brackets -> comma breaths
+  t = t.replace(/["“”]/g, ' ');                      // quote marks are never spoken
+
+  // tidy: no doubled/stray punctuation, no space before punctuation
+  t = t.replace(/\s+([.,!?;:])/g, '$1');
+  t = t.replace(/,\s*(?=[.,!?;:])/g, '');
+  t = t.replace(/^[\s,;:]+/, '');
   t = t.replace(/[ \t]{2,}/g, ' ').trim();
   return t;
 }
@@ -1478,13 +1489,18 @@ function buildChunkTimeline(text) {
     const raw = m[0];
     const core = raw.replace(/[^A-Za-z0-9]/g, '');
     const start = cum;
-    for (const k of wordToVisemeKeys(core)) push(k, VISEME_WEIGHTS[k] || 1.0);
+    let lastStart = start, lastW = 0;
+    for (const k of wordToVisemeKeys(core)) {
+      lastStart = cum; lastW = VISEME_WEIGHTS[k] || 1.0;
+      push(k, lastW);
+    }
     const end = cum;
-    words.push({ charStart: m.index, start, end });
+    // 'hold' = where the lips rest while waiting for the next word (middle of the last sound)
+    words.push({ charStart: m.index, start, end, hold: lastStart + 0.3 * lastW });
 
     const isLast = re.lastIndex >= text.length;
-    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.3 : 1.1);
-    else if (/[,;:]+["')\]]*$/.test(raw))  push('REST', 1.4);
+    if (/[.!?…]+["')\]]*$/.test(raw))      push('REST', isLast ? 0.3 : 1.8);
+    else if (/[,;:]+["')\]]*$/.test(raw))  push('REST', 1.0);
     else                                    push('REST', 0.6);
   }
 
@@ -1576,11 +1592,15 @@ const lipSync = {
   cur: null,
   curIdx: -1,
   msPerWeight: SPEECH_MS_PER_WEIGHT,
+  onsetMs: AUDIO_ONSET_ONLINE_MS,
+  hasBoundaries: false,
+  boundKey: '',
   calKey: '',
   lastFrame: 0,
   shape: { open: 0, width: 1, round: 0 },
 
-  begin(chunkTexts, rate, voiceName) {
+  begin(chunkTexts, rate, voiceName, isLocal) {
+    this.onsetMs = isLocal ? AUDIO_ONSET_LOCAL_MS : AUDIO_ONSET_ONLINE_MS;
     this.stop();
     this.chunks = chunkTexts.map(buildChunkTimeline);
     this.offsets = [];
@@ -1589,6 +1609,9 @@ const lipSync = {
     this.grandTotal = acc || 1;
 
     this.calKey = 'ivieLip:' + (voiceName || 'default') + ':' + rate;
+    this.boundKey = 'ivieLipB:' + (voiceName || 'default');
+    this.hasBoundaries = false;
+    try { this.hasBoundaries = localStorage.getItem(this.boundKey) === '1'; } catch (e) { /* ignore */ }
     this.msPerWeight = SPEECH_MS_PER_WEIGHT / (rate || 1);
     try {
       const saved = parseFloat(localStorage.getItem(this.calKey));
@@ -1611,13 +1634,16 @@ const lipSync = {
       tl: this.chunks[i],
       speaking: true,
       startT: now,
-      activeFrom: now + AUDIO_ONSET_DELAY_MS,
+      // known boundary voice: wait for the real first word (450ms safety timeout);
+      // otherwise use the fallback delay. A word-boundary event always overrides this.
+      activeFrom: now + (this.hasBoundaries ? 450 : this.onsetMs),
       playhead: 0,
       speed: 1 / this.msPerWeight,       // weight units per ms
       wordIdx: -1,
       lastBIdx: -1,
       lastBT: 0,
-      boundarySeen: false
+      boundarySeen: false,
+      heldMs: 0
     };
   },
 
@@ -1635,6 +1661,10 @@ const lipSync = {
     }
 
     c.boundarySeen = true;
+    if (!this.hasBoundaries) {
+      this.hasBoundaries = true;
+      try { localStorage.setItem(this.boundKey, '1'); } catch (e) { /* ignore */ }
+    }
     if (now < c.activeFrom) c.activeFrom = now;   // sound is clearly already playing
 
     // measure real speaking speed between boundaries
@@ -1650,7 +1680,9 @@ const lipSync = {
     c.lastBIdx = k;
     c.lastBT = now;
     c.wordIdx = k;
-    c.playhead = words[k].start;                  // hard sync to the spoken word
+    // hard sync to the spoken word, with a tiny lead so lips never lag the sound
+    c.playhead = Math.min(words[k].start + c.speed * MOUTH_LEAD_MS, words[k].hold);
+    c.heldMs = 0;
   },
 
   endChunk(i) {
@@ -1698,21 +1730,19 @@ const lipSync = {
 
     const c = this.cur;
     let target = { open: 0, width: 1, round: 0 };
-    let tau = MOUTH_RELEASE_MS / 3;
+    let tau = 28;   // close fast the moment the sound stops
 
     if (c && c.speaking && now >= c.activeFrom) {
       c.playhead += c.speed * dt;
 
-      // never run ahead of the audio:
-      let limit = c.tl.total * 0.985;
-      if (c.wordIdx >= 0) {
-        const w = c.tl.words[c.wordIdx];
-        const nextStart = c.wordIdx + 1 < c.tl.words.length ? c.tl.words[c.wordIdx + 1].start : c.tl.total;
-        limit = Math.min(limit, w.end + 0.4 * (nextStart - w.end));
-      }
-      if (c.playhead > limit) c.playhead = limit;
+      // never run ahead of the audio: wait on the current word until the next one is heard
+      const words = c.tl.words;
+      const limit = c.wordIdx >= 0 ? words[c.wordIdx].hold : words[words.length - 1].hold;
+      if (c.playhead >= limit) { c.playhead = limit; c.heldMs += dt; } else { c.heldMs = 0; }
 
       target = this._shapeAt(c.tl, c.playhead);
+      // waiting on the audio for a while = a real pause -> let the lips relax shut
+      if (c.heldMs > 100) target.open *= Math.max(0.2, 1 - (c.heldMs - 100) / 300);
       target.open *= Math.min(1, (now - c.activeFrom) / MOUTH_ATTACK_MS);
       tau = MOUTH_SMOOTH_MS;
 
@@ -1801,7 +1831,7 @@ function speak(text, onEnd) {
   }
 
   speechSynthesis.cancel();
-  lipSync.begin(chunkTexts, rate, chosenVoice ? chosenVoice.name : 'default');
+  lipSync.begin(chunkTexts, rate, chosenVoice ? chosenVoice.name : 'default', isLocal);
 
   let started = false;
   let done = false;
