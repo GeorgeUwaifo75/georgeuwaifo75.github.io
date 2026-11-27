@@ -1,48 +1,42 @@
 /* ═══════════════════════════════════════════════════════════════
    SmartVotes Network — Main Application Script
-   Data-integrity revision v2  (June 2026)
+   Data-integrity revision v3
 
-   FIXES IN THIS REVISION
-   ──────────────────────
-   FIX-1  loadData(forceRefresh=true) could wipe JSONBin when the
-          network blipped.  When forceRefresh is true and jbinGet()
-          returns null we now fall back to the cached localStorage
-          copy instead of calling buildDefaultData() and overwriting
-          the remote store.  This was the PRIMARY cause of the
-          reported "new-user registration wiped existing data" bug.
+   WHY DATA WAS BEING LOST (root causes, all fixed in this revision)
+   ─────────────────────────────────────────────────────────────────
+   1. LOST UPDATES.  The whole database is one JSONBin document.  Two
+      browsers that read-then-write at the same time overwrite each
+      other; the later PUT silently erases the earlier one.  The old
+      "write queue" only ordered writes inside ONE browser tab.
+      -> Record-level merge + verified writes + retry (see DATA LAYER).
+   2. FALSE SUCCESS.  jbinPut()'s result was ignored, so a rejected or
+      failed write (429, size limit, bad key) was reported to the user
+      as "saved" and later discarded.
+      -> Success is only reported after the server is read back.
+   3. LOCAL DATA THROWN AWAY.  loadData() replaced appData and the
+      local cache with the server copy, destroying anything not yet
+      synced (registrations, votes made while a write was failing).
+      -> loadData() now MERGES; unsynced changes live in an outbox.
+   4. DELETES COULD NOT STICK / WERE UNSAFE.  mergeData() re-added any
+      record a stale browser still held (deleted elections returned),
+      and "Clear test data" deleted every vote of an election.
+      -> Tombstones; only votes tagged isTest are cleared.
+   5. UNBOUNDED PAYLOAD.  Base64 image fallbacks could push the bin over
+      its size limit, after which every save failed silently.
+   6. VOTE RULES CHECKED OUTSIDE THE WRITE.  Eligibility, duplicate and
+      "election still open" checks now run inside the write against the
+      freshest data; vote ids are deterministic so a double write
+      cannot create a second vote.
 
-   FIX-2  validateDataIntegrity() failure in loadData() triggered
-          a full buildDefaultData() + jbinPut(), silently replacing
-          the entire remote dataset with just the admin account.
-          Now a validation failure emits a warning and continues
-          with the data as-is instead of nuking it.
-
-   FIX-3  atomicSave() retried business-logic errors (DUPLICATE_EMAIL,
-          DUPLICATE_USERNAME) the same as transient network errors,
-          making three unnecessary jbinGet() calls before surfacing
-          the error.  Business errors now abort immediately.
-
-   FIX-4  atomicSave() fell back to local appData as the write base
-          when all remote-fetch retries were exhausted, risking a
-          stale local snapshot overwriting fresh remote data.
-          The write is now aborted (local-only save) if a confirmed
-          remote baseline cannot be obtained.
-
-   FIX-5  The post-write verification jbinGet() doubled API calls on
-          every mutation and could push the account into JSONBin rate
-          limits (429s), which triggered additional write failures.
-          Verification reads are removed; integrity is maintained
-          by the read-before-write pattern in atomicSave() itself.
-
-   FIX-6  saveUserEdit() had no duplicate-email/username guard.
-          An admin could accidentally reassign an existing email to
-          another account, corrupting user lookup.  Guard added.
-
-   FIX-7  enqueueWrite swallowed the atomicSave return value, so
-          callers that needed to act on save results (doRegister)
-          were calling atomicSave directly outside the queue,
-          bypassing serialization.  The queue now threads results
-          through and doRegister uses saveData() consistently.
+   SECURITY FIXES IN THIS FILE
+   ───────────────────────────
+   - Removed the default-admin-password login bypass (the password sits
+     in a public config file, so it let anyone in even after the admin
+     changed it).
+   - Stored XSS: user-supplied values are now escaped everywhere they
+     are written into HTML (email/name/role/image URLs).
+   - Session in localStorage stores only the user id (no password hash).
+   - CSV export escapes quotes and neutralises spreadsheet formulas.
    ═══════════════════════════════════════════════════════════════ */
 
 "use strict";
@@ -128,372 +122,557 @@ function isValidName(name) {
 }
 
 // ── Data Integrity Validation ─────────────────────────────────────
-// Returns true only when the data object is structurally sound.
-// NOTE: this function is intentionally NON-DESTRUCTIVE; callers must
-// decide what to do when it returns false (warn, do NOT auto-wipe).
-function validateDataIntegrity(data) {
-  if (!data || typeof data !== 'object') return false;
+// Advisory only: reports problems, NEVER triggers a reset or a rewrite.
+const COLLECTIONS = ['users', 'elections', 'categories', 'candidates', 'votes'];
 
-  const requiredArrays = ['users', 'elections', 'categories', 'candidates', 'votes'];
-  for (const arr of requiredArrays) {
-    if (!Array.isArray(data[arr])) return false;
+function findIntegrityIssues(data) {
+  const issues = [];
+  if (!data || typeof data !== 'object') return ['Data is not an object'];
+  for (const c of COLLECTIONS) if (!Array.isArray(data[c])) issues.push(`Missing collection: ${c}`);
+  if (issues.length) return issues;
+
+  const ids = new Set(), emails = new Set(), names = new Set();
+  for (const u of data.users) {
+    if (!u.id) { issues.push('A user record has no id'); continue; }
+    if (ids.has(u.id)) issues.push(`Duplicate user id: ${u.id}`);
+    ids.add(u.id);
+    const em = (u.email || '').toLowerCase();
+    if (!em) issues.push(`User ${u.id} has no email`);
+    else if (emails.has(em)) issues.push(`Duplicate email: ${em}`);
+    emails.add(em);
+    const un = (u.username || '').toLowerCase();
+    if (un) { if (names.has(un)) issues.push(`Duplicate username: ${un}`); names.add(un); }
   }
+  return issues;
+}
+function validateDataIntegrity(data) { return findIntegrityIssues(data).length === 0; }
 
-  const userIds      = new Set();
-  const userEmails   = new Set();
-  const userUsernames = new Set();
+// ══════════════════════════════════════════════════════════════════
+//  DATA LAYER — how SmartVotes stays correct with many users at once
+// ══════════════════════════════════════════════════════════════════
+//
+//  JSONBin stores ONE document and has no compare-and-swap, so two
+//  browsers that read-modify-write at the same moment silently
+//  overwrite each other.  Instead of pretending that cannot happen,
+//  the layer below makes overwrites harmless:
+//
+//   1. RECORD-LEVEL MERGE.  Every record has an id and an `updated`
+//      stamp.  Two copies of the store are combined by taking, per id,
+//      the newest version.  Merging is order-independent, so any
+//      interleaving of writers converges on the same result.
+//   2. TOMBSTONES.  A delete is stored as {id, deleted:true, updated}.
+//      Without it, any browser holding an older copy would bring the
+//      deleted record back on its next save.
+//   3. OUTBOX.  Every change is written to localStorage BEFORE any
+//      network call and stays there until the server is verified to
+//      contain it.  Closing the tab, going offline or a 429 cannot
+//      lose it; the next visit/poll finishes the job.
+//   4. VERIFIED WRITES.  After each PUT we read the bin back and
+//      check our changes are really in it.  If another browser
+//      overwrote us, we re-merge and write again (with random jitter).
+//      A save is only reported as confirmed when verification passed.
+//   5. SELF-HEALING.  Each browser keeps a replica of everything it
+//      has seen.  If a late overwrite (or someone wiping the bin)
+//      removes records, the next sync from any browser puts them back.
+//
+//  This makes loss very unlikely; it cannot make it impossible while
+//  the browser writes straight to a store without transactions.  See
+//  the notes delivered with this file about moving writes to FastAPI.
 
-  for (const user of data.users) {
-    if (!user.id || userIds.has(user.id)) return false;
-    userIds.add(user.id);
+// ── Small helpers ─────────────────────────────────────────────────
+const EPOCH = '1970-01-01T00:00:00.000Z';
+const LS_RAW    = `svn_raw_${JBIN_BIN || 'local'}`;      // full replica incl. tombstones
+const LS_OUTBOX = `svn_outbox_${JBIN_BIN || 'local'}`;   // changes not yet confirmed
+const CONFIRM_TTL_MS = 10 * 60 * 1000;                   // keep confirmed changes this long to catch late overwrites
 
-    const email = user.email?.toLowerCase();
-    if (!email || userEmails.has(email)) return false;
-    userEmails.add(email);
+const cloneJSON = (o) => JSON.parse(JSON.stringify(o));
 
-    const username = user.username?.toLowerCase();
-    if (username) {
-      if (userUsernames.has(username)) return false;
-      userUsernames.add(username);
+function stable(v) {   // JSON with sorted keys, so equal content => equal string
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
+  return '{' + Object.keys(v).filter(k => v[k] !== undefined).sort()
+    .map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}';
+}
+
+// Monotonic "hybrid" stamp: never lower than anything this browser has seen,
+// so an edit made after reading a record always beats that record, even if
+// this device's clock is a little slow.
+let _lastStamp = 0;
+function stamp() {
+  const t = Math.max(Date.now(), _lastStamp + 1);
+  _lastStamp = t;
+  return new Date(t).toISOString();
+}
+function observeStamp(iso) {
+  const t = Date.parse(iso);
+  if (isFinite(t) && t > _lastStamp && t < 8e15) _lastStamp = t;
+}
+
+const recTime = (r) => r.updated || r.created || r.timestamp || '';
+
+// >0 : a is the newer/winning version, <0 : b wins, 0 : identical.
+function cmpRec(a, b) {
+  const ta = recTime(a), tb = recTime(b);
+  if (ta !== tb) return ta > tb ? 1 : -1;
+  if (!!a.deleted !== !!b.deleted) return a.deleted ? 1 : -1;
+  const sa = stable(a), sb = stable(b);
+  return sa === sb ? 0 : (sa > sb ? 1 : -1);
+}
+
+function emptyRaw() { return { users: [], elections: [], categories: [], candidates: [], votes: [] }; }
+
+function normalizeRaw(x) {
+  const out = (x && typeof x === 'object' && !Array.isArray(x)) ? { ...x } : {};
+  for (const c of COLLECTIONS) {
+    const arr = Array.isArray(out[c]) ? out[c] : [];
+    out[c] = arr.filter(r => r && typeof r === 'object' && r.id !== undefined && r.id !== null && r.id !== '');
+  }
+  return out;
+}
+
+// Children of a deleted election/category are dropped from the store
+// (they are invisible anyway) so deleting an election with thousands of
+// votes does not need thousands of tombstones.
+function pruneOrphans(raw) {
+  const delEl  = new Set(raw.elections.filter(e => e.deleted).map(e => String(e.id)));
+  const delCat = new Set(raw.categories.filter(c => c.deleted).map(c => String(c.id)));
+  if (!delEl.size && !delCat.size) return raw;
+  const orphan = (r) => !r.deleted && (delEl.has(String(r.electionId)) || delCat.has(String(r.categoryId)));
+  raw.categories = raw.categories.filter(c => !(!c.deleted && delEl.has(String(c.electionId))));
+  raw.candidates = raw.candidates.filter(c => !orphan(c));
+  raw.votes      = raw.votes.filter(v => !orphan(v));
+  return raw;
+}
+
+// Combine two stores: per id, the newest version wins. Never drops an id.
+function mergeRaw(a, b) {
+  const out = { ...a, ...b };
+  for (const c of COLLECTIONS) {
+    const map = new Map();
+    for (const rec of [...(a[c] || []), ...(b[c] || [])]) {
+      const k = String(rec.id), cur = map.get(k);
+      if (!cur || cmpRec(rec, cur) > 0) map.set(k, rec);
+    }
+    out[c] = [...map.values()];
+  }
+  return pruneOrphans(out);
+}
+
+// true if store `a` already contains every record of `b` (same version or newer)
+function covers(a, b) {
+  for (const c of COLLECTIONS) {
+    const m = new Map((a[c] || []).map(r => [String(r.id), r]));
+    for (const rb of (b[c] || [])) {
+      const ra = m.get(String(rb.id));
+      if (!ra || cmpRec(ra, rb) < 0) return false;
     }
   }
-
   return true;
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  CONCURRENCY LAYER
-// ══════════════════════════════════════════════════════════════════
+function liveView(raw) {
+  const v = {};
+  for (const c of COLLECTIONS) v[c] = raw[c].filter(r => !r.deleted);
+  return v;
+}
 
-// ── Write queue ───────────────────────────────────────────────────
-// FIX-7: thread the resolved value through the chain so callers
-// awaiting saveData() receive the atomicSave result object.
+function applyChanges(raw, changes) {
+  const patch = emptyRaw();
+  for (const ch of changes || []) {
+    if (ch && patch[ch.col] && ch.rec && ch.rec.id !== undefined) patch[ch.col].push(ch.rec);
+  }
+  return mergeRaw(raw, patch);
+}
+
+// Turn "the caller edited a copy of the data" into record-level changes.
+function diffLive(before, after, ts) {
+  const changes = [], removed = [];
+  const stripU = (r) => { const { updated, ...rest } = r; return rest; };
+  for (const c of COLLECTIONS) {
+    const old = new Map((before[c] || []).map(r => [String(r.id), r]));
+    const seen = new Set();
+    for (const r of (after[c] || [])) {
+      if (!r || r.id === undefined || r.id === null) continue;
+      const k = String(r.id);
+      seen.add(k);
+      const prev = old.get(k);
+      if (!prev || stable(stripU(prev)) !== stable(stripU(r))) changes.push({ col: c, rec: { ...r, updated: ts } });
+    }
+    for (const [k, prev] of old) if (!seen.has(k)) removed.push({ col: c, prev });
+  }
+  const delEl  = new Set(removed.filter(x => x.col === 'elections').map(x => String(x.prev.id)));
+  const delCat = new Set(removed.filter(x => x.col === 'categories').map(x => String(x.prev.id)));
+  for (const { col, prev } of removed) {
+    const cascaded =
+      (col === 'categories' && delEl.has(String(prev.electionId))) ||
+      (col === 'candidates' && (delEl.has(String(prev.electionId)) || delCat.has(String(prev.categoryId)))) ||
+      (col === 'votes'      && (delEl.has(String(prev.electionId)) || delCat.has(String(prev.categoryId))));
+    if (!cascaded) changes.push({ col, rec: { id: prev.id, deleted: true, updated: ts } });
+  }
+  return changes;
+}
+
+// ── Local storage (replica, outbox, session) ──────────────────────
+function lsGet() {   // LEGACY cache from older versions; only read by svnRecoverLegacyCache()
+  try { return JSON.parse(localStorage.getItem('svn_data') || 'null'); } catch { return null; }
+}
+function lsRawGet() {
+  try { return normalizeRaw(JSON.parse(localStorage.getItem(LS_RAW) || 'null')); } catch { return emptyRaw(); }
+}
+function lsRawPut(raw) {
+  try { localStorage.setItem(LS_RAW, JSON.stringify(raw)); return true; }
+  catch (e) { console.warn('SmartVotes: could not write local replica (storage full?)', e.message); return false; }
+}
+function outboxGet() {
+  try {
+    const a = JSON.parse(localStorage.getItem(LS_OUTBOX) || '[]');
+    return Array.isArray(a) ? a.filter(e => e && COLLECTIONS.includes(e.col) && e.rec && e.rec.id !== undefined) : [];
+  } catch { return []; }
+}
+function outboxSet(list) {
+  let ok = true;
+  try { localStorage.setItem(LS_OUTBOX, JSON.stringify(list)); }
+  catch (e) { ok = false; console.error('SmartVotes: could not persist outbox!', e.message); }
+  updateSyncBadge(list);
+  return ok;
+}
+function outboxAdd(changes) {
+  const map = new Map(outboxGet().map(e => [`${e.col}:${e.rec.id}`, e]));
+  for (const ch of changes) {
+    const k = `${ch.col}:${ch.rec.id}`, cur = map.get(k);
+    if (!cur || cmpRec(ch.rec, cur.rec) > 0) map.set(k, { col: ch.col, rec: ch.rec, queuedAt: now() });
+  }
+  return outboxSet([...map.values()]);
+}
+
+function lsSession(u)     { localStorage.setItem('svn_session', JSON.stringify({ id: u.id })); }   // id only — never store password hashes here
+function lsSessionGet()   { try { return JSON.parse(localStorage.getItem('svn_session') || 'null'); } catch { return null; } }
+function lsSessionClear() { localStorage.removeItem('svn_session'); }
+
+// Small unobtrusive badge so nobody wrongly assumes unconfirmed work is safe on the server.
+function updateSyncBadge(list) {
+  try {
+    const pending = (list || outboxGet()).filter(e => !e.confirmedAt).length;
+    let b = document.getElementById('svn-sync-badge');
+    if (!pending) { if (b) b.remove(); return; }
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'svn-sync-badge';
+      b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:#92400e;color:#fff;' +
+        'padding:8px 12px;border-radius:8px;font:600 12px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+      document.body.appendChild(b);
+    }
+    b.textContent = `⏳ ${pending} change${pending === 1 ? '' : 's'} not yet confirmed by the server — keep this page open`;
+  } catch { /* UI only */ }
+}
+
+// ── Application state derived from the replica ────────────────────
+let _raw = lsRawGet();      // full store incl. tombstones
+let _lastIssueKey = '';
+
+function defaultAdminRecord(ts) {
+  return {
+    id: "Admin01", name: "System Administrator", username: "Admin01",
+    email: "admin@smartvotes.net", password: hashStr(APP.DEFAULT_ADMIN_PASSWORD),
+    gender: "Male", age: 30, phone: "09038197586", address: "",
+    role: "admin", validated: "Yes", validation_code: "",
+    created: ts, updated: ts
+  };
+}
+function withAdmin(raw) {
+  if (raw.users.some(u => String(u.id) === 'Admin01' && !u.deleted)) return raw;
+  const hadTombstone = raw.users.some(u => String(u.id) === 'Admin01');
+  raw.users = [defaultAdminRecord(hadTombstone ? stamp() : EPOCH), ...raw.users.filter(u => String(u.id) !== 'Admin01')];
+  return raw;
+}
+
+// remote store (or null) + everything we know locally + our unconfirmed changes
+function combine(remote) {
+  let raw = mergeRaw(normalizeRaw(remote), _raw);
+  raw = applyChanges(raw, outboxGet());
+  return withAdmin(raw);
+}
+
+function adoptRaw(raw) {
+  _raw = raw;
+  for (const c of COLLECTIONS) for (const r of raw[c]) if (r.updated) observeStamp(r.updated);
+  appData = liveView(raw);
+  lsRawPut(mergeRaw(lsRawGet(), raw));   // merge, so a second tab's data is not overwritten
+}
+
+// Decide which outbox entries are confirmed, which must be re-sent, which can be dropped.
+function settleOutbox(remote) {
+  const m = {};
+  for (const c of COLLECTIONS) m[c] = new Map((remote[c] || []).map(r => [String(r.id), r]));
+  const t = Date.now(), keep = [];
+  for (const e of outboxGet()) {
+    const ra = m[e.col] && m[e.col].get(String(e.rec.id));
+    const satisfied = !!ra && cmpRec(ra, e.rec) >= 0;
+    if (!satisfied) { const { confirmedAt, ...rest } = e; keep.push(rest); }          // missing/overwritten: keep and re-send
+    else if (!e.confirmedAt) keep.push({ ...e, confirmedAt: t });                      // first confirmation
+    else if (t - e.confirmedAt < CONFIRM_TTL_MS) keep.push(e);                         // still watching for late overwrites
+    // else: confirmed long enough ago -> drop
+  }
+  outboxSet(keep);
+}
+
+// ── Write queue (serialises writes inside this tab) ───────────────
 let _writeQueue = Promise.resolve();
-
 function enqueueWrite(fn) {
   _writeQueue = _writeQueue.then(() => fn().catch(e => {
-    console.error("SmartVotes: enqueued write failed", e);
+    console.error("SmartVotes: queued write failed", e);
     return { success: false, error: e.message };
   }));
   return _writeQueue;
 }
 
-// ── JSONBin helpers ───────────────────────────────────────────────
+// ── JSONBin transport ─────────────────────────────────────────────
 function jbinAuthHeaders(withContentType) {
   const h = {};
-  if (JBIN_MASTER_KEY) {
-    h['X-Master-Key'] = JBIN_MASTER_KEY;
-  } else if (JBIN_ACCESS_KEY) {
-    h['X-Access-Key'] = JBIN_ACCESS_KEY;
-  }
+  if (JBIN_MASTER_KEY) h['X-Master-Key'] = JBIN_MASTER_KEY;
+  else if (JBIN_ACCESS_KEY) h['X-Access-Key'] = JBIN_ACCESS_KEY;
   if (withContentType) h['Content-Type'] = 'application/json';
   return h;
 }
 
+// Returns the record, or null on ANY failure (null never means "empty").
 async function jbinGet() {
-  if (!JBIN_READY) {
-    console.info("SmartVotes: JSONBin not configured — using localStorage only.");
-    return null;
-  }
+  if (!JBIN_READY) return null;
   try {
-    const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}/latest`, {
-      headers: jbinAuthHeaders(false)
-    });
-    if (!r.ok) {
-      console.warn(`SmartVotes: JSONBin GET ${r.status}`);
-      return null;
-    }
+    const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}/latest`, { headers: jbinAuthHeaders(false) });
+    if (!r.ok) { console.warn(`SmartVotes: JSONBin GET ${r.status}`); return null; }
     const j = await r.json();
-    return j.record || null;
+    return (j && typeof j.record === 'object' && j.record !== null) ? j.record : null;
   } catch (e) {
     console.warn("SmartVotes: JSONBin GET network error.", e.message);
     return null;
   }
 }
 
+// Returns {ok, fatal, error, ms}. ONE attempt only: on a retryable failure the caller must
+// re-read a fresh baseline before writing again (retrying here with an old baseline would widen
+// the window in which another browser's write can be overwritten).
 async function jbinPut(data) {
-  if (!JBIN_READY) return false;
+  if (!JBIN_READY) return { ok: false, fatal: true, error: 'NOT_CONFIGURED' };
+  const body = JSON.stringify(data);
+  const limit = Number(CFG.JSONBIN_MAX_BYTES) || 0;
+  if (limit && body.length > limit) {
+    console.error(`SmartVotes: payload ${body.length} bytes exceeds JSONBIN_MAX_BYTES ${limit}`);
+    return { ok: false, fatal: true, error: 'PAYLOAD_TOO_LARGE' };
+  }
+  const t0 = Date.now();
+  try {
+    const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}`, { method: 'PUT', headers: jbinAuthHeaders(true), body });
+    const ms = Date.now() - t0;
+    if (r.ok) return { ok: true, ms };
+    if (r.status === 429 || r.status >= 500) {
+      console.warn(`SmartVotes: JSONBin PUT ${r.status} (will retry with a fresh read)`);
+      return { ok: false, fatal: false, error: `HTTP_${r.status}`, ms };
+    }
+    const txt = await r.text();
+    console.error(`SmartVotes: JSONBin PUT ${r.status} (not retryable, ${body.length} bytes). ${txt}`);
+    return { ok: false, fatal: true, error: `HTTP_${r.status}`, ms };
+  } catch (e) {
+    console.warn('SmartVotes: JSONBin PUT network error.', e.message);
+    return { ok: false, fatal: false, error: 'NETWORK', ms: Date.now() - t0 };
+  }
+}
 
-  const MAX_RETRIES = 4;
-  let delay = 600;
+async function fetchRemoteRaw() {
+  const r = await jbinGet();
+  return r === null ? null : normalizeRaw(r);
+}
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const r = await fetch(`${JBIN_URL}/b/${JBIN_BIN}`, {
-        method:  'PUT',
-        headers: jbinAuthHeaders(true),
-        body:    JSON.stringify(data)
-      });
+// ── Sync primitives (always run inside the write queue, except loadData's read) ──
 
-      if (r.ok) return true;
+// Read the server, fold it into local state. Never replaces local data with remote data.
+async function pullRemote() {
+  const remote = await fetchRemoteRaw();           // null => unreachable
+  const combined = combine(remote);                // evaluated AFTER the await so it sees the latest local state
+  adoptRaw(combined);
+  if (remote) settleOutbox(remote);
+  return { remote, combined, reachable: !JBIN_READY || !!remote };
+}
 
-      const status = r.status;
-      if (status === 429 || status >= 500) {
-        console.warn(`SmartVotes: JSONBin PUT ${status} — retry ${attempt}/${MAX_RETRIES} in ${delay}ms`);
-        await sleep(delay);
-        delay *= 2;
-        continue;
+// Write everything the server is missing, then read back to prove it is there.
+// Every path that ends in "synced" goes through the same verification.
+async function pushPending(opts = {}) {
+  if (!JBIN_READY) return { synced: true, local: true };
+  const MAX_ATTEMPTS = 10, BUDGET_MS = 40000, started = Date.now();
+  const backoff = (n) => sleep(Math.random() * Math.min(6000, 300 * 2 ** n));   // exponential + full jitter: colliding writers spread out
+  let remote = opts.remote || null, lastError = 'REMOTE_UNAVAILABLE';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && Date.now() - started < BUDGET_MS; attempt++) {
+    if (!remote) remote = await fetchRemoteRaw();
+    if (!remote) { lastError = 'REMOTE_UNAVAILABLE'; await backoff(attempt); continue; }
+
+    const combined = combine(remote);
+    let proof = remote, putMs = 300, wrote = false;
+
+    if (!covers(remote, combined)) {
+      // Safety net: the merged store must never lose a record the server has. The only
+      // intended drops are children of an election/category that this merge deletes.
+      const delEl  = new Set(combined.elections.filter(e => e.deleted).map(e => String(e.id)));
+      const delCat = new Set(combined.categories.filter(c => c.deleted).map(c => String(c.id)));
+      const cascaded = (c, r) => !r.deleted && (
+        (c === 'categories' && delEl.has(String(r.electionId))) ||
+        (c === 'candidates' && (delEl.has(String(r.electionId)) || delCat.has(String(r.categoryId)))) ||
+        (c === 'votes'      && (delEl.has(String(r.electionId)) || delCat.has(String(r.categoryId)))));
+      for (const c of COLLECTIONS) {
+        const have = new Set(combined[c].map(r => String(r.id)));
+        const lost = (remote[c] || []).filter(r => !have.has(String(r.id)) && !cascaded(c, r));
+        if (lost.length) { console.error(`SmartVotes: ABORTED write — merge would drop ${lost.length} ${c} record(s).`); return { synced: false, error: 'MERGE_GUARD', fatal: true }; }
       }
-      const body = await r.text();
-      console.warn(`SmartVotes: JSONBin PUT ${status} (non-retryable). ${body}`);
-      return false;
 
-    } catch (e) {
-      console.warn(`SmartVotes: JSONBin PUT network error (attempt ${attempt}).`, e.message);
-      if (attempt < MAX_RETRIES) { await sleep(delay); delay *= 2; }
+      const put = await jbinPut({ ...combined, _meta: { schema: 2, writer: _clientId, at: now() } });
+      if (!put.ok) {
+        lastError = put.error;
+        if (put.fatal) return { synced: false, error: lastError, fatal: true };   // e.g. payload too large / bad credentials: retrying will not help
+        remote = null; await backoff(attempt); continue;
+      }
+      wrote = true; putMs = put.ms || putMs;
+
+      proof = await fetchRemoteRaw();                                          // read-after-write verification
+      if (!proof) { lastError = 'VERIFY_UNAVAILABLE'; remote = null; await backoff(attempt); continue; }
+      if (!covers(proof, combine(proof))) { lastError = 'OVERWRITTEN_BY_OTHER_WRITER'; remote = null; await backoff(attempt); continue; }
     }
+
+    // Settle: another browser that read the bin BEFORE our write can still land its older
+    // write a moment later. For critical writes (votes, sign-ups) wait that window out and
+    // verify again before telling the user it is safe.
+    if (opts.settle && (wrote || outboxGet().some(e => !e.confirmedAt))) {
+      await sleep(Math.max(1000, Math.min(5000, 3 * putMs)));
+      let again = null;
+      for (let i = 0; i < 3 && !again; i++) { again = await fetchRemoteRaw(); if (!again) await sleep(400); }
+      if (!again) { lastError = 'VERIFY_UNAVAILABLE'; remote = null; await backoff(attempt); continue; }
+      if (!covers(again, combine(again))) { lastError = 'OVERWRITTEN_BY_OTHER_WRITER'; remote = null; await backoff(attempt); continue; }
+      proof = again;
+    }
+
+    settleOutbox(proof); adoptRaw(combine(proof));
+    return { synced: true, attempt };
   }
-
-  console.error("SmartVotes: JSONBin PUT failed after all retries.");
-  return false;
+  return { synced: false, error: lastError };
 }
+const _clientId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
 
-// ── Local Storage ─────────────────────────────────────────────────
-function lsGet() {
-  try { return JSON.parse(localStorage.getItem('svn_data') || 'null'); } catch { return null; }
-}
-function lsPut(data) {
-  try { localStorage.setItem('svn_data', JSON.stringify(data)); return true; } catch { return false; }
-}
-function lsSession(u)     { localStorage.setItem('svn_session', JSON.stringify(u)); }
-function lsSessionGet()   { try { return JSON.parse(localStorage.getItem('svn_session') || 'null'); } catch { return null; } }
-function lsSessionClear() { localStorage.removeItem('svn_session'); }
-
-// ── Merge helper ──────────────────────────────────────────────────
-function mergeData(remote, local) {
-  const merged = {};
-  const keys = ['users', 'elections', 'categories', 'candidates', 'votes'];
-  for (const key of keys) {
-    const remoteArr = Array.isArray(remote[key]) ? remote[key] : [];
-    const localArr  = Array.isArray(local[key])  ? local[key]  : [];
-    const remoteIds = new Set(remoteArr.map(x => x.id));
-    const localOnly = localArr.filter(x => !remoteIds.has(x.id));
-    merged[key] = [...remoteArr, ...localOnly];
-  }
-  return merged;
-}
-
-// ── Data Load ─────────────────────────────────────────────────────
-// FIX-1 + FIX-2: loadData no longer wipes data on integrity failure
-// or when a force-refresh fetch returns null.
-//
-// Old behaviour (buggy):
-//   forceRefresh=true + jbinGet()=null → data=null → buildDefaultData()
-//   → jbinPut(defaultData)  ← WIPED the entire remote store!
-//
-// New behaviour:
-//   1. Try remote fetch (always when JBIN_READY, skip only when
-//      !JBIN_READY to avoid unnecessary network calls).
-//   2. On success → sync localStorage and use remote copy.
-//   3. On null remote (network error, 429, etc.) → fall back to
-//      localStorage regardless of forceRefresh flag.  We NEVER
-//      generate and push default data unless BOTH remote AND local
-//      are absent (truly fresh install).
-//   4. If validateDataIntegrity fails → log a warning, continue
-//      with the data as-is.  A failed integrity check is evidence
-//      that something is wrong; silently replacing the dataset
-//      with defaults makes diagnosis impossible and loses votes.
-async function loadData(forceRefresh = false) {
-  let data = null;
-
-  if (JBIN_READY) {
-    data = await jbinGet();
-  }
-
-  if (data) {
-    // Remote fetch succeeded — keep localStorage in sync.
-    lsPut(data);
+// Pull, and push if the server is missing anything. Used by polling and re-checks.
+// It keeps itself scheduled while changes are unconfirmed OR the server cannot be reached,
+// so work is never stranded (back-off keeps this cheap on a long outage).
+let _recheckFails = 0;
+async function reconcileInQueue() {
+  const p = await pullRemote();
+  let out = { synced: p.reachable };
+  if (p.remote && !covers(p.remote, p.combined)) out = await pushPending({ remote: p.remote });
+  const pending = outboxGet().length > 0;
+  const stuck = JBIN_READY && pending && (!p.remote || out.synced === false);
+  if (stuck) {
+    _recheckFails++;
+    scheduleRecheck(out.fatal ? 300000 : Math.min(300000, 15000 * 2 ** Math.min(_recheckFails - 1, 4)));
   } else {
-    // FIX-1: always fall back to localStorage when remote is unavailable,
-    // even when forceRefresh=true.  The old code skipped this branch for
-    // forceRefresh, so a transient 429/network-error during validation or
-    // vote-submit caused data=null → buildDefaultData() → remote wipe.
-    data = lsGet();
-    if (data) {
-      console.info("SmartVotes: using localStorage fallback (remote unavailable).");
-    }
+    _recheckFails = 0;
   }
+  out.synced = out.synced && outboxGet().every(e => e.confirmedAt);
+  return out;
+}
 
-  if (!data) {
-    // Truly fresh install — no remote data and no local cache.
-    data = buildDefaultData();
-    lsPut(data);
-    if (JBIN_READY) {
-      await jbinPut(data);
-    }
+let _recheckTimer = null;
+function scheduleRecheck(ms = 4000) {   // catches an overwrite that lands just after our verification
+  if (!JBIN_READY) return;
+  clearTimeout(_recheckTimer);
+  _recheckTimer = setTimeout(() => { enqueueWrite(reconcileInQueue).then(() => { try { _refreshVisiblePanels(); } catch {} }); }, ms);
+}
+
+let _healQueued = false;
+function scheduleHeal() {
+  if (_healQueued) return;
+  _healQueued = true;
+  enqueueWrite(async () => { _healQueued = false; return reconcileInQueue(); });
+}
+
+// ── Public data API ───────────────────────────────────────────────
+
+// Refresh appData from the server WITHOUT discarding anything local.
+async function loadData() {
+  const p = await pullRemote();
+  const issues = findIntegrityIssues(appData);
+  const key = issues.join('|');
+  if (issues.length && key !== _lastIssueKey) {
+    console.warn('SmartVotes: integrity issues (data kept as-is):', issues);
+    if (currentUser && currentUser.role === 'admin') showToast(`Data check: ${issues[0]}${issues.length > 1 ? ` (+${issues.length - 1} more)` : ''}`, 'warning');
   }
-
-  // FIX-2: integrity failure is a WARNING, not a trigger to wipe.
-  // If the remote or local data has a structural problem (e.g. a
-  // duplicate email from an old import), we continue with what we
-  // have and surface the issue in the console.  Silently resetting
-  // to defaults and overwriting JSONBin would destroy all records.
-  if (!validateDataIntegrity(data)) {
-    console.warn(
-      "SmartVotes: loaded data failed integrity check. " +
-      "Continuing with existing data — investigate manually."
-    );
-    // Do NOT call buildDefaultData() or jbinPut() here.
-  }
-
-  appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...data };
-  ensureAdmin();
+  _lastIssueKey = key;
+  if (p.remote && !covers(p.remote, p.combined)) scheduleHeal();   // server is missing something we hold
   return appData;
 }
 
-// ── Startup Integrity Check ───────────────────────────────────────
-// Non-destructive advisory check — surfaces issues without wiping.
-async function performStartupIntegrityCheck() {
-  if (!JBIN_READY) return true;
+// Apply a change to the data.  fn(data) edits a private copy; throw to abort.
+// Resolves to { success, synced, error, data }:
+//   success=false           -> nothing was changed (e.g. DUPLICATE_EMAIL, or fn threw)
+//   success=true, synced    -> change is on the server and verified
+//   success=true, !synced   -> change is safe on this device and will keep retrying
+async function mutate(fn, options = {}) {
+  const pull = await pullRemote();                                   // fresh baseline
+  if (options.requireRemote && !pull.reachable) return { success: false, error: 'REMOTE_UNAVAILABLE', data: appData };
 
-  try {
-    const remote = await jbinGet();
-    if (remote && !validateDataIntegrity(remote)) {
-      console.error("SmartVotes: Remote data integrity check FAILED!");
-      showToast("Data integrity issue detected. Contact support.", "error");
-      // Return false to signal the caller, but do NOT reset data.
-      return false;
-    }
+  const working = cloneJSON(appData);
+  let result;
+  try { result = fn(working); }
+  catch (e) { return { success: false, error: e.message, data: appData }; }   // business rule failed: abort, no retry
+  const finalData = (result && Array.isArray(result.users)) ? result : working;
 
-    const local = lsGet();
-    if (local && !validateDataIntegrity(local)) {
-      console.warn("Local cache integrity check failed — cache will not be used for fallback.");
-      // If remote is valid, re-sync localStorage from remote.
-      if (remote && validateDataIntegrity(remote)) {
-        lsPut(remote);
-        appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...remote };
-      }
-    }
+  const changes = diffLive(appData, finalData, stamp());
+  if (!changes.length) return { success: true, noop: true, synced: true, data: appData };
 
-    return true;
-  } catch (e) {
-    console.error("Startup integrity check error:", e);
-    return false;
+  if (JBIN_READY) outboxAdd(changes);                               // durable BEFORE any network write
+  adoptRaw(applyChanges(_raw, changes));                            // UI shows the change immediately
+  const push = await pushPending({ remote: pull.remote, settle: !!options.settle });
+  scheduleRecheck();
+  return { success: true, synced: !!push.synced, error: push.synced ? undefined : push.error, data: appData };
+}
+function saveData(fn, options) { return enqueueWrite(() => mutate(fn, options)); }
+
+// One-off, deliberate recovery: run svnRecoverLegacyCache() in the browser console on a device
+// that still holds the OLD cache. Re-adds records that exist nowhere in the current store.
+window.svnRecoverLegacyCache = async function () {
+  const legacy = normalizeRaw(lsGet());
+  const ts = stamp(), changes = [];
+  for (const c of COLLECTIONS) {
+    const known = new Set(_raw[c].map(r => String(r.id)));
+    for (const r of legacy[c]) if (!known.has(String(r.id))) changes.push({ col: c, rec: { ...r, updated: ts } });
   }
-}
-
-// ── Atomic Save (read-before-write) ──────────────────────────────
-// The ONLY function that writes to JSONBin. Always called inside
-// enqueueWrite() so at most one write runs at a time.
-//
-// FIX-3: Business-logic errors thrown by fn() (DUPLICATE_EMAIL,
-//   DUPLICATE_USERNAME) now abort immediately instead of retrying
-//   up to maxRetries times.
-//
-// FIX-4: When all remote-fetch retries are exhausted (remote=null),
-//   the JSONBin PUT is skipped and the mutation is saved to
-//   localStorage only — identical to the original atomicSave guard.
-//   The old "improved" code fell through to use local appData as the
-//   write base after exhausting retries, risking an overwrite.
-//
-// FIX-5: Post-write verification jbinGet() removed.  It doubled API
-//   calls per mutation and contributed to rate-limit cascades.  The
-//   read-before-write in step 1 already provides a fresh baseline.
-async function atomicSave(fn, options = {}) {
-  const { maxRetries = 3 } = options;
-
-  // Sentinel set on the fn()-thrown error to skip retries.
-  const BUSINESS_ERROR_MARKER = '__BUSINESS_ERROR__';
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // 1. Fetch latest remote state.
-      let remote = JBIN_READY ? await jbinGet() : null;
-
-      if (JBIN_READY && remote === null) {
-        if (attempt < maxRetries) {
-          console.warn(`atomicSave: remote fetch failed, retry ${attempt}/${maxRetries}`);
-          await sleep(500 * attempt);
-          continue;
-        }
-        // FIX-4: All retries exhausted with null remote.
-        // Apply mutation to local state only — do NOT fall through
-        // to a PUT that would use stale local data as the remote baseline.
-        console.warn(
-          "SmartVotes: atomicSave — could not obtain a remote baseline after " +
-          maxRetries + " attempts. Mutation saved to localStorage only."
-        );
-        const localBase = { users: [], elections: [], categories: [], candidates: [], votes: [], ...appData };
-        const localPatched = fn ? fn(localBase) : localBase;
-        lsPut(localPatched);
-        appData = localPatched;
-        ensureAdmin();
-        return { success: false, error: "REMOTE_UNAVAILABLE", data: appData };
-      }
-
-      // 2. Merge remote with current in-memory state.
-      const base   = remote ? mergeData(remote, appData) : appData;
-      const merged = { users: [], elections: [], categories: [], candidates: [], votes: [], ...base };
-
-      // 3. Apply caller's mutation on top of the merged snapshot.
-      //    Business-logic errors thrown here abort immediately (FIX-3).
-      let patched;
-      try {
-        patched = fn ? fn(merged) : merged;
-      } catch (businessErr) {
-        businessErr[BUSINESS_ERROR_MARKER] = true;
-        throw businessErr;
-      }
-
-      // 4. Persist locally first (always safe).
-      lsPut(patched);
-
-      // 5. Push to JSONBin.
-      if (JBIN_READY) {
-        await jbinPut(patched);
-        // FIX-5: no post-write verification GET.
-      }
-
-      // 6. Sync global state.
-      appData = patched;
-      ensureAdmin();
-      return { success: true, data: appData, attempt };
-
-    } catch (e) {
-      // FIX-3: Do not retry business-logic errors.
-      if (e[BUSINESS_ERROR_MARKER]) {
-        return { success: false, error: e.message, data: appData };
-      }
-      console.error(`atomicSave attempt ${attempt} failed:`, e);
-      if (attempt === maxRetries) {
-        return { success: false, error: e.message, data: appData };
-      }
-      await sleep(500 * attempt);
-    }
-  }
-
-  return { success: false, error: "Max retries exceeded", data: appData };
-}
-
-// Convenience wrapper: enqueue an atomicSave.
-// FIX-7: return the promise so callers can await the result.
-function saveData(fn, options) {
-  return enqueueWrite(() => atomicSave(fn, options));
-}
+  if (!changes.length) return 'Nothing to recover: every record in the old cache already exists.';
+  outboxAdd(changes);
+  adoptRaw(applyChanges(_raw, changes));
+  await enqueueWrite(() => pushPending());
+  return `Recovered ${changes.length} record(s) from the old cache.`;
+};
 
 // ── Background polling ────────────────────────────────────────────
-const POLL_INTERVAL = 20000;
+const POLL_INTERVAL = 45000;
 let   _pollTimer    = null;
 
 function startPolling() {
   stopPolling();
-  _pollTimer = setInterval(async () => {
-    if (!currentUser) { stopPolling(); return; }
-    try {
-      const remote = JBIN_READY ? await jbinGet() : null;
-      if (!remote) return;  // Never reset state on a null poll result.
-      const refreshed = mergeData(remote, appData);
-      appData = { users: [], elections: [], categories: [], candidates: [], votes: [], ...refreshed };
-      ensureAdmin();
-      _refreshVisiblePanels();
-    } catch (e) {
-      console.warn("SmartVotes: background poll error", e);
-    }
-  }, POLL_INTERVAL);
+  const tick = () => {
+    _pollTimer = setTimeout(async () => {
+      if (!currentUser) return;                                       // logged out: stop
+      if (!document.hidden) {
+        await enqueueWrite(reconcileInQueue);
+        try { _refreshVisiblePanels(); } catch (e) { console.warn('SmartVotes: refresh error', e); }
+      }
+      tick();
+    }, POLL_INTERVAL + Math.random() * 10000);                         // jitter spreads load on the API
+  };
+  tick();
 }
+function stopPolling() { if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; } }
 
-function stopPolling() {
-  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+if (typeof window.addEventListener === 'function') {
+  window.addEventListener('online', () => { scheduleHeal(); });        // flush the outbox as soon as connectivity returns
+}
+if (typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) scheduleHeal(); });
 }
 
 function _refreshVisiblePanels() {
@@ -508,43 +687,30 @@ function _refreshVisiblePanels() {
   renderHomePage();
 }
 
-// ══════════════════════════════════════════════════════════════════
-
-function buildDefaultData() {
-  return {
-    users: [{
-      id: "Admin01",
-      name: "System Administrator",
-      username: "Admin01",
-      email: "admin@smartvotes.net",
-      password: hashStr(APP.DEFAULT_ADMIN_PASSWORD),
-      gender: "Male",
-      age: 30,
-      phone: "09038197586",
-      address: "",
-      role: "admin",
-      validated: "Yes",
-      validation_code: "",
-      created: now()
-    }],
-    elections:  [],
-    categories: [],
-    candidates: [],
-    votes:      []
-  };
-}
-
-function ensureAdmin() {
-  const adm = appData.users.find(u => u.id === "Admin01");
-  if (!adm) {
-    appData.users.unshift({
-      id: "Admin01", name: "System Administrator", username: "Admin01",
-      email: "admin@smartvotes.net",
-      password: hashStr(APP.DEFAULT_ADMIN_PASSWORD),
-      gender: "Male", age: 30, phone: "09038197586", address: "",
-      role: "admin", validated: "Yes", validation_code: "", created: now()
-    });
+// Tells the user the truth about a save result. Returns true if the change was applied.
+const SAVE_ERRORS = {
+  PARENT_GONE:        'The election or category this belongs to was deleted by someone else. Nothing was saved.',
+  HAS_REAL_VOTES:     'This election already has real votes. Test mode is only for elections without real votes.',
+  REMOTE_UNAVAILABLE: 'Cannot reach the server right now. Nothing was saved — please try again.',
+};
+const SYNC_FATAL = {
+  PAYLOAD_TOO_LARGE: 'The data store is full. Your change is kept on this device only — contact the administrator.',
+  HTTP_400:          'The server rejected the save (data store may be full). Your change is kept on this device only — contact the administrator.',
+  HTTP_401:          'The server refused the save (credentials). Your change is kept on this device only — contact the administrator.',
+  HTTP_403:          'The server refused the save (credentials). Your change is kept on this device only — contact the administrator.',
+  HTTP_404:          'The data store could not be found. Your change is kept on this device only — contact the administrator.',
+};
+function notifySave(res, okMsg, okType = 'success') {
+  if (!res || !res.success) {
+    showToast(SAVE_ERRORS[res?.error] || 'Could not save your change. Nothing was modified — please try again.', 'error');
+    return false;
   }
+  if (res.synced === false) {
+    showToast(SYNC_FATAL[res.error] || 'Saved on this device but not yet confirmed by the server. It will keep retrying — please keep this page open.', 'warning');
+  } else if (okMsg) {
+    showToast(okMsg, okType);
+  }
+  return true;
 }
 
 
@@ -559,8 +725,12 @@ async function firebaseUpload(file, path) {
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
   } catch (e) {
-    console.warn("Firebase upload failed — using base64 fallback.", e);
-    return await fileToBase64(file);
+    console.warn("Firebase upload failed.", e);
+    // A big base64 image would bloat the shared data store (JSONBin has a size limit, and once
+    // it is exceeded EVERY save fails). Only tiny images may be embedded as a fallback.
+    const dataUrl = await fileToBase64(file);
+    if (dataUrl.length <= 30000) return dataUrl;
+    throw new Error('IMAGE_UPLOAD_FAILED');
   }
 }
 
@@ -641,12 +811,12 @@ async function doSignIn() {
   await loadData();
 
   const user = appData.users.find(u =>
-    (u.email.toLowerCase() === email || u.username?.toLowerCase() === email) &&
+    ((u.email || '').toLowerCase() === email || u.username?.toLowerCase() === email) &&
     u.password === hashStr(password)
   );
-
-  const isAdminDefault = (email === 'admin01' || email === 'admin@smartvotes.net') && password === APP.DEFAULT_ADMIN_PASSWORD;
-  const matched = user || (isAdminDefault ? appData.users.find(u => u.id === 'Admin01') : null);
+  // (The old "default admin password always works" bypass was removed: that password is
+  //  readable in the public config file, so it defeated any password change.)
+  const matched = user || null;
 
   if (!matched) { showAlert('signin-alert', 'Invalid email or password.', 'error'); return; }
 
@@ -718,11 +888,11 @@ async function doValidateCode() {
     });
 
     if (!saveResult || !saveResult.success) {
-      // Even if the remote write failed, the local state was updated.
-      // Log the issue but allow the user to proceed — the next background
-      // poll will re-sync the remote.
-      console.warn("doValidateCode: remote save uncertain, proceeding with local state.");
+      showAlert('validate-alert', 'Could not save your verification. Please try again.', 'error');
+      setLoading('btn-validate', false, 'Verify Email');
+      return;
     }
+    if (saveResult.synced === false) notifySave(saveResult);   // saved locally, will keep retrying
 
     const updatedUser = appData.users.find(x => x.id === pendingValidationUser.id);
     showAlert('validate-alert', 'Email verified! Logging you in…', 'success');
@@ -772,7 +942,9 @@ async function resendValidationCode() {
     });
 
     if (!saveResult || !saveResult.success) {
-      console.warn("resendValidationCode: remote save uncertain.");
+      // Do NOT email a code that was not stored — it would never match.
+      showToast("Could not generate a new code. Please try again.", "error");
+      return;
     }
 
     // Retry email up to 3 times.
@@ -869,7 +1041,7 @@ async function doRegister() {
     const saveResult = await saveData(data => {
       // These checks run against the most current remote snapshot
       // fetched inside atomicSave — the definitive race-condition guard.
-      if (data.users.some(u => u.email.toLowerCase() === email)) {
+      if (data.users.some(u => (u.email || '').toLowerCase() === email)) {
         throw new Error("DUPLICATE_EMAIL");
       }
       if (data.users.some(u => u.username?.toLowerCase() === username.toLowerCase())) {
@@ -877,7 +1049,7 @@ async function doRegister() {
       }
       data.users.push(newUser);
       return data;
-    });
+    }, { requireRemote: true, settle: true });   // never create an account blind: the duplicate check needs the live server data
 
     if (!saveResult || !saveResult.success) {
       if (saveResult?.error === "DUPLICATE_EMAIL") {
@@ -889,13 +1061,12 @@ async function doRegister() {
         showAlert('register-alert', 'This username is already taken.', 'error'); return;
       }
       if (saveResult?.error === "REMOTE_UNAVAILABLE") {
-        // Local-only save succeeded. The user is persisted locally and
-        // will sync to remote on the next successful write.
-        console.warn("Registration saved locally; will sync to remote when connectivity returns.");
-      } else {
-        throw new Error(saveResult?.error || "Unknown save error");
+        setLoading('btn-register', false, 'Create Account →');
+        showAlert('register-alert', 'Cannot reach the server right now. Please check your connection and try again.', 'error'); return;
       }
+      throw new Error(saveResult?.error || "Unknown save error");
     }
+    if (saveResult.synced === false) notifySave(saveResult);   // saved locally, will keep retrying
 
     // ── Send verification email (non-critical) ────────────────────
     let emailSent = false;
@@ -1066,13 +1237,13 @@ function renderElectionsTable() {
   tbody.innerHTML = appData.elections.length ? appData.elections.map(e => `
     <tr data-search="${esc(e.title).toLowerCase()}">
       <td><div style="width:48px;height:40px;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,var(--green-deep),var(--purple-deep));display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.5);font-size:1.2rem">
-        ${e.image ? `<img src="${e.image}" style="width:100%;height:100%;object-fit:cover"/>` : '🗳️'}
+        ${e.image ? `<img src="${esc(e.image)}" style="width:100%;height:100%;object-fit:cover"/>` : '🗳️'}
       </div></td>
       <td><strong>${esc(e.title)}</strong></td>
       <td style="font-size:0.8rem;font-family:var(--font-mono)">${fmtDT(e.start)}</td>
       <td style="font-size:0.8rem;font-family:var(--font-mono)">${fmtDT(e.end)}</td>
       <td>${statusBadge(e)}</td>
-      <td><span class="badge ${e.viewStatus === 'visible' ? 'badge-success' : 'badge-neutral'}">${e.viewStatus || 'hidden'}</span></td>
+      <td><span class="badge ${e.viewStatus === 'visible' ? 'badge-success' : 'badge-neutral'}">${esc(e.viewStatus || 'hidden')}</span></td>
       <td><div class="action-btns">
         <button class="btn btn-xs btn-primary"   onclick="openElectionModal('${e.id}')">✏️</button>
         <button class="btn btn-xs btn-secondary" onclick="toggleViewStatus('${e.id}')">${e.viewStatus === 'visible' ? '🙈' : '👁'}</button>
@@ -1123,11 +1294,17 @@ async function saveElection() {
 
   let imageUrl = '';
   const imgInput = document.getElementById('el-img-input');
-  if (imgInput?.files?.length) imageUrl = await firebaseUpload(imgInput.files[0], `elections/${uid()}`);
+  if (imgInput?.files?.length) {
+    try { imageUrl = await firebaseUpload(imgInput.files[0], `elections/${uid()}`); }
+    catch (e) {
+      setLoading('btn-save-election', false, 'Save Election');
+      showAlert('election-form-alert', 'Image upload failed. Check your connection or use a smaller image, then try again.', 'error'); return;
+    }
+  }
 
   const capId = editingId;
 
-  await saveData(data => {
+  const res = await saveData(data => {
     if (capId) {
       const idx = data.elections.findIndex(e => e.id === capId);
       if (idx >= 0) data.elections[idx] = { ...data.elections[idx], title, start, end,
@@ -1142,21 +1319,22 @@ async function saveElection() {
   });
 
   setLoading('btn-save-election', false, 'Save Election');
+  if (!res || !res.success) { notifySave(res); return; }   // keep the form open so nothing typed is lost
   closeModal('modal-election');
   renderElectionsTable(); renderOverviewElections(); refreshAdminStats(); populateElectionSelects();
-  showToast(capId ? 'Election updated!' : 'Election created!', 'success');
+  notifySave(res, capId ? 'Election updated!' : 'Election created!');
   editingId = null;
 }
 
 async function toggleViewStatus(id) {
-  await saveData(data => {
+  const res = await saveData(data => {
     const e = data.elections.find(x => x.id === id);
     if (e) e.viewStatus = e.viewStatus === 'visible' ? 'hidden' : 'visible';
     return data;
   });
   renderElectionsTable();
   const e = appData.elections.find(x => x.id === id);
-  showToast(`Election is now ${e?.viewStatus || 'updated'}.`, 'info');
+  notifySave(res, `Election is now ${e?.viewStatus || 'updated'}.`, 'info');
 }
 
 // ── Categories ────────────────────────────────────────────────────
@@ -1211,7 +1389,8 @@ async function saveCategory() {
 
   const capId = editingId;
 
-  await saveData(data => {
+  const res = await saveData(data => {
+    if (!data.elections.some(e => e.id === elId)) throw new Error('PARENT_GONE');
     if (capId) {
       const idx = data.categories.findIndex(c => c.id === capId);
       if (idx >= 0) data.categories[idx] = { ...data.categories[idx], electionId: elId, name, description: v('cat-desc'), updated: now() };
@@ -1222,8 +1401,9 @@ async function saveCategory() {
   });
 
   setLoading('btn-save-category', false, 'Save Category');
+  if (!res || !res.success) { notifySave(res); return; }
   closeModal('modal-category'); renderCategoriesTable(); populateCandidateFilters();
-  showToast(capId ? 'Category updated!' : 'Category created!', 'success');
+  notifySave(res, capId ? 'Category updated!' : 'Category created!');
   editingId = null;
 }
 
@@ -1248,7 +1428,7 @@ function renderCandidatesTable() {
     const el  = appData.elections.find(x => x.id === c.electionId);
     return `<tr>
       <td><div style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--green-pale),var(--purple-pale));display:flex;align-items:center;justify-content:center;font-size:1.2rem">
-        ${c.photo ? `<img src="${c.photo}" style="width:100%;height:100%;object-fit:cover"/>` : '👤'}
+        ${c.photo ? `<img src="${esc(c.photo)}" style="width:100%;height:100%;object-fit:cover"/>` : '👤'}
       </div></td>
       <td><strong>${esc(c.name)}</strong></td>
       <td><span class="badge badge-purple">${esc(cat?.name||'—')}</span></td>
@@ -1294,11 +1474,18 @@ async function saveCandidate() {
 
   let photoUrl = '';
   const pInput = document.getElementById('cand-photo-input');
-  if (pInput?.files?.length) photoUrl = await firebaseUpload(pInput.files[0], `candidates/${uid()}`);
+  if (pInput?.files?.length) {
+    try { photoUrl = await firebaseUpload(pInput.files[0], `candidates/${uid()}`); }
+    catch (e) {
+      setLoading('btn-save-candidate', false, 'Save Candidate');
+      showAlert('cand-form-alert', 'Photo upload failed. Check your connection or use a smaller image, then try again.', 'error'); return;
+    }
+  }
 
   const capId = editingId;
 
-  await saveData(data => {
+  const res = await saveData(data => {
+    if (!data.elections.some(e => e.id === elId) || !data.categories.some(c => c.id === catId && c.electionId === elId)) throw new Error('PARENT_GONE');
     if (capId) {
       const idx = data.candidates.findIndex(c => c.id === capId);
       if (idx >= 0) data.candidates[idx] = { ...data.candidates[idx], name, electionId: elId, categoryId: catId, updated: now(), ...(photoUrl ? { photo: photoUrl } : {}) };
@@ -1309,8 +1496,9 @@ async function saveCandidate() {
   });
 
   setLoading('btn-save-candidate', false, 'Save Candidate');
+  if (!res || !res.success) { notifySave(res); return; }
   closeModal('modal-candidate'); renderCandidatesTable(); refreshAdminStats();
-  showToast(capId ? 'Candidate updated!' : 'Candidate added!', 'success');
+  notifySave(res, capId ? 'Candidate updated!' : 'Candidate added!');
   editingId = null;
 }
 
@@ -1319,14 +1507,14 @@ function renderUsersTable() {
   const tbody = document.getElementById('users-tbody');
   if (!tbody) return;
   tbody.innerHTML = appData.users.map(u => `
-    <tr data-search="${(u.name+u.email+u.username).toLowerCase()}">
+    <tr data-search="${esc((u.name+u.email+u.username).toLowerCase())}">
       <td><strong>${esc(u.name)}</strong></td>
       <td style="font-family:var(--font-mono);font-size:0.82rem">${esc(u.username||'—')}</td>
       <td style="font-size:0.82rem">${esc(u.email)}</td>
-      <td>${u.gender||'—'}</td><td>${u.age||'—'}</td>
+      <td>${esc(u.gender||'—')}</td><td>${esc(u.age||'—')}</td>
       <td style="font-size:0.82rem">${esc(u.phone||'—')}</td>
-      <td><span class="badge ${u.validated==='Yes'?'badge-success':'badge-warning'}">${u.validated||'No'}</span></td>
-      <td><span class="badge ${u.role==='admin'?'badge-purple':'badge-green'}">${u.role||'voter'}</span></td>
+      <td><span class="badge ${u.validated==='Yes'?'badge-success':'badge-warning'}">${esc(u.validated||'No')}</span></td>
+      <td><span class="badge ${u.role==='admin'?'badge-purple':'badge-green'}">${esc(u.role||'voter')}</span></td>
       <td><div class="action-btns">
         <button class="btn btn-xs btn-primary" onclick="openUserEdit('${u.id}')">✏️</button>
         ${u.id !== 'Admin01' ? `<button class="btn btn-xs btn-danger" onclick="confirmDelete('user','${u.id}')">🗑️</button>` : ''}
@@ -1366,7 +1554,7 @@ async function saveUserEdit() {
     if (!u) return data;
     u.name      = v('eu-name').trim();
     u.username  = v('eu-username').trim();
-    u.email     = v('eu-email').trim();
+    u.email     = newEmail;
     u.gender    = v('eu-gender');
     u.age       = parseInt(v('eu-age')) || u.age;
     u.phone     = v('eu-phone').trim();
@@ -1387,7 +1575,7 @@ async function saveUserEdit() {
   }
 
   closeModal('modal-user'); renderUsersTable();
-  showToast('User updated!', 'success'); editingUserId = null;
+  notifySave(saveResult, 'User updated!'); editingUserId = null;
 }
 
 // ── Delete confirm ────────────────────────────────────────────────
@@ -1398,8 +1586,23 @@ function confirmDelete(type, id) {
     candidate: 'This will delete this candidate.',
     user:      'This will permanently delete this user account.'
   };
+
+  if (type === 'user' && id === 'Admin01') { showToast('The main administrator account cannot be deleted.', 'warning'); return; }
+
+  // Deleting an election with real votes destroys them irreversibly: require a typed confirmation.
+  if (type === 'election') {
+    const el   = appData.elections.find(e => e.id === id);
+    const real = appData.votes.filter(v => v.electionId === id && !v.isTest).length;
+    if (real > 0) {
+      const typed = window.prompt(
+        `"${el?.title || 'This election'}" has ${real} recorded vote(s).\n` +
+        `Deleting it permanently destroys them and cannot be undone.\n\nType DELETE to continue:`);
+      if (typed === null || typed.trim() !== 'DELETE') { showToast('Deletion cancelled — nothing was changed.', 'info'); return; }
+    }
+  }
+
   openConfirmModal(`Delete ${type}?`, msgs[type]||'Are you sure?', '⚠️', async () => {
-    await saveData(data => {
+    const res = await saveData(data => {
       if (type === 'election')  {
         data.elections  = data.elections.filter(e => e.id !== id);
         data.categories = data.categories.filter(c => c.electionId !== id);
@@ -1408,6 +1611,7 @@ function confirmDelete(type, id) {
       } else if (type === 'category')  {
         data.categories = data.categories.filter(c => c.id !== id);
         data.candidates = data.candidates.filter(c => c.categoryId !== id);
+        data.votes      = data.votes.filter(v => v.categoryId !== id);
       } else if (type === 'candidate') {
         data.candidates = data.candidates.filter(c => c.id !== id);
       } else if (type === 'user') {
@@ -1416,12 +1620,13 @@ function confirmDelete(type, id) {
       return data;
     });
 
+    if (!res || !res.success) { notifySave(res); return; }
     if (type === 'election')  { renderElectionsTable(); renderOverviewElections(); }
     if (type === 'category')  renderCategoriesTable();
     if (type === 'candidate') renderCandidatesTable();
     if (type === 'user')      renderUsersTable();
     refreshAdminStats();
-    showToast(`${type} deleted.`, 'success');
+    notifySave(res, `${type} deleted.`);
   });
 }
 
@@ -1602,7 +1807,7 @@ function renderVoterElections() {
     const cats      = appData.categories.filter(c => c.electionId === e.id);
     const allCats   = cats.length > 0 && cats.every(cat => myVotes.some(mv => mv.categoryId === cat.id));
     return `<div class="election-card">
-      ${e.image ? `<div class="election-card-img"><img src="${e.image}" alt="${esc(e.title)}"/></div>` : ''}
+      ${e.image ? `<div class="election-card-img"><img src="${esc(e.image)}" alt="${esc(e.title)}"/></div>` : ''}
       <div class="election-card-body">
         <div class="election-card-meta">${statusBadge(e)}</div>
         <h3 class="election-card-title">${esc(e.title)}</h3>
@@ -1632,7 +1837,7 @@ function renderHomePage() {
   }
   grid.innerHTML = visible.map(e => `
     <div class="election-card">
-      ${e.image ? `<div class="election-card-img"><img src="${e.image}" alt="${esc(e.title)}"/></div>` : ''}
+      ${e.image ? `<div class="election-card-img"><img src="${esc(e.image)}" alt="${esc(e.title)}"/></div>` : ''}
       <div class="election-card-body">
         <div class="election-card-meta">${statusBadge(e)}</div>
         <h3 class="election-card-title">${esc(e.title)}</h3>
@@ -1666,7 +1871,7 @@ function openVoteModal(elId) {
         ${catCands.length ? catCands.map(c=>`
           <div class="candidate-card" id="cand-${cat.id}-${c.id}" onclick="selectCandidate('${cat.id}','${c.id}')">
             <div class="candidate-check">✓</div>
-            <div class="candidate-photo">${c.photo?`<img src="${c.photo}" alt="${esc(c.name)}"/>`:'👤'}</div>
+            <div class="candidate-photo">${c.photo?`<img src="${esc(c.photo)}" alt="${esc(c.name)}"/>`:'👤'}</div>
             <div class="candidate-name">${esc(c.name)}</div>
             <div class="candidate-cat">${esc(cat.name)}</div>
           </div>`).join('') : '<p class="text-muted" style="font-size:0.85rem">No candidates in this category.</p>'}
@@ -1683,23 +1888,13 @@ function selectCandidate(catId, candId) {
 }
 
 // ── Submit Votes ──────────────────────────────────────────────────
+// Every rule (eligibility, election open, valid candidate, one vote per
+// category) is checked INSIDE the write, against the freshest data, so a
+// concurrent admin change or a second device cannot slip past it.
+// Vote ids are deterministic (election+category+voter): even if the same
+// vote were written twice it merges into ONE record, never a double count.
 async function submitVotes() {
   if (!currentUser || !votingElection) return;
-
-  // Refresh data before reading categories to catch admin changes made
-  // after the voter opened the vote modal.
-  // FIX-1 applies: loadData() no longer wipes on a failed fetch.
-  await loadData();
-
-  const cats    = appData.categories.filter(c => c.electionId === votingElection.id);
-  const unvoted = cats.filter(cat =>
-    !voteSelections[cat.id] &&
-    appData.candidates.filter(c => c.categoryId === cat.id).length > 0
-  );
-  if (unvoted.length) {
-    showAlert('vote-alert', `Please select a candidate for: ${unvoted.map(c => c.name).join(', ')}`, 'error');
-    return;
-  }
 
   setLoading('btn-submit-votes', true, 'Submitting…');
   const voterId    = currentUser.id;
@@ -1707,38 +1902,58 @@ async function submitVotes() {
   const timestamp  = now();
   const selections = { ...voteSelections };
 
-  let duplicateError = false;
+  const res = await saveData(data => {
+    const me = data.users.find(u => u.id === voterId);
+    if (!me) throw new Error('USER_GONE');
+    if (me.validated !== 'Yes' && me.role !== 'admin') throw new Error('NOT_VALIDATED');
 
-  await saveData(data => {
-    const existing = data.votes.filter(v => v.voterId === voterId && v.electionId === elId);
-    const alreadyVotedCats = new Set(existing.map(v => v.categoryId));
+    const el = data.elections.find(e => e.id === elId);
+    if (!el) throw new Error('ELECTION_GONE');
+    const status = computeStatus(el);
+    if (status !== 'active' && status !== 'test') throw new Error('ELECTION_CLOSED');
 
-    const newVotes = Object.entries(selections)
-      .filter(([catId]) => !alreadyVotedCats.has(catId))
-      .map(([catId, candId]) => ({
-        id: uid(), electionId: elId, categoryId: catId,
-        candidateId: candId, voterId, timestamp
-      }));
+    const cats    = data.categories.filter(c => c.electionId === elId);
+    const already = new Set(data.votes.filter(v => v.voterId === voterId && v.electionId === elId).map(v => v.categoryId));
+    const missing = cats.filter(cat =>
+      !already.has(cat.id) && !selections[cat.id] && data.candidates.some(c => c.categoryId === cat.id));
+    if (missing.length) throw new Error('MISSING:' + missing.map(c => c.name).join(', '));
 
-    if (!newVotes.length) {
-      duplicateError = true;
-      return data;
+    const newVotes = [];
+    for (const cat of cats) {
+      if (already.has(cat.id) || !selections[cat.id]) continue;
+      const cand = data.candidates.find(c => c.id === selections[cat.id] && c.categoryId === cat.id);
+      if (!cand) throw new Error('INVALID_CANDIDATE');
+      newVotes.push({
+        id: `vote_${elId}_${cat.id}_${voterId}`,
+        electionId: elId, categoryId: cat.id, candidateId: cand.id, voterId, timestamp,
+        ...(status === 'test' ? { isTest: true } : {})
+      });
     }
+    if (!newVotes.length) throw new Error('ALREADY_VOTED');
 
     data.votes.push(...newVotes);
     return data;
-  });
+  }, { settle: true });   // wait out the late-overwrite window before saying "cast"
 
   setLoading('btn-submit-votes', false, '🗳️ Submit Votes');
 
-  if (duplicateError) {
-    showAlert('vote-alert', 'You have already voted in this election.', 'error');
+  if (!res || !res.success) {
+    const e = res?.error || '';
+    const msg =
+      e === 'ALREADY_VOTED'      ? 'You have already voted in this election.' :
+      e === 'ELECTION_CLOSED'    ? 'This election is not open for voting right now.' :
+      e === 'ELECTION_GONE'      ? 'This election no longer exists.' :
+      e === 'INVALID_CANDIDATE'  ? 'A candidate you selected was changed by the administrator. Please reopen the ballot and choose again.' :
+      e === 'USER_GONE' || e === 'NOT_VALIDATED' ? 'Your account is not eligible to vote. Please sign in again.' :
+      e.startsWith('MISSING:')   ? `Please select a candidate for: ${e.slice(8)}` :
+      'Your vote could not be recorded. Nothing was submitted — please try again.';
+    showAlert('vote-alert', msg, 'error');
     return;
   }
 
   voteSelections = {};
   closeModal('modal-vote');
-  showToast('🎉 Your vote has been cast successfully!', 'success');
+  notifySave(res, '🎉 Your vote has been cast successfully!');
   renderVoterElections(); renderVoterHistory();
 }
 
@@ -1766,28 +1981,39 @@ function adminTestElection() { populateElectionSelects(); openModal('modal-test-
 async function runTestElection() {
   const elId = v('test-election-select');
   if (!elId) { showToast('Select an election.','warning'); return; }
-  await saveData(data => {
+  const res = await saveData(data => {
     const el = data.elections.find(e => e.id === elId);
-    if (el) el.status = 'test';
+    if (!el) return data;
+    // Never mix test mode into an election that already holds real votes.
+    if (data.votes.some(x => x.electionId === elId && !x.isTest)) throw new Error('HAS_REAL_VOTES');
+    el.status = 'test';
     return data;
   });
   closeModal('modal-test-election'); renderElectionsTable();
   const el = appData.elections.find(e => e.id === elId);
-  showToast(`"${el?.title}" is now in test mode.`, 'info');
+  notifySave(res, `"${el?.title}" is now in test mode.`, 'info');
 }
 
 async function adminClearTest() {
   const testEls = appData.elections.filter(e => e.status === 'test');
   if (!testEls.length) { showToast('No test elections to clear.','info'); return; }
-  openConfirmModal('Clear Test Elections?', `This will clear test status and all test votes for ${testEls.length} election(s).`, '🧹', async () => {
+  openConfirmModal('Clear Test Elections?',
+    `This clears test status for ${testEls.length} election(s) and deletes only the votes that were cast in test mode. Real votes are never touched.`,
+    '🧹', async () => {
     const testIds = new Set(testEls.map(e => e.id));
-    await saveData(data => {
+    const untagged = appData.votes.filter(x => testIds.has(x.electionId) && x.isTest !== true).length;
+    let removed = 0;
+    const res = await saveData(data => {
       data.elections.forEach(e => { if (testIds.has(e.id)) e.status = 'upcoming'; });
-      data.votes = data.votes.filter(v => !testIds.has(v.electionId));
+      const before = data.votes.length;
+      data.votes = data.votes.filter(x => !(testIds.has(x.electionId) && x.isTest === true));
+      removed = before - data.votes.length;
       return data;
     });
     renderElectionsTable(); refreshAdminStats();
-    showToast('Test data cleared.', 'success');
+    if (notifySave(res, `Test data cleared (${removed} test vote${removed === 1 ? '' : 's'} removed).`) && untagged) {
+      showToast(`${untagged} vote(s) without a test tag were kept (they may be real). Delete the election to remove them.`, 'info');
+    }
   });
 }
 
@@ -1806,6 +2032,12 @@ function exportResultsExcel(elId) {
   XLSX.writeFile(wb, `${el?.title||'results'}_results.xlsx`);
 }
 
+function csvCell(val) {
+  let t = String(val ?? '');
+  if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;          // stop spreadsheet formula injection
+  return '"' + t.replace(/"/g, '""') + '"';
+}
+
 function exportResultsCSV(elId) {
   const el   = appData.elections.find(e => e.id === elId);
   const cats = appData.categories.filter(c => c.electionId === elId);
@@ -1815,7 +2047,7 @@ function exportResultsCSV(elId) {
     const votes = appData.votes.filter(v => v.categoryId === cat.id);
     cands.forEach(c => {
       const cnt = votes.filter(v => v.candidateId === c.id).length;
-      csv += `"${cat.name}","${c.name}",${cnt},${votes.length ? Math.round(cnt/votes.length*100) : 0}%\n`;
+      csv += `${csvCell(cat.name)},${csvCell(c.name)},${cnt},${votes.length ? Math.round(cnt/votes.length*100) : 0}%\n`;
     });
   });
   const a  = document.createElement('a');
@@ -1937,14 +2169,14 @@ function filterTable(input, tbodyId) {
 function showAlert(containerId, msg, type='info') {
   const c = document.getElementById(containerId); if (!c) return;
   const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
-  c.innerHTML = `<div class="alert alert-${type}"><span class="alert-icon">${icons[type]||'ℹ️'}</span>${msg}</div>`;
+  c.innerHTML = `<div class="alert alert-${type}"><span class="alert-icon">${icons[type]||'ℹ️'}</span>${esc(msg)}</div>`;
 }
 function clearAlert(containerId) { const c=document.getElementById(containerId); if(c) c.innerHTML=''; }
 
 function showToast(msg, type='info') {
   const container=document.getElementById('toast-container'), icons={success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
   const toast=document.createElement('div'); toast.className=`toast ${type}`;
-  toast.innerHTML=`<span class="toast-icon">${icons[type]||'ℹ️'}</span>${msg}`;
+  toast.innerHTML=`<span class="toast-icon">${icons[type]||'ℹ️'}</span>${esc(msg)}`;
   container.appendChild(toast); setTimeout(()=>toast.remove(), 4200);
 }
 
@@ -1961,10 +2193,10 @@ function esc(str)         { if(!str) return ''; return String(str).replace(/&/g,
 
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
-  await loadData();
-  // performStartupIntegrityCheck is advisory only — it does not modify data.
-  await performStartupIntegrityCheck();
+  adoptRaw(combine(null));        // show the last known data immediately (own replica + unconfirmed changes)
   _initHamburger();
+  await loadData();               // MERGE with the server — never overwrites anything held locally
+  if (JBIN_READY && outboxGet().some(e => !e.confirmedAt)) scheduleHeal();   // finish work a closed tab left behind
 
   const session = lsSessionGet();
   if (session) {
@@ -1974,8 +2206,7 @@ async function init() {
       updateHeaderForUser(user);
       startPolling();
     } else if (user && user.validated === 'No') {
-      // Clear session for unvalidated users to avoid stale state.
-      lsSessionClear();
+      lsSessionClear();           // un-validated accounts do not keep a session
     }
   }
 
