@@ -683,7 +683,6 @@ function _refreshVisiblePanels() {
   if (document.getElementById('panel-admin-users')?.classList.contains('active'))      renderUsersTable();
   if (document.getElementById('panel-voter-elections')?.classList.contains('active'))  renderVoterElections();
   if (document.getElementById('panel-voter-history')?.classList.contains('active'))    renderVoterHistory();
-  if (document.getElementById('panel-voter-results')?.classList.contains('active'))    populateVoterResultSelect();
   refreshAdminStats();
   renderHomePage();
 }
@@ -1245,15 +1244,13 @@ function renderElectionsTable() {
       <td style="font-size:0.8rem;font-family:var(--font-mono)">${fmtDT(e.end)}</td>
       <td>${statusBadge(e)}</td>
       <td><span class="badge ${e.viewStatus === 'visible' ? 'badge-success' : 'badge-neutral'}">${esc(e.viewStatus || 'hidden')}</span></td>
-      <td><span class="badge ${e.resultsVisible ? 'badge-success' : 'badge-neutral'}">${e.resultsVisible ? 'shown to voters' : 'admin only'}</span></td>
       <td><div class="action-btns">
         <button class="btn btn-xs btn-primary"   onclick="openElectionModal('${e.id}')">✏️</button>
         <button class="btn btn-xs btn-secondary" onclick="toggleViewStatus('${e.id}')">${e.viewStatus === 'visible' ? '🙈' : '👁'}</button>
-        <button class="btn btn-xs btn-secondary" title="${e.resultsVisible ? 'Hide results from voters' : 'Show results to voters'}" onclick="toggleResultsVisibility('${e.id}')">${e.resultsVisible ? '📊✔' : '📊'}</button>
         <button class="btn btn-xs btn-danger"    onclick="confirmDelete('election','${e.id}')">🗑️</button>
       </div></td>
     </tr>
-  `).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No elections yet</h3><p>Click "+ New Election" to create one.</p></div></td></tr>`;
+  `).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">🗳️</div><h3>No elections yet</h3><p>Click "+ New Election" to create one.</p></div></td></tr>`;
 }
 
 function statusBadge(e) {
@@ -1280,10 +1277,10 @@ function openElectionModal(id) {
     if (!e) return;
     sv('el-title', e.title); sv('el-start', e.start?.slice(0,16)||'');
     sv('el-end', e.end?.slice(0,16)||''); sv('el-desc', e.description||'');
-    sv('el-view-status', e.viewStatus||'hidden'); sv('el-status', e.status||'upcoming'); sv('el-results-visible', e.resultsVisible ? 'yes' : 'no');
+    sv('el-view-status', e.viewStatus||'hidden'); sv('el-status', e.status||'upcoming');
   } else {
     ['el-title','el-start','el-end','el-desc'].forEach(i => sv(i,''));
-    sv('el-view-status','hidden'); sv('el-status','upcoming'); sv('el-results-visible','no');
+    sv('el-view-status','hidden'); sv('el-status','upcoming');
     document.getElementById('el-img-preview').classList.add('hidden');
   }
   openModal('modal-election');
@@ -1311,11 +1308,11 @@ async function saveElection() {
     if (capId) {
       const idx = data.elections.findIndex(e => e.id === capId);
       if (idx >= 0) data.elections[idx] = { ...data.elections[idx], title, start, end,
-        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'), resultsVisible: v('el-results-visible') === 'yes',
+        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
         updated: now(), ...(imageUrl ? { image: imageUrl } : {}) };
     } else {
       data.elections.push({ id: uid(), title, start, end,
-        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'), resultsVisible: v('el-results-visible') === 'yes',
+        description: v('el-desc'), viewStatus: v('el-view-status'), status: v('el-status'),
         image: imageUrl, created: now() });
     }
     return data;
@@ -1338,20 +1335,6 @@ async function toggleViewStatus(id) {
   renderElectionsTable();
   const e = appData.elections.find(x => x.id === id);
   notifySave(res, `Election is now ${e?.viewStatus || 'updated'}.`, 'info');
-}
-
-// Admin switch: may voters see this election's results? (default: no)
-async function toggleResultsVisibility(id) {
-  let nowVisible = false;
-  const res = await saveData(data => {
-    const e = data.elections.find(x => x.id === id);
-    if (!e) return data;
-    e.resultsVisible = !e.resultsVisible;
-    nowVisible = e.resultsVisible;
-    return data;
-  });
-  renderElectionsTable();
-  notifySave(res, nowVisible ? 'Results are now visible to voters.' : 'Results are now hidden from voters (admin only).', 'info');
 }
 
 // ── Categories ────────────────────────────────────────────────────
@@ -1656,7 +1639,7 @@ function populateResultElectionSelect() {
 }
 
 function populateElectionSelects() {
-  ['cat-election-id','cand-election-id','cat-election-filter','cand-election-filter','result-election-select','test-election-select'].forEach(id => {
+  ['cat-election-id','cand-election-id','cat-election-filter','cand-election-filter','result-election-select','voter-result-select','test-election-select'].forEach(id => {
     const sel = document.getElementById(id); if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = (id.includes('filter')||id.includes('result')||id.includes('test') ? '<option value="">— All/Choose —</option>' : '<option value="">— Select Election —</option>') +
@@ -1673,11 +1656,11 @@ function loadResults() {
 
 function loadVoterResults() {
   const elId = v('voter-result-select'), container = document.getElementById('voter-results-content');
-  if (!container) return;
   if (!elId) { container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📊</div><h3>Select an Election</h3></div>`; return; }
   const el = appData.elections.find(e => e.id === elId);
-  if (!el || !el.resultsVisible) {
-    container.innerHTML = `<div class="alert alert-info"><span class="alert-icon">ℹ️</span>The administrator has not released the results of this election.</div>`;
+  if (!el) return;
+  if (!(computeStatus(el) === 'ended' || el.viewStatus === 'visible')) {
+    container.innerHTML = `<div class="alert alert-info"><span class="alert-icon">ℹ️</span>Results will be available after the election ends.</div>`;
     return;
   }
   renderResults(elId, container, false);
@@ -1685,10 +1668,6 @@ function loadVoterResults() {
 
 function renderResults(elId, container, isAdmin) {
   const el    = appData.elections.find(e => e.id === elId);
-  if (!isAdmin && !(el && el.resultsVisible)) {      // enforced here too, not just in the picker
-    container.innerHTML = `<div class="alert alert-info"><span class="alert-icon">ℹ️</span>The administrator has not released the results of this election.</div>`;
-    return;
-  }
   const cats  = appData.categories.filter(c => c.electionId === elId);
   const cands = appData.candidates.filter(c => c.electionId === elId);
   const votes = appData.votes.filter(v => v.electionId === elId);
@@ -1992,13 +1971,8 @@ function renderVoterHistory() {
 function populateVoterResultSelect() {
   const sel = document.getElementById('voter-result-select');
   if (!sel) return;
-  const cur = sel.value;
-  const released = appData.elections.filter(e => e.resultsVisible);
-  sel.innerHTML = '<option value="">— Choose Election —</option>' + released.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
-  if (cur && released.some(e => e.id === cur)) sel.value = cur;
-  const box = document.getElementById('voter-results-content');
-  if (box && !released.length) box.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📊</div><h3>No results released yet</h3><p>Results appear here when the administrator makes them visible.</p></div>`;
-  else if (box && cur && !sel.value) loadVoterResults();   // the one being viewed was just hidden
+  const visible = appData.elections.filter(e => computeStatus(e)==='ended' || e.viewStatus==='visible');
+  sel.innerHTML = '<option value="">— Choose Election —</option>' + visible.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
 }
 
 // ── Test Election ─────────────────────────────────────────────────
